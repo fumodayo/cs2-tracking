@@ -1,0 +1,50 @@
+import type { PriceRange } from "@/domain/price";
+
+export type CaseDto = {
+  id: string;
+  name: string;
+  marketHashName: string;
+  imageUrl?: string;
+  isActive: boolean;
+};
+
+export type PriceChangeDto = {
+  amount: number | null;
+  percent: number | null;
+  baselinePrice: number | null;
+  baselineDate: string | null;
+};
+
+export type PortfolioReportRowDto = {
+  item: {
+    id: string;
+    caseId: string;
+    quantity: number;
+    buyPrice: number;
+    buyCurrency: "VND";
+    buyDate: string;
+    note?: string;
+    createdAt: string;
+    updatedAt: string;
+  };
+  case: CaseDto;
+  currentPrice: number | null;
+  currentPriceCapturedAt: string | null;
+  investedValue: number;
+  currentValue: number | null;
+  profitAmount: number | null;
+  profitPercent: number | null;
+  marketChanges: Record<PriceRange, PriceChangeDto>;
+};
+
+export type PortfolioReportDto = {
+  summary: {
+    totalInvested: number;
+    totalCurrentValue: number;
+    totalProfit: number;
+    totalProfitPercent: number;
+    itemCount: number;
+    caseCount: number;
+  };
+  rows: PortfolioReportRowDto[];
+};
