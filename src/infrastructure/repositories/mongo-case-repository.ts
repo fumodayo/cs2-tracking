@@ -14,18 +14,22 @@ export class MongoCaseRepository implements CaseRepository {
     await collection.createIndex({ marketHashName: 1 }, { unique: true });
     await collection.createIndex({ name: "text", marketHashName: "text" });
 
-    if ((await collection.estimatedDocumentCount()) > 0) {
-      return;
-    }
+    // Upsert all default items — adds any missing items without touching existing ones
+    const ops = DEFAULT_CASES.map((caseItem) => ({
+      updateOne: {
+        filter: { marketHashName: caseItem.marketHashName },
+        update: {
+          $setOnInsert: {
+            ...caseItem,
+            isActive: true,
+            createdAt: new Date(),
+          },
+        },
+        upsert: true,
+      },
+    }));
 
-    await collection.insertMany(
-      DEFAULT_CASES.map((caseItem) => ({
-        ...caseItem,
-        isActive: true,
-        createdAt: new Date(),
-      })),
-      { ordered: false },
-    );
+    await collection.bulkWrite(ops, { ordered: false }).catch(() => {});
   }
 
   async search(query: string): Promise<CaseItem[]> {
@@ -58,6 +62,24 @@ export class MongoCaseRepository implements CaseRepository {
 
     const db = await getDatabase();
     const doc = await db.collection("cases").findOne({ _id: toObjectId(id), isActive: true });
+    if (!doc) {
+      return null;
+    }
+
+    const [caseItem] = await this.enrichMissingImages([mapCaseDocument(doc)]);
+    return caseItem;
+  }
+
+  async findByMarketHashName(marketHashName: string): Promise<CaseItem | null> {
+    await this.ensureSeeded();
+
+    const db = await getDatabase();
+    const normalizedMarketHashName = marketHashName.trim();
+    const doc = await db.collection("cases").findOne({
+      isActive: true,
+      marketHashName: { $regex: `^${escapeRegExp(normalizedMarketHashName)}$`, $options: "i" },
+    });
+
     if (!doc) {
       return null;
     }
@@ -114,4 +136,8 @@ export class MongoCaseRepository implements CaseRepository {
 
     return cases;
   }
+}
+
+function escapeRegExp(value: string): string {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }

@@ -10,6 +10,7 @@ export interface CaseRepository {
   ensureSeeded(): Promise<void>;
   search(query: string): Promise<CaseItem[]>;
   findById(id: string): Promise<CaseItem | null>;
+  findByMarketHashName(marketHashName: string): Promise<CaseItem | null>;
   findByIds(ids: string[]): Promise<CaseItem[]>;
 }
 

@@ -26,6 +26,16 @@ export class PortfolioService {
     return this.portfolioRepository.create(input);
   }
 
+  async createMany(inputs: CreatePortfolioItemInput[]): Promise<PortfolioItem[]> {
+    const createdItems: PortfolioItem[] = [];
+
+    for (const input of inputs) {
+      createdItems.push(await this.create(input));
+    }
+
+    return createdItems;
+  }
+
   async update(id: string, input: UpdatePortfolioItemInput): Promise<PortfolioItem | null> {
     validatePortfolioInput(input, true);
     return this.portfolioRepository.update(id, input);

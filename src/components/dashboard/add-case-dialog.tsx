@@ -1,7 +1,8 @@
 "use client";
 
+import { useQuery } from "@tanstack/react-query";
 import { Search, X } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import type { CaseDto } from "@/types/report";
 import { formatInputDate } from "@/utils/format";
 import { CaseThumbnail } from "./case-thumbnail";
@@ -21,7 +22,6 @@ type AddCaseDialogProps = {
 
 export function AddCaseDialog({ open, saving, onClose, onSubmit }: AddCaseDialogProps) {
   const [query, setQuery] = useState("");
-  const [cases, setCases] = useState<CaseDto[]>([]);
   const [selectedCase, setSelectedCase] = useState<CaseDto | null>(null);
   const [quantity, setQuantity] = useState("1");
   const [buyPrice, setBuyPrice] = useState("");
@@ -34,36 +34,14 @@ export function AddCaseDialog({ open, saving, onClose, onSubmit }: AddCaseDialog
     [buyDate, buyPrice, quantity, selectedCase],
   );
 
-  useEffect(() => {
-    if (!open) {
-      return;
-    }
+  const caseQuery = useQuery({
+    queryKey: ["cases", query],
+    queryFn: () => fetchCases(query),
+    enabled: open,
+    staleTime: 60_000,
+  });
 
-    const controller = new AbortController();
-    const timeout = window.setTimeout(async () => {
-      try {
-        const response = await fetch(`/api/cases?search=${encodeURIComponent(query)}`, {
-          signal: controller.signal,
-        });
-        const data = (await response.json()) as { cases?: CaseDto[]; message?: string };
-
-        if (!response.ok) {
-          throw new Error(data.message ?? "Không thể tìm case.");
-        }
-
-        setCases(data.cases ?? []);
-      } catch (fetchError) {
-        if (!controller.signal.aborted) {
-          setError(fetchError instanceof Error ? fetchError.message : "Không thể tìm case.");
-        }
-      }
-    }, 250);
-
-    return () => {
-      window.clearTimeout(timeout);
-      controller.abort();
-    };
-  }, [open, query]);
+  const cases = caseQuery.data ?? [];
 
   if (!open) {
     return null;
@@ -203,7 +181,11 @@ export function AddCaseDialog({ open, saving, onClose, onSubmit }: AddCaseDialog
           />
         </label>
 
-        {error ? <p className="mt-3 text-sm text-red-300">{error}</p> : null}
+        {error || caseQuery.error ? (
+          <p className="mt-3 text-sm text-red-300">
+            {error ?? (caseQuery.error instanceof Error ? caseQuery.error.message : "Không thể tìm case.")}
+          </p>
+        ) : null}
 
         <div className="mt-5 flex justify-end gap-2">
           <button
@@ -224,4 +206,15 @@ export function AddCaseDialog({ open, saving, onClose, onSubmit }: AddCaseDialog
       </form>
     </div>
   );
+}
+
+async function fetchCases(query: string): Promise<CaseDto[]> {
+  const response = await fetch(`/api/cases?search=${encodeURIComponent(query)}`);
+  const data = (await response.json()) as { cases?: CaseDto[]; message?: string };
+
+  if (!response.ok) {
+    throw new Error(data.message ?? "Không thể tìm case.");
+  }
+
+  return data.cases ?? [];
 }

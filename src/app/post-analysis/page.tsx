@@ -7,7 +7,7 @@ export default function PostAnalysisPage() {
         <p className="text-sm font-semibold uppercase tracking-[0.18em] text-amber-300">Post Analyzer</p>
         <h1 className="mt-2 text-3xl font-semibold text-stone-50">Phân tích bài viết</h1>
         <p className="mt-2 max-w-3xl text-sm leading-6 text-stone-400">
-          Dán bài rao bán case/terminal để tính giá theo rate. Những bài đã phân tích sẽ được lưu lại trên trình duyệt này.
+          Dán bài rao bán case/terminal hoặc upload ảnh inventory để tính giá theo rate. Những bài đã phân tích sẽ được lưu lại trên trình duyệt này.
         </p>
       </div>
 

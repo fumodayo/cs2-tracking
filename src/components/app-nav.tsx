@@ -1,12 +1,13 @@
 "use client";
 
-import { BarChart3, FileSearch } from "lucide-react";
+import { BarChart3, FileSearch, Search } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 
 const NAV_ITEMS = [
   { href: "/portfolio", label: "Quản lý case", icon: BarChart3 },
   { href: "/post-analysis", label: "Phân tích bài viết", icon: FileSearch },
+  { href: "/inventory-scanner", label: "Quét hòm đồ", icon: Search },
 ];
 
 export function AppNav() {

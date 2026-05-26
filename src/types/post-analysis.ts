@@ -15,6 +15,8 @@ export type UnknownPostItemDto = {
 };
 
 export type PostAnalysisDto = {
+  itemSource: "text" | "image";
+  cacheStatus?: "hit" | "miss";
   itemRate: number;
   allRate: number;
   totalQuantity: number;
@@ -23,4 +25,13 @@ export type PostAnalysisDto = {
   totalAllRateValue: number;
   rows: PostAnalysisRowDto[];
   unknownItems: UnknownPostItemDto[];
+};
+
+export type PostAnalysisHistoryItemDto = {
+  id: string;
+  createdAt: string;
+  updatedAt: string;
+  text: string;
+  imageFileName?: string;
+  analysis: PostAnalysisDto;
 };

@@ -1,102 +1,85 @@
 "use client";
 
-import { Plus, RefreshCcw } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { Download, Plus, RefreshCcw, Upload } from "lucide-react";
+import { useRef, useState } from "react";
 import type { PortfolioReportDto } from "@/types/report";
 import { AddCaseDialog } from "./add-case-dialog";
 import { EmptyState } from "./empty-state";
+import { exportPortfolioToExcel, parsePortfolioExcelFile, type PortfolioImportRow } from "./portfolio-excel";
 import { PortfolioTable } from "./portfolio-table";
 import { SummaryCards } from "./summary-cards";
 
+const PORTFOLIO_QUERY_KEY = ["portfolio-report"];
+
 export function Dashboard() {
-  const [report, setReport] = useState<PortfolioReportDto | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [refreshing, setRefreshing] = useState(false);
-  const [saving, setSaving] = useState(false);
-  const [deletingId, setDeletingId] = useState<string | null>(null);
+  const queryClient = useQueryClient();
+  const importInputRef = useRef<HTMLInputElement | null>(null);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  useEffect(() => {
-    let active = true;
+  const reportQuery = useQuery({
+    queryKey: PORTFOLIO_QUERY_KEY,
+    queryFn: fetchPortfolioReport,
+  });
 
-    fetch("/api/portfolio")
-      .then(parseReportResponse)
-      .then((data) => {
-        if (active) {
-          setReport(data);
-        }
-      })
-      .catch((loadError) => {
-        if (active) {
-          setError(getErrorMessage(loadError));
-        }
-      })
-      .finally(() => {
-        if (active) {
-          setLoading(false);
-        }
-      });
+  const refreshMutation = useMutation({
+    mutationFn: refreshPortfolioPrices,
+    onSuccess: (report) => {
+      queryClient.setQueryData(PORTFOLIO_QUERY_KEY, report);
+      setError(null);
+    },
+    onError: setMutationError,
+  });
 
-    return () => {
-      active = false;
-    };
-  }, []);
-
-  async function refreshPrices() {
-    setRefreshing(true);
-    setError(null);
-
-    try {
-      const response = await fetch("/api/prices/refresh", { method: "POST" });
-      const data = await parseReportResponse(response);
-      setReport(data);
-    } catch (refreshError) {
-      setError(getErrorMessage(refreshError));
-    } finally {
-      setRefreshing(false);
-    }
-  }
-
-  async function addCase(payload: {
-    caseId: string;
-    quantity: number;
-    buyPrice: number;
-    buyDate: string;
-    note?: string;
-  }) {
-    setSaving(true);
-    setError(null);
-
-    try {
-      const response = await fetch("/api/portfolio", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
-      });
-      const data = await parseReportResponse(response);
-      setReport(data);
+  const addMutation = useMutation({
+    mutationFn: addPortfolioItem,
+    onSuccess: (report) => {
+      queryClient.setQueryData(PORTFOLIO_QUERY_KEY, report);
       setDialogOpen(false);
-    } catch (saveError) {
-      setError(getErrorMessage(saveError));
-      throw saveError;
-    } finally {
-      setSaving(false);
-    }
+      setError(null);
+    },
+    onError: setMutationError,
+  });
+
+  const deleteMutation = useMutation({
+    mutationFn: deletePortfolioItem,
+    onSuccess: (report) => {
+      queryClient.setQueryData(PORTFOLIO_QUERY_KEY, report);
+      setError(null);
+    },
+    onError: setMutationError,
+  });
+
+  const importMutation = useMutation({
+    mutationFn: importPortfolioRows,
+    onSuccess: (report) => {
+      queryClient.setQueryData(PORTFOLIO_QUERY_KEY, report);
+      setError(null);
+    },
+    onError: setMutationError,
+  });
+
+  const report = reportQuery.data ?? null;
+  const loading = reportQuery.isLoading;
+  const deletingId = deleteMutation.isPending ? deleteMutation.variables ?? null : null;
+
+  function setMutationError(mutationError: unknown) {
+    setError(getErrorMessage(mutationError));
   }
 
-  async function deleteCase(id: string) {
-    setDeletingId(id);
-    setError(null);
+  async function handleImportFile(event: React.ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0];
+    event.target.value = "";
+    if (!file) {
+      return;
+    }
 
     try {
-      const response = await fetch(`/api/portfolio/${id}`, { method: "DELETE" });
-      const data = await parseReportResponse(response);
-      setReport(data);
-    } catch (deleteError) {
-      setError(getErrorMessage(deleteError));
-    } finally {
-      setDeletingId(null);
+      const rows = await parsePortfolioExcelFile(file);
+      importMutation.mutate(rows);
+    } catch (importError) {
+      setError(getErrorMessage(importError));
     }
   }
 
@@ -123,21 +106,42 @@ export function Dashboard() {
       </section>
 
       <section className="mx-auto max-w-7xl px-4 py-6 sm:px-6 lg:px-8">
-        <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <div className="mb-4 flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
           <div>
             <h2 className="text-xl font-semibold text-stone-50">Portfolio</h2>
-            <p className="mt-1 text-sm text-stone-400">Giá hiện tại được cache ngắn hạn và lưu lịch sử vào MongoDB.</p>
+            <p className="mt-1 text-sm text-stone-400">
+              Giá hiện tại được cache ngắn hạn, lịch sử lưu MongoDB, bảng hỗ trợ tìm kiếm, sắp xếp và tổng hợp case.
+            </p>
           </div>
-          <div className="flex gap-2">
+          <div className="flex flex-wrap gap-2">
             <button
               type="button"
-              onClick={refreshPrices}
-              disabled={refreshing || loading}
+              onClick={() => refreshMutation.mutate()}
+              disabled={refreshMutation.isPending || loading}
               className="inline-flex items-center gap-2 rounded-md border border-stone-700 px-3 py-2 text-sm font-medium text-stone-200 hover:bg-stone-800 disabled:cursor-wait disabled:opacity-50"
             >
-              <RefreshCcw className={`size-4 ${refreshing ? "animate-spin" : ""}`} />
+              <RefreshCcw className={`size-4 ${refreshMutation.isPending ? "animate-spin" : ""}`} />
               Refresh giá
             </button>
+            <button
+              type="button"
+              onClick={() => report && exportPortfolioToExcel(report)}
+              disabled={!report || report.rows.length === 0}
+              className="inline-flex items-center gap-2 rounded-md border border-stone-700 px-3 py-2 text-sm font-medium text-stone-200 hover:bg-stone-800 disabled:cursor-not-allowed disabled:opacity-40"
+            >
+              <Download className="size-4" />
+              Xuất Excel
+            </button>
+            <button
+              type="button"
+              onClick={() => importInputRef.current?.click()}
+              disabled={importMutation.isPending}
+              className="inline-flex items-center gap-2 rounded-md border border-stone-700 px-3 py-2 text-sm font-medium text-stone-200 hover:bg-stone-800 disabled:cursor-wait disabled:opacity-50"
+            >
+              <Upload className="size-4" />
+              {importMutation.isPending ? "Đang import..." : "Nhập Excel"}
+            </button>
+            <input ref={importInputRef} type="file" accept=".xlsx,.xls,.csv" className="sr-only" onChange={handleImportFile} />
             <button
               type="button"
               onClick={() => setDialogOpen(true)}
@@ -149,9 +153,9 @@ export function Dashboard() {
           </div>
         </div>
 
-        {error ? (
+        {error || reportQuery.error ? (
           <div className="mb-4 rounded-lg border border-red-500/30 bg-red-950/30 px-4 py-3 text-sm text-red-200">
-            {error}
+            {error ?? getErrorMessage(reportQuery.error)}
           </div>
         ) : null}
 
@@ -161,7 +165,7 @@ export function Dashboard() {
           <div className="space-y-5">
             <SummaryCards report={report} />
             {report.rows.length > 0 ? (
-              <PortfolioTable rows={report.rows} deletingId={deletingId} onDelete={deleteCase} />
+              <PortfolioTable report={report} deletingId={deletingId} onDelete={(id) => deleteMutation.mutate(id)} />
             ) : (
               <EmptyState onAdd={() => setDialogOpen(true)} />
             )}
@@ -175,9 +179,53 @@ export function Dashboard() {
         </a>
       </footer>
 
-      <AddCaseDialog open={dialogOpen} saving={saving} onClose={() => setDialogOpen(false)} onSubmit={addCase} />
+      <AddCaseDialog
+        open={dialogOpen}
+        saving={addMutation.isPending}
+        onClose={() => setDialogOpen(false)}
+        onSubmit={(payload) => addMutation.mutateAsync(payload).then(() => undefined)}
+      />
     </main>
   );
+}
+
+async function fetchPortfolioReport(): Promise<PortfolioReportDto> {
+  const response = await fetch("/api/portfolio", { cache: "no-store" });
+  return parseReportResponse(response);
+}
+
+async function refreshPortfolioPrices(): Promise<PortfolioReportDto> {
+  const response = await fetch("/api/prices/refresh", { method: "POST" });
+  return parseReportResponse(response);
+}
+
+async function addPortfolioItem(payload: {
+  caseId: string;
+  quantity: number;
+  buyPrice: number;
+  buyDate: string;
+  note?: string;
+}): Promise<PortfolioReportDto> {
+  const response = await fetch("/api/portfolio", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+  return parseReportResponse(response);
+}
+
+async function deletePortfolioItem(id: string): Promise<PortfolioReportDto> {
+  const response = await fetch(`/api/portfolio/${id}`, { method: "DELETE" });
+  return parseReportResponse(response);
+}
+
+async function importPortfolioRows(rows: PortfolioImportRow[]): Promise<PortfolioReportDto> {
+  const response = await fetch("/api/portfolio/import", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ rows }),
+  });
+  return parseReportResponse(response);
 }
 
 async function parseReportResponse(response: Response): Promise<PortfolioReportDto> {
