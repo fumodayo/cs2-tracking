@@ -5,16 +5,34 @@ import type { PriceSnapshot } from "@/domain/price";
 
 const STEAM_PRICE_CACHE_MINUTES = 15;
 
+type PriceLookupOptions = {
+  forceRefresh?: boolean;
+  refreshStale?: boolean;
+};
+
 export class PriceService {
   constructor(
     private readonly snapshotRepository: PriceSnapshotRepository,
     private readonly priceProvider: PriceProvider,
   ) {}
 
-  async getCurrentPrice(caseItem: CaseItem, options?: { forceRefresh?: boolean }): Promise<PriceSnapshot | null> {
+  async getCurrentPrice(
+    caseItem: CaseItem,
+    options?: PriceLookupOptions,
+  ): Promise<PriceSnapshot | null> {
     const latest = await this.snapshotRepository.findLatest(caseItem.id);
+    const shouldRefreshStale = options?.refreshStale ?? true;
 
-    if (!options?.forceRefresh && latest && isFresh(latest.capturedAt, STEAM_PRICE_CACHE_MINUTES)) {
+    if (
+      !options?.forceRefresh &&
+      latest &&
+      (!shouldRefreshStale ||
+        isFresh(latest.capturedAt, STEAM_PRICE_CACHE_MINUTES))
+    ) {
+      return latest;
+    }
+
+    if (!options?.forceRefresh && !shouldRefreshStale) {
       return latest;
     }
 

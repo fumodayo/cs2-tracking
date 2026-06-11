@@ -1,0 +1,250 @@
+import { NextRequest, NextResponse } from "next/server";
+import { createHash } from "node:crypto";
+import { USER_AGENTS } from "@/utils/api-client";
+import { SteamMarketPriceProvider } from "@/infrastructure/price/steam-market-price-provider";
+import { MongoPostAnalysisHistoryRepository } from "@/infrastructure/repositories/mongo-post-analysis-history-repository";
+import { PostAnalysisService } from "@/services/post-analysis-service";
+
+export const dynamic = "force-dynamic";
+
+export async function POST(request: NextRequest) {
+  try {
+    const body = await request.json();
+    const text = String(body.text ?? "").trim();
+    const imageUrls = Array.isArray(body.imageUrls) ? body.imageUrls : [];
+    const force = body.force === true;
+    const postUrl =
+      typeof body.postUrl === "string" ? body.postUrl.trim() : undefined;
+
+    if (!text) {
+      return NextResponse.json(
+        { message: "Nội dung bài viết trống." },
+        { status: 400 },
+      );
+    }
+
+    const historyRepository = new MongoPostAnalysisHistoryRepository();
+
+    // Check by postUrl before downloading any images or doing any heavy work
+    if (!force && postUrl) {
+      const cachedByUrl = await historyRepository.findByPostUrl(postUrl);
+      if (cachedByUrl) {
+        await historyRepository.touch(cachedByUrl.id);
+        return NextResponse.json({
+          ...cachedByUrl.analysis,
+          imageCloudinaryUrl: cachedByUrl.imageCloudinaryUrl,
+          author: cachedByUrl.analysis.author ?? body.author ?? undefined,
+          postTime: cachedByUrl.analysis.postTime ?? body.postTime ?? undefined,
+          postUrl: cachedByUrl.analysis.postUrl ?? postUrl,
+          authorUrl:
+            cachedByUrl.analysis.authorUrl ?? body.authorUrl ?? undefined,
+          steamUrl: cachedByUrl.analysis.steamUrl ?? body.steamUrl ?? undefined,
+          cacheStatus: "hit",
+        });
+      }
+    }
+
+    const imageInputs: Array<{
+      data: string;
+      mimeType: string;
+      fileName: string;
+    }> = [];
+
+    // If image URLs are selected, fetch them in parallel and convert to base64
+    if (imageUrls.length > 0) {
+      await Promise.all(
+        imageUrls.map(async (imageUrl: string, idx: number) => {
+          try {
+            const imageRes = await fetch(imageUrl, {
+              headers: {
+                "User-Agent": USER_AGENTS.steamBrowser,
+              },
+            });
+
+            if (!imageRes.ok) {
+              throw new Error(`HTTP status ${imageRes.status}`);
+            }
+
+            const arrayBuffer = await imageRes.arrayBuffer();
+            const buffer = Buffer.from(arrayBuffer);
+            const mimeType =
+              imageRes.headers.get("content-type") || "image/jpeg";
+            const base64 = buffer.toString("base64");
+
+            imageInputs.push({
+              data: base64,
+              mimeType,
+              fileName: `facebook_post_image_${idx}.jpg`,
+            });
+          } catch (fetchError) {
+            console.error(
+              `Failed to download image ${imageUrl} from Facebook CDN:`,
+              fetchError,
+            );
+          }
+        }),
+      );
+    }
+
+    const fingerprint = createPostAnalysisFingerprint(text, imageInputs);
+    const cachedHistoryItem = !force
+      ? await historyRepository.findByFingerprint(fingerprint)
+      : null;
+
+    if (cachedHistoryItem) {
+      await historyRepository.touch(cachedHistoryItem.id);
+
+      // Dynamic Upgrade: Upload image to Cloudinary if it wasn't done before
+      if (!cachedHistoryItem.imageCloudinaryUrl && imageInputs.length > 0) {
+        try {
+          const { uploadImageToCloudinary } =
+            await import("@/infrastructure/cloudinary");
+          const imageCloudinaryUrl = await uploadImageToCloudinary(
+            imageInputs[0].data,
+            imageInputs[0].mimeType,
+          );
+
+          if (imageCloudinaryUrl) {
+            cachedHistoryItem.imageCloudinaryUrl = imageCloudinaryUrl;
+            cachedHistoryItem.analysis.imageCloudinaryUrl = imageCloudinaryUrl;
+
+            await historyRepository.save({
+              fingerprint,
+              text,
+              imageFileName: imageInputs[0].fileName,
+              imageCloudinaryUrl,
+              analysis: {
+                ...cachedHistoryItem.analysis,
+                imageCloudinaryUrl,
+              },
+            });
+          }
+        } catch (uploadError) {
+          console.error(
+            "Failed to dynamically upload cached image to Cloudinary:",
+            uploadError,
+          );
+        }
+      }
+
+      return NextResponse.json({
+        ...cachedHistoryItem.analysis,
+        imageCloudinaryUrl: cachedHistoryItem.imageCloudinaryUrl,
+        author: cachedHistoryItem.analysis.author ?? body.author ?? undefined,
+        postTime:
+          cachedHistoryItem.analysis.postTime ?? body.postTime ?? undefined,
+        postUrl:
+          cachedHistoryItem.analysis.postUrl ?? body.postUrl ?? undefined,
+        authorUrl:
+          cachedHistoryItem.analysis.authorUrl ?? body.authorUrl ?? undefined,
+        steamUrl:
+          cachedHistoryItem.analysis.steamUrl ?? body.steamUrl ?? undefined,
+        cacheStatus: "hit",
+      });
+    }
+
+    let imageCloudinaryUrl: string | undefined = undefined;
+    if (imageInputs.length > 0) {
+      try {
+        const { uploadImageToCloudinary } =
+          await import("@/infrastructure/cloudinary");
+        imageCloudinaryUrl = await uploadImageToCloudinary(
+          imageInputs[0].data,
+          imageInputs[0].mimeType,
+        );
+      } catch (uploadError) {
+        console.error("Failed to upload image to Cloudinary:", uploadError);
+      }
+    }
+
+    const analyzer = new PostAnalysisService(new SteamMarketPriceProvider());
+    const analysis = await analyzer.analyze(text, imageInputs);
+
+    // Attach metadata fields from body or text
+    analysis.author = typeof body.author === "string" ? body.author : undefined;
+    analysis.postTime =
+      typeof body.postTime === "string" ? body.postTime : undefined;
+    analysis.postUrl =
+      typeof body.postUrl === "string" ? body.postUrl : undefined;
+    analysis.authorUrl =
+      typeof body.authorUrl === "string" ? body.authorUrl : undefined;
+    analysis.steamUrl =
+      typeof body.steamUrl === "string"
+        ? body.steamUrl
+        : extractSteamUrl(text) || undefined;
+
+    await historyRepository.save({
+      fingerprint,
+      text,
+      imageFileName:
+        imageInputs.length > 0 ? imageInputs[0].fileName : undefined,
+      imageCloudinaryUrl,
+      analysis: {
+        ...analysis,
+        imageCloudinaryUrl,
+      },
+    });
+
+    return NextResponse.json({
+      ...analysis,
+      imageCloudinaryUrl,
+      cacheStatus: "miss",
+    });
+  } catch (error) {
+    console.error("Error analyzing HTML post:", error);
+    return NextResponse.json(
+      {
+        message:
+          error instanceof Error
+            ? error.message
+            : "Không thể phân tích bài viết.",
+      },
+      { status: 500 },
+    );
+  }
+}
+
+function createPostAnalysisFingerprint(
+  text: string,
+  images: Array<{ data: string; mimeType: string }>,
+): string {
+  const normalizedText = text.replace(/\s+/g, " ").trim().toLowerCase();
+  let imageHash = "no-image";
+  if (images.length > 0) {
+    const hash = createHash("sha256");
+    const sorted = [...images].sort((a, b) => a.data.localeCompare(b.data));
+    sorted.forEach((img) => {
+      hash.update(img.mimeType).update(":").update(img.data).update("|");
+    });
+    imageHash = hash.digest("hex");
+  }
+  return createHash("sha256")
+    .update(normalizedText)
+    .update("|")
+    .update(imageHash)
+    .digest("hex");
+}
+
+function extractSteamUrl(text: string): string | null {
+  const fullLinkMatch = text.match(
+    /https?:\/\/steamcommunity\.com\/(?:id|profiles)\/[a-zA-Z0-9_-]+/i,
+  );
+  if (fullLinkMatch) {
+    const base = fullLinkMatch[0];
+    return base.endsWith("/inventory") || base.endsWith("/inventory/")
+      ? base
+      : `${base.replace(/\/$/, "")}/inventory/`;
+  }
+
+  const idMatch = text.match(/(?:\/id\/|id\/)([a-zA-Z0-9_-]+)/i);
+  if (idMatch && idMatch[1]) {
+    return `https://steamcommunity.com/id/${idMatch[1]}/inventory/`;
+  }
+
+  const profileMatch = text.match(/(?:\/profiles\/|profiles\/)([0-9]+)/i);
+  if (profileMatch && profileMatch[1]) {
+    return `https://steamcommunity.com/profiles/${profileMatch[1]}/inventory/`;
+  }
+
+  return null;
+}

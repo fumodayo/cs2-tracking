@@ -1,4 +1,7 @@
-import type { PortfolioReport, PortfolioReportRow } from "@/domain/portfolio-report";
+import type {
+  PortfolioReport,
+  PortfolioReportRow,
+} from "@/domain/portfolio-report";
 
 export function serializeReport(report: PortfolioReport) {
   return {
@@ -13,6 +16,7 @@ function serializeRow(row: PortfolioReportRow) {
     item: {
       ...row.item,
       buyDate: row.item.buyDate.toISOString(),
+      tradeHoldUntil: row.item.tradeHoldUntil?.toISOString(),
       createdAt: row.item.createdAt.toISOString(),
       updatedAt: row.item.updatedAt.toISOString(),
     },

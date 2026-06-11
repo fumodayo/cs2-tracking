@@ -1,3 +1,5 @@
+import { USER_AGENTS } from "@/utils/api-client";
+
 type SteamMarketSearchResponse = {
   success?: boolean;
   results?: SteamMarketSearchResult[];
@@ -11,13 +13,17 @@ type SteamMarketSearchResult = {
   };
 };
 
-const STEAM_IMAGE_CDN_BASE_URL = "https://community.cloudflare.steamstatic.com/economy/image";
-const STEAM_MARKET_SEARCH_URL = "https://steamcommunity.com/market/search/render/";
+const STEAM_IMAGE_CDN_BASE_URL =
+  "https://community.cloudflare.steamstatic.com/economy/image";
+const STEAM_MARKET_SEARCH_URL =
+  "https://steamcommunity.com/market/search/render/";
 const STEAM_IMAGE_SIZE = "96fx96f";
 
 const imageUrlCache = new Map<string, string | null>();
 
-export async function getSteamCaseImageUrl(marketHashName: string): Promise<string | null> {
+export async function getSteamCaseImageUrl(
+  marketHashName: string,
+): Promise<string | null> {
   const cacheKey = marketHashName.toLowerCase();
   if (imageUrlCache.has(cacheKey)) {
     return imageUrlCache.get(cacheKey) ?? null;
@@ -38,7 +44,7 @@ export async function getSteamCaseImageUrl(marketHashName: string): Promise<stri
     const response = await fetch(`${STEAM_MARKET_SEARCH_URL}?${params}`, {
       next: { revalidate: 60 * 60 * 24 },
       headers: {
-        "User-Agent": "cs2-case-tracker/0.1",
+        "User-Agent": USER_AGENTS.steamApi,
       },
     });
 
@@ -48,7 +54,9 @@ export async function getSteamCaseImageUrl(marketHashName: string): Promise<stri
     }
 
     const data = (await response.json()) as SteamMarketSearchResponse;
-    const result = data.results?.find((item) => matchesMarketHashName(item, marketHashName));
+    const result = data.results?.find((item) =>
+      matchesMarketHashName(item, marketHashName),
+    );
     const iconUrl = result?.asset_description?.icon_url;
 
     if (!data.success || !iconUrl) {
@@ -66,7 +74,10 @@ export async function getSteamCaseImageUrl(marketHashName: string): Promise<stri
   }
 }
 
-function matchesMarketHashName(result: SteamMarketSearchResult, marketHashName: string): boolean {
+function matchesMarketHashName(
+  result: SteamMarketSearchResult,
+  marketHashName: string,
+): boolean {
   const expected = marketHashName.toLowerCase();
   return (
     result.hash_name?.toLowerCase() === expected ||

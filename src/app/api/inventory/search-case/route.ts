@@ -13,6 +13,28 @@ export async function GET(request: NextRequest) {
     const { caseRepository, priceService } = createServices();
     const cases = await caseRepository.search(query);
 
+    const trimmedQuery = query.trim();
+    if (trimmedQuery.length >= 3) {
+      const hasExactMatch = cases.some(
+        (c) =>
+          c.marketHashName.toLowerCase() === trimmedQuery.toLowerCase() ||
+          c.name.toLowerCase() === trimmedQuery.toLowerCase(),
+      );
+      if (!hasExactMatch) {
+        const { getSteamCaseImageUrl } =
+          await import("@/infrastructure/cases/steam-case-image-provider");
+        const imageUrl = await getSteamCaseImageUrl(trimmedQuery);
+
+        cases.unshift({
+          id: `ext_${trimmedQuery}`,
+          name: trimmedQuery,
+          marketHashName: trimmedQuery,
+          imageUrl: imageUrl ?? undefined,
+          isActive: true,
+        });
+      }
+    }
+
     const results = await Promise.all(
       cases.slice(0, 10).map(async (caseItem) => {
         let price = 0;

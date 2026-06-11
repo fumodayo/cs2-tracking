@@ -25,6 +25,12 @@ export type PostAnalysisDto = {
   totalAllRateValue: number;
   rows: PostAnalysisRowDto[];
   unknownItems: UnknownPostItemDto[];
+  imageCloudinaryUrl?: string;
+  author?: string;
+  postTime?: string;
+  postUrl?: string;
+  authorUrl?: string;
+  steamUrl?: string;
 };
 
 export type PostAnalysisHistoryItemDto = {
@@ -33,5 +39,6 @@ export type PostAnalysisHistoryItemDto = {
   updatedAt: string;
   text: string;
   imageFileName?: string;
+  imageCloudinaryUrl?: string;
   analysis: PostAnalysisDto;
 };

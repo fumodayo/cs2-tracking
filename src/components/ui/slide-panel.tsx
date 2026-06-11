@@ -1,0 +1,110 @@
+/* eslint-disable react-refresh/only-export-components */
+"use client";
+
+import * as DialogPrimitive from "@radix-ui/react-dialog";
+import { X } from "lucide-react";
+import type { ComponentPropsWithoutRef, ReactNode } from "react";
+import { Button } from "@/components/ui/button";
+import { cn } from "@/utils/cn";
+
+export const SlidePanel = DialogPrimitive.Root;
+export const SlidePanelTrigger = DialogPrimitive.Trigger;
+export const SlidePanelClose = DialogPrimitive.Close;
+
+interface SlidePanelContentProps extends Omit<
+  ComponentPropsWithoutRef<typeof DialogPrimitive.Content>,
+  "title"
+> {
+  title?: ReactNode;
+  description?: string;
+  footer?: ReactNode;
+  hideHeader?: boolean;
+  noPadding?: boolean;
+}
+
+export function SlidePanelContent({
+  children,
+  className,
+  title,
+  description,
+  footer,
+  hideHeader = false,
+  noPadding = false,
+  ...props
+}: SlidePanelContentProps) {
+  return (
+    <DialogPrimitive.Portal>
+      <DialogPrimitive.Overlay className="data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=open]:fade-in-0 data-[state=closed]:fade-out-0 fixed inset-0 z-50 bg-slate-950/70 backdrop-blur-sm" />
+      <DialogPrimitive.Content
+        className={cn(
+          "data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=open]:slide-in-from-right data-[state=closed]:slide-out-to-right fixed inset-y-0 right-0 z-50 flex h-full w-full max-w-lg flex-col border-l border-border bg-card shadow-2xl duration-250 outline-none",
+          className,
+        )}
+        aria-describedby={undefined}
+        {...props}
+      >
+        {hideHeader ? (
+          <DialogPrimitive.Title className="sr-only">
+            {title || "Panel"}
+          </DialogPrimitive.Title>
+        ) : (
+          /* Header */
+          <div className="flex shrink-0 items-center justify-between border-b border-border px-6 py-4">
+            <div className="min-w-0 pr-6">
+              {title && (
+                <DialogPrimitive.Title className="truncate text-lg font-semibold text-foreground">
+                  {title}
+                </DialogPrimitive.Title>
+              )}
+              {description && (
+                <DialogPrimitive.Description className="mt-1 truncate text-xs text-muted-foreground">
+                  {description}
+                </DialogPrimitive.Description>
+              )}
+            </div>
+            <DialogPrimitive.Close asChild>
+              <Button
+                variant="ghost"
+                size="icon"
+                aria-label="Đóng"
+                className="rounded-lg"
+              >
+                <X className="size-4" />
+              </Button>
+            </DialogPrimitive.Close>
+          </div>
+        )}
+
+        {hideHeader && (
+          <DialogPrimitive.Close asChild>
+            <Button
+              variant="ghost"
+              size="icon"
+              aria-label="Đóng"
+              className="border-stone-850 absolute top-4 right-4 z-50 cursor-pointer rounded-lg border bg-stone-900/60 text-stone-400 shadow-md hover:bg-stone-900/90 hover:text-stone-100"
+            >
+              <X className="size-4" />
+            </Button>
+          </DialogPrimitive.Close>
+        )}
+
+        {/* Content */}
+        <div
+          className={cn(
+            "min-h-0 flex-1 overflow-y-auto",
+            noPadding ? "" : "p-6",
+          )}
+        >
+          {children}
+        </div>
+
+        {/* Footer */}
+        {footer && (
+          <div className="shrink-0 border-t border-border bg-surface/20 px-6 py-4">
+            {footer}
+          </div>
+        )}
+      </DialogPrimitive.Content>
+    </DialogPrimitive.Portal>
+  );
+}

@@ -1,18 +1,38 @@
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { MongoPostAnalysisHistoryRepository } from "@/infrastructure/repositories/mongo-post-analysis-history-repository";
 
 export const dynamic = "force-dynamic";
 
-export async function GET() {
+export async function GET(request: NextRequest) {
   try {
+    const { searchParams } = new URL(request.url);
+    const postUrl = searchParams.get("postUrl");
+    const fingerprint = searchParams.get("fingerprint");
+
     const repository = new MongoPostAnalysisHistoryRepository();
+
+    if (postUrl) {
+      const item = await repository.findByPostUrl(postUrl);
+      return NextResponse.json({ item });
+    }
+
+    if (fingerprint) {
+      const item = await repository.findByFingerprint(fingerprint);
+      return NextResponse.json({ item });
+    }
+
     const items = await repository.list(30);
     return NextResponse.json({ items });
   } catch (error) {
-    return NextResponse.json({ message: getErrorMessage(error) }, { status: 500 });
+    return NextResponse.json(
+      { message: getErrorMessage(error) },
+      { status: 500 },
+    );
   }
 }
 
 function getErrorMessage(error: unknown): string {
-  return error instanceof Error ? error.message : "Không thể tải lịch sử phân tích.";
+  return error instanceof Error
+    ? error.message
+    : "Không thể tải lịch sử phân tích.";
 }

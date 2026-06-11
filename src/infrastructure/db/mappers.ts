@@ -12,13 +12,35 @@ export function toObjectId(id: string): ObjectId {
 }
 
 export function mapCaseDocument(doc: WithId<Document>): CaseItem {
+  const rarity = isCaseRarity(doc.rarity)
+    ? {
+        name: String(doc.rarity.name),
+        color: String(doc.rarity.color),
+      }
+    : undefined;
+
   return {
     id: doc._id.toString(),
     name: String(doc.name),
     marketHashName: String(doc.marketHashName),
     imageUrl: doc.imageUrl ? String(doc.imageUrl) : undefined,
+    rarity,
     isActive: Boolean(doc.isActive),
   };
+}
+
+function isCaseRarity(
+  value: unknown,
+): value is { name: unknown; color: unknown } {
+  return (
+    typeof value === "object" &&
+    value !== null &&
+    "name" in value &&
+    "color" in value &&
+    typeof value.name === "string" &&
+    typeof value.color === "string" &&
+    /^#[0-9a-f]{6}$/i.test(value.color)
+  );
 }
 
 export function mapPortfolioDocument(doc: WithId<Document>): PortfolioItem {
@@ -30,8 +52,37 @@ export function mapPortfolioDocument(doc: WithId<Document>): PortfolioItem {
     buyCurrency: "VND",
     buyDate: new Date(doc.buyDate),
     note: doc.note ? String(doc.note) : undefined,
+    sourceAccounts: Array.isArray(doc.sourceAccounts)
+      ? doc.sourceAccounts
+          .map((account) => ({
+            steamId64: String(account?.steamId64 ?? ""),
+            name: String(account?.name ?? ""),
+            breakdown: account?.breakdown
+              ? {
+                  tradeable: Number(account.breakdown.tradeable ?? 0),
+                  onMarket: Number(account.breakdown.onMarket ?? 0),
+                  tradeProtected: Number(account.breakdown.tradeProtected ?? 0),
+                  hold: Number(account.breakdown.hold ?? 0),
+                  holdDetails: Array.isArray(account.breakdown.holdDetails)
+                    ? account.breakdown.holdDetails.map((hd: any) => ({
+                        quantity: Number(hd?.quantity ?? 0),
+                        holdDays: Number(hd?.holdDays ?? 0),
+                      }))
+                    : undefined,
+                }
+              : undefined,
+          }))
+          .filter((account) => account.steamId64 && account.name)
+      : [],
     createdAt: new Date(doc.createdAt),
     updatedAt: new Date(doc.updatedAt),
+    tradeHoldUntil: doc.tradeHoldUntil
+      ? new Date(doc.tradeHoldUntil)
+      : undefined,
+    isTemporaryPrice: doc.isTemporaryPrice
+      ? Boolean(doc.isTemporaryPrice)
+      : undefined,
+    storageUnitId: doc.storageUnitId ? String(doc.storageUnitId) : undefined,
   };
 }
 

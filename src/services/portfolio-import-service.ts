@@ -12,6 +12,7 @@ export type PortfolioImportRowInput = {
 
 export type PortfolioImportResult = {
   importedCount: number;
+  importedIds: string[];
 };
 
 export class PortfolioImportService {
@@ -20,7 +21,9 @@ export class PortfolioImportService {
     private readonly caseRepository: CaseRepository,
   ) {}
 
-  async importRows(rows: PortfolioImportRowInput[]): Promise<PortfolioImportResult> {
+  async importRows(
+    rows: PortfolioImportRowInput[],
+  ): Promise<PortfolioImportResult> {
     if (rows.length === 0) {
       throw new Error("File không có dòng portfolio hợp lệ.");
     }
@@ -38,14 +41,18 @@ export class PortfolioImportService {
       });
     }
 
-    await this.portfolioService.createMany(inputs);
+    const createdItems = await this.portfolioService.createMany(inputs);
 
     return {
-      importedCount: inputs.length,
+      importedCount: createdItems.length,
+      importedIds: createdItems.map((item) => item.id),
     };
   }
 
-  private async resolveCaseId(row: PortfolioImportRowInput, index: number): Promise<string> {
+  private async resolveCaseId(
+    row: PortfolioImportRowInput,
+    index: number,
+  ): Promise<string> {
     if (row.caseId) {
       const caseItem = await this.caseRepository.findById(row.caseId);
       if (caseItem) {
@@ -54,12 +61,15 @@ export class PortfolioImportService {
     }
 
     if (row.marketHashName) {
-      const caseItem = await this.caseRepository.findByMarketHashName(row.marketHashName);
-      if (caseItem) {
-        return caseItem.id;
-      }
+      return (
+        await this.caseRepository.findOrCreateByMarketHashName(
+          row.marketHashName,
+        )
+      ).id;
     }
 
-    throw new Error(`Dòng ${index + 2}: không tìm thấy case. Hãy nhập Case ID hoặc Market Hash Name đúng.`);
+    throw new Error(
+      `Dòng ${index + 2}: không tìm thấy case. Hãy nhập Case ID hoặc Market Hash Name đúng.`,
+    );
   }
 }

@@ -19,17 +19,7 @@ export function formatPercent(value: number | null | undefined): string {
   return `${prefix}${value.toFixed(2)}%`;
 }
 
-export function formatDateTime(value: string | null): string {
-  if (!value) {
-    return "Chưa cập nhật";
-  }
-
-  return new Intl.DateTimeFormat("vi-VN", {
-    dateStyle: "short",
-    timeStyle: "short",
-  }).format(new Date(value));
-}
-
-export function formatInputDate(value: Date): string {
-  return value.toISOString().slice(0, 10);
-}
+export {
+  formatDateTimeVi as formatDateTime,
+  formatInputDate,
+} from "@/utils/date";

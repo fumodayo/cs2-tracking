@@ -1,11 +1,13 @@
 import type { PriceChangeDto } from "@/types/report";
-import { formatCurrency, formatPercent } from "@/utils/format";
+import { formatPercent } from "@/utils/format";
+import { useCurrency } from "@/components/currency-provider";
 
 type ChangePillProps = {
   change: PriceChangeDto;
 };
 
 export function ChangePill({ change }: ChangePillProps) {
+  const { formatCurrency } = useCurrency();
   if (change.amount === null || change.percent === null) {
     return <span className="text-xs text-stone-500">Chưa đủ dữ liệu</span>;
   }
@@ -22,7 +24,9 @@ export function ChangePill({ change }: ChangePillProps) {
       title={`Mốc gốc: ${change.baselineDate ?? "không rõ"}`}
     >
       <span className="font-semibold">{formatPercent(change.percent)}</span>
-      <span className="text-[0.68rem] opacity-80">{formatCurrency(change.amount)}</span>
+      <span className="text-[0.68rem] opacity-80">
+        {formatCurrency(change.amount)}
+      </span>
     </span>
   );
 }

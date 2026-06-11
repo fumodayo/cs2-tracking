@@ -5,6 +5,10 @@ export type CaseDto = {
   name: string;
   marketHashName: string;
   imageUrl?: string;
+  rarity?: {
+    name: string;
+    color: string;
+  };
   isActive: boolean;
 };
 
@@ -24,6 +28,19 @@ export type PortfolioReportRowDto = {
     buyCurrency: "VND";
     buyDate: string;
     note?: string;
+    sourceAccounts?: Array<{
+      steamId64: string;
+      name: string;
+    }>;
+    tradeHoldUntil?: string;
+    isTemporaryPrice?: boolean;
+    storageUnitId?: string;
+    storageUnitQuantity?: number;
+    storageUnitDetails?: Array<{
+      storageUnitId: string;
+      storageUnitName: string;
+      quantity: number;
+    }>;
     createdAt: string;
     updatedAt: string;
   };

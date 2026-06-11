@@ -3,7 +3,10 @@ import type {
   PortfolioItem,
   UpdatePortfolioItemInput,
 } from "@/domain/portfolio-item";
-import type { CaseRepository, PortfolioRepository } from "@/domain/repositories";
+import type {
+  CaseRepository,
+  PortfolioRepository,
+} from "@/domain/repositories";
 
 export class PortfolioService {
   constructor(
@@ -26,17 +29,34 @@ export class PortfolioService {
     return this.portfolioRepository.create(input);
   }
 
-  async createMany(inputs: CreatePortfolioItemInput[]): Promise<PortfolioItem[]> {
-    const createdItems: PortfolioItem[] = [];
+  async createMany(
+    inputs: CreatePortfolioItemInput[],
+  ): Promise<PortfolioItem[]> {
+    if (inputs.length === 0) return [];
 
     for (const input of inputs) {
-      createdItems.push(await this.create(input));
+      validatePortfolioInput(input);
     }
 
-    return createdItems;
+    const uniqueCaseIds = Array.from(
+      new Set(inputs.map((input) => input.caseId)),
+    );
+    const existingCases = await this.caseRepository.findByIds(uniqueCaseIds);
+    const existingCaseIds = new Set(existingCases.map((c) => String(c.id)));
+
+    for (const input of inputs) {
+      if (!existingCaseIds.has(input.caseId)) {
+        throw new Error(`Case không tồn tại (ID: ${input.caseId}).`);
+      }
+    }
+
+    return this.portfolioRepository.createMany(inputs);
   }
 
-  async update(id: string, input: UpdatePortfolioItemInput): Promise<PortfolioItem | null> {
+  async update(
+    id: string,
+    input: UpdatePortfolioItemInput,
+  ): Promise<PortfolioItem | null> {
     validatePortfolioInput(input, true);
     return this.portfolioRepository.update(id, input);
   }
@@ -44,18 +64,31 @@ export class PortfolioService {
   async delete(id: string): Promise<boolean> {
     return this.portfolioRepository.delete(id);
   }
+
+  async deleteMany(ids: string[]): Promise<boolean> {
+    return this.portfolioRepository.deleteMany(ids);
+  }
 }
 
-function validatePortfolioInput(input: Partial<CreatePortfolioItemInput>, partial = false) {
+function validatePortfolioInput(
+  input: Partial<CreatePortfolioItemInput>,
+  partial = false,
+) {
   if (!partial && !input.caseId) {
     throw new Error("Vui lòng chọn case.");
   }
 
-  if (input.quantity !== undefined && (!Number.isFinite(input.quantity) || input.quantity <= 0)) {
+  if (
+    input.quantity !== undefined &&
+    (!Number.isFinite(input.quantity) || input.quantity <= 0)
+  ) {
     throw new Error("Số lượng phải lớn hơn 0.");
   }
 
-  if (input.buyPrice !== undefined && (!Number.isFinite(input.buyPrice) || input.buyPrice <= 0)) {
+  if (
+    input.buyPrice !== undefined &&
+    (!Number.isFinite(input.buyPrice) || input.buyPrice <= 0)
+  ) {
     throw new Error("Giá mua phải lớn hơn 0.");
   }
 

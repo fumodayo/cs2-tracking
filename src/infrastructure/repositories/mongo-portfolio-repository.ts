@@ -8,9 +8,15 @@ import { getDatabase } from "@/infrastructure/db/mongo-client";
 import { mapPortfolioDocument, toObjectId } from "@/infrastructure/db/mappers";
 
 export class MongoPortfolioRepository implements PortfolioRepository {
+  constructor(private readonly ownerId = "guest") {}
+
   async list(): Promise<PortfolioItem[]> {
     const db = await getDatabase();
-    const docs = await db.collection("portfolio_items").find({}).sort({ createdAt: -1 }).toArray();
+    const docs = await db
+      .collection("portfolio_items")
+      .find(this.getOwnerFilter())
+      .sort({ createdAt: -1 })
+      .toArray();
     return docs.map(mapPortfolioDocument);
   }
 
@@ -24,11 +30,18 @@ export class MongoPortfolioRepository implements PortfolioRepository {
       buyCurrency: "VND",
       buyDate: input.buyDate,
       note: input.note,
+      sourceAccounts: input.sourceAccounts ?? [],
+      tradeHoldUntil: input.tradeHoldUntil,
+      isTemporaryPrice: input.isTemporaryPrice,
+      storageUnitId: input.storageUnitId,
+      ownerId: this.ownerId,
       createdAt: now,
       updatedAt: now,
     });
 
-    const doc = await db.collection("portfolio_items").findOne({ _id: result.insertedId });
+    const doc = await db
+      .collection("portfolio_items")
+      .findOne({ _id: result.insertedId });
     if (!doc) {
       throw new Error("Failed to create portfolio item.");
     }
@@ -36,10 +49,47 @@ export class MongoPortfolioRepository implements PortfolioRepository {
     return mapPortfolioDocument(doc);
   }
 
-  async update(id: string, input: UpdatePortfolioItemInput): Promise<PortfolioItem | null> {
+  async createMany(
+    inputs: CreatePortfolioItemInput[],
+  ): Promise<PortfolioItem[]> {
+    if (inputs.length === 0) return [];
+    const db = await getDatabase();
+    const now = new Date();
+    const docs = inputs.map((input) => ({
+      caseId: input.caseId,
+      quantity: input.quantity,
+      buyPrice: input.buyPrice,
+      buyCurrency: "VND",
+      buyDate: input.buyDate,
+      note: input.note,
+      sourceAccounts: input.sourceAccounts ?? [],
+      tradeHoldUntil: input.tradeHoldUntil,
+      isTemporaryPrice: input.isTemporaryPrice,
+      storageUnitId: input.storageUnitId,
+      ownerId: this.ownerId,
+      createdAt: now,
+      updatedAt: now,
+    }));
+
+    const result = await db.collection("portfolio_items").insertMany(docs);
+    const insertedIds = Object.values(result.insertedIds);
+    const insertedDocs = await db
+      .collection("portfolio_items")
+      .find({
+        _id: { $in: insertedIds },
+      })
+      .toArray();
+
+    return insertedDocs.map(mapPortfolioDocument);
+  }
+
+  async update(
+    id: string,
+    input: UpdatePortfolioItemInput,
+  ): Promise<PortfolioItem | null> {
     const db = await getDatabase();
     const result = await db.collection("portfolio_items").findOneAndUpdate(
-      { _id: toObjectId(id) },
+      { _id: toObjectId(id), ...this.getOwnerFilter() },
       {
         $set: {
           ...input,
@@ -54,7 +104,29 @@ export class MongoPortfolioRepository implements PortfolioRepository {
 
   async delete(id: string): Promise<boolean> {
     const db = await getDatabase();
-    const result = await db.collection("portfolio_items").deleteOne({ _id: toObjectId(id) });
+    const result = await db
+      .collection("portfolio_items")
+      .deleteOne({ _id: toObjectId(id), ...this.getOwnerFilter() });
     return result.deletedCount === 1;
+  }
+
+  async deleteMany(ids: string[]): Promise<boolean> {
+    if (ids.length === 0) return true;
+    const db = await getDatabase();
+    const objectIds = ids.map((id) => toObjectId(id));
+    const result = await db
+      .collection("portfolio_items")
+      .deleteMany({ _id: { $in: objectIds }, ...this.getOwnerFilter() });
+    return result.deletedCount === ids.length;
+  }
+
+  private getOwnerFilter() {
+    if (this.ownerId === "guest") {
+      return {
+        $or: [{ ownerId: "guest" }, { ownerId: { $exists: false } }],
+      };
+    }
+
+    return { ownerId: this.ownerId };
   }
 }

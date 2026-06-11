@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createServices } from "@/infrastructure/container";
+import { getPortfolioOwnerId } from "@/services/auth-service";
 import { serializeReport } from "@/services/dto";
 import type { PortfolioImportRowInput } from "@/services/portfolio-import-service";
 
@@ -9,14 +10,24 @@ export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
     const rows = normalizeRows(body.rows);
-    const { portfolioImportService, portfolioReportService } = createServices();
+    const { portfolioImportService, portfolioReportService } = createServices({
+      ownerId: await getPortfolioOwnerId(),
+    });
 
     const result = await portfolioImportService.importRows(rows);
-    const report = await portfolioReportService.buildReport();
+    const report = await portfolioReportService.buildReport({
+      refreshStalePrices: false,
+    });
 
-    return NextResponse.json({ ...serializeReport(report), importResult: result }, { status: 201 });
+    return NextResponse.json(
+      { ...serializeReport(report), importResult: result },
+      { status: 201 },
+    );
   } catch (error) {
-    return NextResponse.json({ message: getErrorMessage(error) }, { status: 400 });
+    return NextResponse.json(
+      { message: getErrorMessage(error) },
+      { status: 400 },
+    );
   }
 }
 

@@ -6,8 +6,33 @@ export type PortfolioItem = {
   buyCurrency: "VND";
   buyDate: Date;
   note?: string;
+  sourceAccounts?: PortfolioSourceAccount[];
+  tradeHoldUntil?: Date;
+  isTemporaryPrice?: boolean;
+  storageUnitId?: string;
+  storageUnitQuantity?: number;
+  storageUnitDetails?: Array<{
+    storageUnitId: string;
+    storageUnitName: string;
+    quantity: number;
+  }>;
   createdAt: Date;
   updatedAt: Date;
+};
+
+export type PortfolioSourceAccount = {
+  steamId64: string;
+  name: string;
+  breakdown?: {
+    tradeable: number;
+    onMarket: number;
+    tradeProtected: number;
+    hold: number;
+    holdDetails?: Array<{
+      quantity: number;
+      holdDays: number;
+    }>;
+  };
 };
 
 export type CreatePortfolioItemInput = {
@@ -16,8 +41,22 @@ export type CreatePortfolioItemInput = {
   buyPrice: number;
   buyDate: Date;
   note?: string;
+  sourceAccounts?: PortfolioSourceAccount[];
+  tradeHoldUntil?: Date;
+  isTemporaryPrice?: boolean;
+  storageUnitId?: string;
 };
 
 export type UpdatePortfolioItemInput = Partial<
-  Pick<CreatePortfolioItemInput, "quantity" | "buyPrice" | "buyDate" | "note">
+  Pick<
+    CreatePortfolioItemInput,
+    | "quantity"
+    | "buyPrice"
+    | "buyDate"
+    | "note"
+    | "tradeHoldUntil"
+    | "isTemporaryPrice"
+    | "sourceAccounts"
+    | "storageUnitId"
+  >
 >;
