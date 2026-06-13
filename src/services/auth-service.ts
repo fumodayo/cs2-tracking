@@ -185,11 +185,6 @@ async function upsertUser(profile: GoogleUserInfo): Promise<SessionUser> {
 }
 
 async function getGoogleRedirectUri(): Promise<string> {
-  const appUrl = process.env.NEXT_PUBLIC_APP_URL || process.env.APP_URL;
-  if (appUrl) {
-    return `${appUrl.replace(/\/+$/, "")}/api/auth/google/callback`;
-  }
-
   const headerStore = await headers();
   const host =
     headerStore.get("x-forwarded-host") ??
@@ -198,6 +193,18 @@ async function getGoogleRedirectUri(): Promise<string> {
   const proto =
     headerStore.get("x-forwarded-proto") ??
     (host.startsWith("localhost") ? "http" : "https");
+
+  const appUrl = process.env.NEXT_PUBLIC_APP_URL || process.env.APP_URL;
+  if (appUrl) {
+    const isAppUrlLocal = appUrl.includes("localhost") || appUrl.includes("127.0.0.1");
+    const isRequestLocal = host.startsWith("localhost") || host.startsWith("127.0.0.1");
+
+    // Only use the configured appUrl if it's not a localhost mismatch
+    if (!isAppUrlLocal || isRequestLocal) {
+      return `${appUrl.replace(/\/+$/, "")}/api/auth/google/callback`;
+    }
+  }
+
   return `${proto}://${host}/api/auth/google/callback`;
 }
 
