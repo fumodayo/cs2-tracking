@@ -1,5 +1,6 @@
 import type { PortfolioReportDto } from "@/types/report";
 import type { PortfolioImportRow } from "@/components/portfolio";
+import { getErrorMessage } from "@/utils/error";
 
 export const PORTFOLIO_QUERY_KEY = ["portfolio-report"];
 
@@ -12,12 +13,12 @@ export type PortfolioImportResponse = PortfolioReportDto & {
 
 export async function fetchPortfolioReport(): Promise<PortfolioReportDto> {
   const response = await fetch("/api/portfolio", { cache: "no-store" });
-  return parseReportResponse(response);
+  return parseResponse<PortfolioReportDto>(response);
 }
 
 export async function refreshPortfolioPrices(): Promise<PortfolioReportDto> {
   const response = await fetch("/api/prices/refresh", { method: "POST" });
-  return parseReportResponse(response);
+  return parseResponse<PortfolioReportDto>(response);
 }
 
 export async function addPortfolioItem(payload: {
@@ -45,12 +46,12 @@ export async function addPortfolioItem(payload: {
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(payload),
   });
-  return parseReportResponse(response);
+  return parseResponse<PortfolioReportDto>(response);
 }
 
 export async function deletePortfolioItem(id: string): Promise<PortfolioReportDto> {
   const response = await fetch(`/api/portfolio/${id}`, { method: "DELETE" });
-  return parseReportResponse(response);
+  return parseResponse<PortfolioReportDto>(response);
 }
 
 export async function deleteManyPortfolioItems(
@@ -61,7 +62,7 @@ export async function deleteManyPortfolioItems(
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ ids }),
   });
-  return parseReportResponse(response);
+  return parseResponse<PortfolioReportDto>(response);
 }
 
 export async function updatePortfolioItem(payload: {
@@ -99,7 +100,7 @@ export async function updatePortfolioItem(payload: {
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(body),
   });
-  return parseReportResponse(response);
+  return parseResponse<PortfolioReportDto>(response);
 }
 
 export async function importPortfolioRows(
@@ -110,21 +111,17 @@ export async function importPortfolioRows(
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ rows }),
   });
-  return parseReportResponse(response);
+  return parseResponse<PortfolioImportResponse>(response);
 }
 
-async function parseReportResponse(
-  response: Response,
-): Promise<PortfolioReportDto> {
+async function parseResponse<T>(response: Response): Promise<T> {
   const data = await response.json();
 
   if (!response.ok) {
     throw new Error(data.message ?? "Request thất bại.");
   }
 
-  return data as PortfolioReportDto;
+  return data as T;
 }
 
-export function getErrorMessage(error: unknown): string {
-  return error instanceof Error ? error.message : "Có lỗi xảy ra.";
-}
+export { getErrorMessage };

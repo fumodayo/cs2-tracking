@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import type { UpdatePortfolioItemInput } from "@/domain/portfolio-item";
+import { getErrorMessage } from "@/utils/error";
 import { createServices } from "@/infrastructure/container";
 import { getPortfolioOwnerId } from "@/services/auth-service";
 import { serializeReport } from "@/services/dto";
@@ -139,7 +140,7 @@ export async function PATCH(request: NextRequest, context: RouteContext) {
     return NextResponse.json(serializeReport(report));
   } catch (error) {
     return NextResponse.json(
-      { message: getErrorMessage(error) },
+      { message: getErrorMessage(error, "Không thể cập nhật portfolio.") },
       { status: 400 },
     );
   }
@@ -216,14 +217,10 @@ export async function DELETE(_request: NextRequest, context: RouteContext) {
     return NextResponse.json(serializeReport(report));
   } catch (error) {
     return NextResponse.json(
-      { message: getErrorMessage(error) },
+      { message: getErrorMessage(error, "Không thể cập nhật portfolio.") },
       { status: 400 },
     );
   }
 }
 
-function getErrorMessage(error: unknown): string {
-  return error instanceof Error
-    ? error.message
-    : "Không thể cập nhật portfolio.";
-}
+

@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { MongoPostAnalysisHistoryRepository } from "@/infrastructure/repositories/mongo-post-analysis-history-repository";
+import { getErrorMessage } from "@/utils/error";
 
 export const dynamic = "force-dynamic";
 
@@ -25,14 +26,8 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ items });
   } catch (error) {
     return NextResponse.json(
-      { message: getErrorMessage(error) },
+      { message: getErrorMessage(error, "Không thể tải lịch sử phân tích.") },
       { status: 500 },
     );
   }
-}
-
-function getErrorMessage(error: unknown): string {
-  return error instanceof Error
-    ? error.message
-    : "Không thể tải lịch sử phân tích.";
 }

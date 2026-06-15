@@ -3,6 +3,7 @@ import { createServices } from "@/infrastructure/container";
 import { getPortfolioOwnerId } from "@/services/auth-service";
 import { serializeReport } from "@/services/dto";
 import type { PortfolioImportRowInput } from "@/services/portfolio-import-service";
+import { getErrorMessage } from "@/utils/error";
 
 export const dynamic = "force-dynamic";
 
@@ -25,7 +26,7 @@ export async function POST(request: NextRequest) {
     );
   } catch (error) {
     return NextResponse.json(
-      { message: getErrorMessage(error) },
+      { message: getErrorMessage(error, "Không thể import portfolio.") },
       { status: 400 },
     );
   }
@@ -76,8 +77,4 @@ function getOptionalString(value: unknown): string | undefined {
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
-}
-
-function getErrorMessage(error: unknown): string {
-  return error instanceof Error ? error.message : "Không thể import portfolio.";
 }

@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { createServices } from "@/infrastructure/container";
 import { getPortfolioOwnerId } from "@/services/auth-service";
 import { serializeReport } from "@/services/dto";
+import { getErrorMessage } from "@/utils/error";
 
 export const dynamic = "force-dynamic";
 
@@ -17,12 +18,8 @@ export async function POST() {
     return NextResponse.json(serializeReport(report));
   } catch (error) {
     return NextResponse.json(
-      { message: getErrorMessage(error) },
+      { message: getErrorMessage(error, "Không thể refresh giá.") },
       { status: 500 },
     );
   }
-}
-
-function getErrorMessage(error: unknown): string {
-  return error instanceof Error ? error.message : "Không thể refresh giá.";
 }

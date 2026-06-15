@@ -1,5 +1,6 @@
 import { NextRequest } from "next/server";
 import { ObjectId } from "mongodb";
+import { getErrorMessage } from "@/utils/error";
 import type { CaseItem } from "@/domain/case-item";
 import type {
   PortfolioSourceAccount,
@@ -510,7 +511,7 @@ export async function POST(request: NextRequest) {
         });
         controller.close();
       } catch (error) {
-        sendProgress({ type: "error", message: getErrorMessage(error) });
+        sendProgress({ type: "error", message: getErrorMessage(error, "Không thể import inventory vào portfolio.") });
         controller.close();
       }
     },
@@ -700,8 +701,4 @@ async function updateImportedCaseMetadata(input: {
     .updateOne({ marketHashName: input.marketHashName }, { $set });
 }
 
-function getErrorMessage(error: unknown): string {
-  return error instanceof Error
-    ? error.message
-    : "Không thể import inventory vào portfolio.";
-}
+

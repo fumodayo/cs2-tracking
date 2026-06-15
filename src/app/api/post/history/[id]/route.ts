@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { MongoPostAnalysisHistoryRepository } from "@/infrastructure/repositories/mongo-post-analysis-history-repository";
+import { getErrorMessage } from "@/utils/error";
 
 export const dynamic = "force-dynamic";
 
@@ -25,14 +26,8 @@ export async function DELETE(_request: NextRequest, context: RouteContext) {
     return NextResponse.json({ ok: true });
   } catch (error) {
     return NextResponse.json(
-      { message: getErrorMessage(error) },
+      { message: getErrorMessage(error, "Không thể xóa lịch sử phân tích.") },
       { status: 400 },
     );
   }
-}
-
-function getErrorMessage(error: unknown): string {
-  return error instanceof Error
-    ? error.message
-    : "Không thể xóa lịch sử phân tích.";
 }

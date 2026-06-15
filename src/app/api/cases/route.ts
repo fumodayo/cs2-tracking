@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createServices } from "@/infrastructure/container";
+import { getErrorMessage } from "@/utils/error";
 
 export const dynamic = "force-dynamic";
 
@@ -37,14 +38,8 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ cases });
   } catch (error) {
     return NextResponse.json(
-      { message: getErrorMessage(error) },
+      { message: getErrorMessage(error, "Không thể tải danh sách case.") },
       { status: 500 },
     );
   }
-}
-
-function getErrorMessage(error: unknown): string {
-  return error instanceof Error
-    ? error.message
-    : "Không thể tải danh sách case.";
 }

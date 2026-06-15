@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getDatabase } from "@/infrastructure/db/mongo-client";
+import { getErrorMessage } from "@/utils/error";
 import { getPortfolioOwnerId } from "@/services/auth-service";
 import { encrypt, decrypt } from "@/services/crypto-service";
 import { ObjectId } from "mongodb";
@@ -32,7 +33,7 @@ export async function GET() {
     );
   } catch (error) {
     return NextResponse.json(
-      { message: getErrorMessage(error) },
+      { message: getErrorMessage(error, "Đã xảy ra lỗi.") },
       { status: 500 },
     );
   }
@@ -96,7 +97,7 @@ export async function POST(request: NextRequest) {
     );
   } catch (error) {
     return NextResponse.json(
-      { message: getErrorMessage(error) },
+      { message: getErrorMessage(error, "Đã xảy ra lỗi.") },
       { status: 400 },
     );
   }
@@ -143,7 +144,7 @@ export async function PATCH(request: NextRequest) {
     return NextResponse.json({ success: true });
   } catch (error) {
     return NextResponse.json(
-      { message: getErrorMessage(error) },
+      { message: getErrorMessage(error, "Đã xảy ra lỗi.") },
       { status: 500 },
     );
   }
@@ -201,7 +202,7 @@ export async function DELETE(request: NextRequest) {
     return NextResponse.json({ success: true });
   } catch (error) {
     return NextResponse.json(
-      { message: getErrorMessage(error) },
+      { message: getErrorMessage(error, "Đã xảy ra lỗi.") },
       { status: 500 },
     );
   }
@@ -216,6 +217,4 @@ function getOwnerFilter(ownerId: string) {
   return { ownerId };
 }
 
-function getErrorMessage(error: unknown): string {
-  return error instanceof Error ? error.message : "Đã xảy ra lỗi.";
-}
+
