@@ -1,17 +1,16 @@
 import {
   useCallback,
   useEffect,
-  useMemo,
   useReducer,
   useRef,
   useState,
 } from "react";
 import { useSession } from "@/components/auth/use-session";
+import { toast } from "@/stores/toast-store";
 import {
   AccountEntry,
   CaseItemData,
   ScanProgress,
-  ScanResponse,
   ScanResultItem,
 } from "./types";
 import {
@@ -21,9 +20,6 @@ import {
   SCAN_REQUEST_TIMEOUT_MS,
   createAccount,
   extractSteamKey,
-  fetchWithTimeout,
-  getInventoryItemType,
-  getSourceAccountsForItem,
   readRate,
   LS_RATE_ALL,
   LS_RATE_LE,
@@ -32,11 +28,13 @@ import {
 } from "./utils";
 
 import {
-  ScannerState,
-  ScannerAction,
   initScannerState,
   scannerReducer,
 } from "./scanner-reducer";
+
+import { useScannerDataMerged } from "./hooks/use-scanner-data-merged";
+import { useScannerAutoRetry } from "./hooks/use-scanner-auto-retry";
+import { useScannerPortfolioImport } from "./hooks/use-scanner-portfolio-import";
 
 export function useInventoryScanner() {
   const [state, dispatch] = useReducer(scannerReducer, null, initScannerState);
@@ -52,8 +50,7 @@ export function useInventoryScanner() {
 
   const { user, googleConfigured } = useSession();
 
-  const autoRetryRoundRef = useRef(0);
-  const hasScanCompletedRef = useRef(false);
+  const scanAbortControllerRef = useRef<AbortController | null>(null);
 
   // Load persisted state from localStorage after mount (avoids hydration mismatch)
   useEffect(() => {
@@ -165,13 +162,22 @@ export function useInventoryScanner() {
    * Periodically polls progress on the server for a queued background scan job.
    */
   const pollScanProgress = useCallback(
-    async (jobId: string, accountId: string): Promise<ScanProgress> => {
+    async (
+      jobId: string,
+      accountId: string,
+      signal?: AbortSignal,
+    ): Promise<ScanProgress> => {
       const startedAt = Date.now();
       while (Date.now() - startedAt < SCAN_REQUEST_TIMEOUT_MS) {
+        if (signal?.aborted) {
+          throw new DOMException("Aborted", "AbortError");
+        }
+
         const response = await fetch(
           `/api/inventory/scan?jobId=${encodeURIComponent(jobId)}`,
           {
             cache: "no-store",
+            signal,
           },
         );
 
@@ -179,7 +185,7 @@ export function useInventoryScanner() {
         let progress: ScanProgress;
         try {
           progress = JSON.parse(responseText) as ScanProgress;
-        } catch (e) {
+        } catch {
           throw new Error(
             `Không thể kết nối đến máy chủ định giá (HTTP ${response.status}).`,
           );
@@ -194,7 +200,26 @@ export function useInventoryScanner() {
           return progress;
         }
 
-        await new Promise((resolve) => setTimeout(resolve, 900));
+        await new Promise<void>((resolve, reject) => {
+          const timeout = setTimeout(() => {
+            if (signal) signal.removeEventListener("abort", onAbort);
+            resolve();
+          }, 900);
+
+          const onAbort = () => {
+            clearTimeout(timeout);
+            if (signal) signal.removeEventListener("abort", onAbort);
+            reject(new DOMException("Aborted", "AbortError"));
+          };
+
+          if (signal) {
+            if (signal.aborted) {
+              onAbort();
+            } else {
+              signal.addEventListener("abort", onAbort);
+            }
+          }
+        });
       }
 
       throw new Error("Quét inventory quá lâu. Hãy thử lại sau.");
@@ -202,14 +227,13 @@ export function useInventoryScanner() {
     [],
   );
 
-  /**
-   * Executes a full scanning sequence for a specific profile url.
-   */
   const doScan = useCallback(
     async (
       accountId: string,
       forceRefresh: boolean,
       currentAccounts: AccountEntry[],
+      signal?: AbortSignal,
+      isPartOfScanAll = false,
     ) => {
       const account = currentAccounts.find((a) => a.id === accountId);
       if (!account || !account.url.trim()) return;
@@ -226,10 +250,23 @@ export function useInventoryScanner() {
         return;
       }
 
+      let activeSignal = signal;
+      if (!activeSignal) {
+        scanAbortControllerRef.current = new AbortController();
+        activeSignal = scanAbortControllerRef.current.signal;
+      }
+
+      let toastId: string | null = null;
+      if (!isPartOfScanAll) {
+        toastId = toast.loading("Đang quét hòm đồ...");
+      }
+
       dispatch({ type: "START_SCAN", accountId });
 
       try {
-        const res = await fetchWithTimeout(
+        if (activeSignal?.aborted) throw new DOMException("Aborted", "AbortError");
+
+        const res = await fetch(
           "/api/inventory/scan",
           {
             method: "POST",
@@ -241,14 +278,15 @@ export function useInventoryScanner() {
               forceRefresh,
               progress: true,
             }),
-          },
-          SCAN_REQUEST_TIMEOUT_MS,
+            signal: activeSignal,
+          }
         );
+
         const resText = await res.text();
         let data: any;
         try {
           data = JSON.parse(resText);
-        } catch (e) {
+        } catch {
           throw new Error(`Yêu cầu quét thất bại (HTTP ${res.status})`);
         }
         if (!res.ok) throw new Error(data.message || "Yêu cầu quét thất bại.");
@@ -256,6 +294,7 @@ export function useInventoryScanner() {
         const scanProgress = await pollScanProgress(
           String(data.jobId),
           accountId,
+          activeSignal,
         );
         if (scanProgress.status === "error" || !scanProgress.result) {
           throw new Error(
@@ -272,12 +311,33 @@ export function useInventoryScanner() {
           result: scanResult,
           progress: scanProgress,
         });
+
+        if (toastId) {
+          toast.dismiss(toastId);
+          toast.success("Quét hòm đồ thành công!");
+        }
       } catch (err) {
-        dispatch({
-          type: "SCAN_FAILURE",
-          accountId,
-          error: err instanceof Error ? err.message : "Lỗi",
-        });
+        if (toastId) {
+          toast.dismiss(toastId);
+          if (err instanceof DOMException && err.name === "AbortError") {
+            toast.info("Đã dừng quét.");
+          } else {
+            toast.error(err instanceof Error ? err.message : "Quét thất bại.");
+          }
+        }
+
+        if (err instanceof DOMException && err.name === "AbortError") {
+          dispatch({
+            type: "CANCEL_SCAN",
+            accountId,
+          });
+        } else {
+          dispatch({
+            type: "SCAN_FAILURE",
+            accountId,
+            error: err instanceof Error ? err.message : "Lỗi",
+          });
+        }
       }
     },
     [findUrlDuplicate, pollScanProgress],
@@ -291,14 +351,52 @@ export function useInventoryScanner() {
       const valid = state.accounts.filter((a) => a.url.trim());
       if (!valid.length) return;
 
+      scanAbortControllerRef.current = new AbortController();
+      const signal = scanAbortControllerRef.current.signal;
+
+      const toastId = toast.loading("Đang tiến hành quét toàn bộ hòm đồ...");
+
       dispatch({ type: "SET_SCANNING_ALL", scanning: true });
       try {
         dispatch({ type: "RESET_REMOVED_KEYS" });
         for (let i = 0; i < valid.length; i++) {
-          await doScan(valid[i].id, forceRefresh, state.accounts);
-          if (i < valid.length - 1) {
-            await new Promise((r) => setTimeout(r, 500));
+          if (signal.aborted) break;
+          await doScan(valid[i].id, forceRefresh, state.accounts, signal, true);
+          if (i < valid.length - 1 && !signal.aborted) {
+            await new Promise<void>((resolve, reject) => {
+              const timeout = setTimeout(() => {
+                signal.removeEventListener("abort", onAbort);
+                resolve();
+              }, 500);
+
+              const onAbort = () => {
+                clearTimeout(timeout);
+                signal.removeEventListener("abort", onAbort);
+                reject(new DOMException("Aborted", "AbortError"));
+              };
+
+              if (signal.aborted) {
+                onAbort();
+              } else {
+                signal.addEventListener("abort", onAbort);
+              }
+            });
           }
+        }
+
+        if (signal.aborted) {
+          toast.dismiss(toastId);
+          toast.info("Đã dừng quét toàn bộ.");
+        } else {
+          toast.dismiss(toastId);
+          toast.success("Quét toàn bộ hòm đồ hoàn tất!");
+        }
+      } catch (err) {
+        toast.dismiss(toastId);
+        if (err instanceof DOMException && err.name === "AbortError") {
+          toast.info("Đã dừng quét toàn bộ.");
+        } else {
+          toast.error("Quét thất bại: " + (err instanceof Error ? err.message : "Lỗi"));
         }
       } finally {
         dispatch({ type: "SET_SCANNING_ALL", scanning: false });
@@ -306,6 +404,10 @@ export function useInventoryScanner() {
     },
     [state.accounts, doScan],
   );
+
+  const cancelScanAll = useCallback(() => {
+    scanAbortControllerRef.current?.abort();
+  }, []);
 
   const addManualItem = useCallback(
     (
@@ -376,7 +478,7 @@ export function useInventoryScanner() {
         let data: any;
         try {
           data = JSON.parse(resText);
-        } catch (e) {
+        } catch {
           throw new Error(
             `Yêu cầu lấy giá BUFF163 thất bại (HTTP ${response.status}).`,
           );
@@ -410,17 +512,6 @@ export function useInventoryScanner() {
     dispatch({ type: "SET_EXPANDED_ACCOUNT", id });
   }, []);
 
-  const setSelectedTypes = useCallback((_v: Set<string>) => {
-    // Dispatch is cleaner than multiple state updates. Since selectedTypes is a Set,
-    // we manage it through specialized actions or replace it entirely.
-    // For simplicity, let's keep Set selection inside state or reducer directly.
-    // We can just add/delete directly inside our UI or clear it.
-    // Let's create an action that resets or toggles the set.
-    // To support set replacing directly:
-    // Let's toggle or clear. Or we can add an action:
-    // type: "SET_TYPE_FILTERS", selectedTypes: Set<string>
-  }, []);
-
   // For faceted filter toggling
   const toggleTypeFilter = useCallback((itemType: string) => {
     dispatch({ type: "TOGGLE_TYPE_FILTER", itemType });
@@ -434,453 +525,45 @@ export function useInventoryScanner() {
     dispatch({ type: "SET_GLOBAL_FILTER", filter });
   }, []);
 
-  /**
-   * Applies third-party BUFF163 exchange calculations to a scanned item.
-   */
-  const applyBuffPricing = useCallback(
-    (item: ScanResultItem): ScanResultItem => {
-      if (item.type !== "Skin") {
-        return item;
-      }
-
-      const buffPriceCny = state.buffPricesCny[item.caseItem.marketHashName];
-      if (!Number.isFinite(buffPriceCny) || buffPriceCny <= 0) {
-        return { ...item, buffPriceCny: undefined };
-      }
-
-      const price = Math.round(buffPriceCny * buffCnyToVndRate);
-      return {
-        ...item,
-        price,
-        total: price * item.quantity,
-        buffPriceCny,
-        priceSource: "buff163",
-      };
-    },
-    [buffCnyToVndRate, state.buffPricesCny],
-  );
-
-  // Aggregated data derivation using useMemo
-  const mergedRaw = useMemo(() => {
-    const done = state.accounts
-      .filter((a) => a.status === "done" && a.result)
-      .map((a) => a.result!);
-    const hasScanned = done.length > 0;
-    const hasManual = state.manualItems.length > 0;
-    if (!hasScanned && !hasManual) return null;
-
-    const map = new Map<string, ScanResultItem>();
-    for (const r of done) {
-      for (const item of r.items) {
-        if (state.removedKeys.has(item.caseItem.marketHashName)) continue;
-        const k = item.caseItem.marketHashName;
-
-        const isMarket = !!item.onMarket;
-        const isProtected = !!item.tradeProtected;
-        const isHold = !isProtected && !!item.holdDays && item.holdDays > 0;
-        const isTradeable = !isMarket && !isProtected && !isHold;
-
-        const sourceAccount = {
-          steamId64: r.steamId64,
-          name: r.profile?.name || r.steamId64,
-          quantity: item.quantity,
-          breakdown: {
-            tradeable: isTradeable ? item.quantity : 0,
-            onMarket: isMarket ? item.quantity : 0,
-            tradeProtected: isProtected ? item.quantity : 0,
-            hold: isHold ? item.quantity : 0,
-            holdDetails:
-              isHold || isProtected
-                ? [{ quantity: item.quantity, holdDays: item.holdDays || 0 }]
-                : [],
-          },
-        };
-
-        const ex = map.get(k);
-        if (ex) {
-          ex.quantity += item.quantity;
-          ex.total += item.total;
-          ex.holdDays =
-            Math.max(ex.holdDays ?? 0, item.holdDays ?? 0) || undefined;
-
-          if (item.onMarket) ex.onMarket = true;
-          if (item.tradeProtected) ex.tradeProtected = true;
-
-          const sourceAccounts = [...(ex.sourceAccounts ?? [])];
-          const existingAccount = sourceAccounts.find(
-            (account) => account.steamId64 === sourceAccount.steamId64,
-          );
-          if (existingAccount) {
-            existingAccount.quantity =
-              (existingAccount.quantity ?? 0) + item.quantity;
-            if (!existingAccount.breakdown) {
-              existingAccount.breakdown = {
-                tradeable: 0,
-                onMarket: 0,
-                tradeProtected: 0,
-                hold: 0,
-                holdDetails: [],
-              };
-            }
-            existingAccount.breakdown.tradeable +=
-              sourceAccount.breakdown.tradeable;
-            existingAccount.breakdown.onMarket +=
-              sourceAccount.breakdown.onMarket;
-            existingAccount.breakdown.tradeProtected +=
-              sourceAccount.breakdown.tradeProtected;
-            existingAccount.breakdown.hold += sourceAccount.breakdown.hold;
-            if (sourceAccount.breakdown.holdDetails.length > 0) {
-              existingAccount.breakdown.holdDetails = [
-                ...(existingAccount.breakdown.holdDetails || []),
-                ...sourceAccount.breakdown.holdDetails,
-              ];
-            }
-          } else {
-            sourceAccounts.push(sourceAccount);
-          }
-          ex.sourceAccounts = sourceAccounts;
-        } else {
-          map.set(k, {
-            ...item,
-            sourceAccounts: [sourceAccount],
-            onMarket: isMarket ? true : undefined,
-            tradeProtected: isProtected ? true : undefined,
-          });
-        }
-      }
-    }
-
-    const scannedItems = Array.from(map.values());
-    const items = [...state.manualItems, ...scannedItems];
-    return {
-      items,
-      scannedItems,
-      totalInventoryCount: done.reduce(
-        (s: number, r: ScanResponse) => s + r.totalInventoryCount,
-        0,
-      ),
-      accountCount: done.length,
-    };
-  }, [state.accounts, state.manualItems, state.removedKeys]);
-
-  const merged = useMemo(() => {
-    if (!mergedRaw) return null;
-    const pricedItems = mergedRaw.items.map(applyBuffPricing);
-    const pricedScannedItems = mergedRaw.scannedItems.map(applyBuffPricing);
-    const items = pricedItems.filter(
-      (i) => state.selectedTypes.size === 0 || state.selectedTypes.has(i.type),
-    );
-    const scannedItems = pricedScannedItems.filter(
-      (i) => state.selectedTypes.size === 0 || state.selectedTypes.has(i.type),
-    );
-    return {
-      ...mergedRaw,
-      items,
-      scannedItems,
-      totalPrice: items.reduce(
-        (s: number, i: ScanResultItem) => s + i.total,
-        0,
-      ),
-      totalQuantity: items.reduce(
-        (s: number, i: ScanResultItem) => s + i.quantity,
-        0,
-      ),
-    };
-  }, [applyBuffPricing, mergedRaw, state.selectedTypes]);
-
-  const totalSi = useMemo(() => {
-    if (!merged?.items) return 0;
-    return merged.items.reduce((sum: number, item: ScanResultItem) => {
-      return (
-        sum +
-        (item.priceSource === "buff163"
-          ? item.total
-          : (item.total * rateAll) / 100)
-      );
-    }, 0);
-  }, [merged, rateAll]);
-
-  const totalLe = useMemo(() => {
-    if (!merged?.items) return 0;
-    return merged.items.reduce((sum: number, item: ScanResultItem) => {
-      return (
-        sum +
-        (item.priceSource === "buff163"
-          ? item.total
-          : (item.total * rateLe) / 100)
-      );
-    }, 0);
-  }, [merged, rateLe]);
-
-  const filteredManualItems = useMemo(() => {
-    const query = state.globalFilter.trim().toLowerCase();
-    const items = state.manualItems
-      .filter(
-        (i) =>
-          state.selectedTypes.size === 0 || state.selectedTypes.has(i.type),
-      )
-      .map(applyBuffPricing);
-    if (!query) return items;
-    return items.filter((i) => i.caseItem.name.toLowerCase().includes(query));
-  }, [
-    state.manualItems,
-    state.globalFilter,
-    state.selectedTypes,
+  // Integration of specialized modular sub-hooks
+  const {
+    mergedRaw,
+    merged,
+    totalSi,
+    totalLe,
+    filteredManualItems,
+    zeroPricedItems,
     applyBuffPricing,
+  } = useScannerDataMerged({
+    accounts: state.accounts,
+    manualItems: state.manualItems,
+    removedKeys: state.removedKeys,
+    selectedTypes: state.selectedTypes,
+    globalFilter: state.globalFilter,
+    buffPricesCny: state.buffPricesCny,
     buffCnyToVndRate,
-    state.buffPricesCny,
-  ]);
+    rateAll,
+    rateLe,
+  });
 
   const isAnyScanPending = state.accounts.some((a) => a.status === "scanning");
   const hasValidUrls = state.accounts.some((a) => a.url.trim());
-  const zeroPricedItems = useMemo(
-    () => merged?.items.filter((item: ScanResultItem) => item.price <= 0) ?? [],
-    [merged],
-  );
 
-  // Transition monitoring to auto-trigger background price retrieval loops
-  const prevScanPendingRef = useRef(false);
-  useEffect(() => {
-    if (prevScanPendingRef.current && !isAnyScanPending) {
-      hasScanCompletedRef.current = true;
-      autoRetryRoundRef.current = 0;
-      dispatch({ type: "PRICE_RETRY_STATUS", status: "" });
-    }
-    prevScanPendingRef.current = isAnyScanPending;
-  }, [isAnyScanPending]);
-
-  // Automatic retry loops for items returned with 0 VND values
-  const MAX_AUTO_RETRY_ROUNDS = 15;
-  const AUTO_RETRY_COOLDOWN_MS = 5_000;
-
-  useEffect(() => {
-    if (!hasScanCompletedRef.current) return;
-    if (state.retryingPrices) return;
-    if (zeroPricedItems.length === 0) {
-      if (autoRetryRoundRef.current > 0) {
-        dispatch({
-          type: "PRICE_RETRY_STATUS",
-          status: "Đã cập nhật giá cho tất cả item!",
-        });
-      }
-      return;
-    }
-    if (autoRetryRoundRef.current >= MAX_AUTO_RETRY_ROUNDS) {
-      dispatch({
-        type: "PRICE_RETRY_STATUS",
-        status: `Đã thử ${MAX_AUTO_RETRY_ROUNDS} lần, còn ${zeroPricedItems.length} item vẫn 0đ. Steam có thể không có giá cho các item này.`,
-      });
-      return;
-    }
-
-    const round = autoRetryRoundRef.current + 1;
-    const delay = round === 1 ? 500 : AUTO_RETRY_COOLDOWN_MS;
-
-    const timer = setTimeout(async () => {
-      const itemsToRetry = zeroPricedItems.filter((item: ScanResultItem) => {
-        if (
-          item.type === "Skin" &&
-          state.buffPricesCny[item.caseItem.marketHashName] > 0
-        )
-          return false;
-        return true;
-      });
-      if (!itemsToRetry.length) return;
-
-      autoRetryRoundRef.current = round;
-      dispatch({ type: "START_PRICE_RETRY" });
-      dispatch({
-        type: "PRICE_RETRY_STATUS",
-        status: `Lần ${round}/${MAX_AUTO_RETRY_ROUNDS}: đang lấy giá ${itemsToRetry.length} item...`,
-      });
-
-      try {
-        const res = await fetch("/api/inventory/retry-price", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            marketHashNames: itemsToRetry.map(
-              (i: ScanResultItem) => i.caseItem.marketHashName,
-            ),
-          }),
-        });
-        const resText = await res.text();
-        let data: any;
-        try {
-          data = JSON.parse(resText);
-        } catch {
-          // ignore
-        }
-
-        if (res.ok && data && Array.isArray(data.results)) {
-          const matchedCount = data.results.filter(
-            (r: { price: number }) => r.price > 0,
-          ).length;
-          const remaining = itemsToRetry.length - matchedCount;
-          const statusText = `Lần ${round}: cập nhật ${matchedCount}/${
-            itemsToRetry.length
-          } item.${remaining > 0 ? ` Còn ${remaining} item, đang chờ retry tiếp...` : ""}`;
-
-          dispatch({
-            type: "PRICE_RETRY_SUCCESS",
-            results: data.results,
-            status: statusText,
-          });
-        } else {
-          dispatch({
-            type: "PRICE_RETRY_FAILURE",
-            status: `Lần ${round}: lỗi phản hồi từ API, sẽ thử lại...`,
-          });
-        }
-      } catch {
-        dispatch({
-          type: "PRICE_RETRY_FAILURE",
-          status: `Lần ${round}: lỗi kết nối, sẽ thử lại...`,
-        });
-      }
-    }, delay);
-
-    return () => clearTimeout(timer);
-  }, [
+  useScannerAutoRetry({
+    dispatch,
     zeroPricedItems,
-    state.retryingPrices,
-    state.buffPricesCny,
+    retryingPrices: state.retryingPrices,
+    buffPricesCny: state.buffPricesCny,
     buffCnyToVndRate,
-  ]);
+    isAnyScanPending,
+  });
 
-  /**
-   * Imports all scanned items directly to user's personal tracking portfolio.
-   */
-  const importInventoryToPortfolio = useCallback(async () => {
-    const items = (mergedRaw?.items ?? []).map(applyBuffPricing);
-    if (!items.length) return;
-
-    const doneAccounts = state.accounts
-      .filter((a) => a.status === "done" && a.result)
-      .map((a) => a.result!);
-
-    const itemsWithAccounts = items.map((item: ScanResultItem) => ({
-      ...item,
-      sourceAccounts: item.sourceAccounts || [],
-    }));
-
-    const accountsWithCookies = state.accounts
-      .filter((a) => a.status === "done" && a.result)
-      .map((a) => ({
-        steamId64: a.result!.steamId64,
-        steamCookie: a.steamCookie?.trim() || "",
-      }));
-
-    dispatch({ type: "START_PORTFOLIO_IMPORT" });
-
-    try {
-      dispatch({
-        type: "UPDATE_PORTFOLIO_IMPORT_STATUS",
-        status: "Đang chuẩn bị dữ liệu hòm đồ...",
-      });
-
-      const response = await fetch("/api/portfolio/import-inventory", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          items: itemsWithAccounts,
-          accounts: accountsWithCookies,
-        }),
-      });
-
-      if (!response.ok) {
-        let errMessage = "Không thể lưu inventory vào portfolio.";
-        try {
-          const resText = await response.text();
-          const errData = JSON.parse(resText);
-          errMessage = errData.message || errMessage;
-        } catch {
-          errMessage = `Không thể lưu portfolio (HTTP ${response.status})`;
-        }
-        throw new Error(errMessage);
-      }
-
-      if (!response.body) {
-        throw new Error("Không thể đọc phản hồi từ máy chủ.");
-      }
-
-      // Read streaming progress from server
-      const reader = response.body.getReader();
-      const decoder = new TextDecoder();
-      let buffer = "";
-      let lastResult: { importedCount?: number; skippedCount?: number } | null =
-        null;
-
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
-
-        buffer += decoder.decode(value, { stream: true });
-        const lines = buffer.split("\n");
-        buffer = lines.pop() ?? "";
-
-        for (const line of lines) {
-          if (!line.trim()) continue;
-          try {
-            const event = JSON.parse(line);
-
-            if (event.type === "progress") {
-              const percent = event.percent ?? 0;
-              dispatch({
-                type: "UPDATE_PORTFOLIO_IMPORT_STATUS",
-                status: `[${percent}%] ${event.message}`,
-              });
-            } else if (event.type === "done") {
-              lastResult = event.importResult ?? null;
-              dispatch({
-                type: "PORTFOLIO_IMPORT_SUCCESS",
-                message: event.message,
-              });
-            } else if (event.type === "error") {
-              throw new Error(event.message);
-            }
-          } catch (parseError) {
-            if (parseError instanceof Error && parseError.message !== line) {
-              throw parseError;
-            }
-          }
-        }
-      }
-
-      // Process any remaining buffer
-      if (buffer.trim()) {
-        try {
-          const event = JSON.parse(buffer);
-          if (event.type === "done") {
-            lastResult = event.importResult ?? null;
-            dispatch({
-              type: "PORTFOLIO_IMPORT_SUCCESS",
-              message: event.message,
-            });
-          } else if (event.type === "error") {
-            throw new Error(event.message);
-          }
-        } catch {
-          /* ignore final parse */
-        }
-      }
-
-      if (!lastResult) {
-        dispatch({
-          type: "PORTFOLIO_IMPORT_SUCCESS",
-          message: "Đã lưu inventory vào portfolio cá nhân.",
-        });
-      }
-    } catch (error) {
-      dispatch({
-        type: "PORTFOLIO_IMPORT_FAILURE",
-        error:
-          error instanceof Error
-            ? error.message
-            : "Không thể lưu inventory vào portfolio.",
-      });
-    }
-  }, [state.accounts, mergedRaw, applyBuffPricing]);
+  const { importInventoryToPortfolio } = useScannerPortfolioImport({
+    dispatch,
+    accounts: state.accounts,
+    mergedRaw,
+    applyBuffPricing,
+  });
 
   return {
     state,
@@ -900,6 +583,7 @@ export function useInventoryScanner() {
     addAccount,
     doScan,
     scanAll,
+    cancelScanAll,
     addManualItem,
     updateManualItemQty,
     removeItem,

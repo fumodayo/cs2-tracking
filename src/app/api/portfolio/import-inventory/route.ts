@@ -6,10 +6,9 @@ import type {
   CreatePortfolioItemInput,
 } from "@/domain/portfolio-item";
 import {
-  updateSourceAccounts,
   resolveSyncTransactions,
   type ExistingPortfolioItem,
-} from "@/utils/portfolio-sync";
+} from "@/services/portfolio-sync";
 import { createServices } from "@/infrastructure/container";
 import { getDatabase } from "@/infrastructure/db/mongo-client";
 import { mapCaseDocument } from "@/infrastructure/db/mappers";

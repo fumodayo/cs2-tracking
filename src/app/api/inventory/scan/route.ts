@@ -4,7 +4,7 @@ import { getDatabase } from "@/infrastructure/db/mongo-client";
 import { getSteamCaseImageUrl } from "@/infrastructure/cases/steam-case-image-provider";
 import { getPortfolioOwnerId } from "@/services/auth-service";
 import type { StorageUnitInfo } from "@/domain/storage-unit";
-import { parseSteamCookies, resolveSteamId } from "@/utils/steam";
+import { parseSteamCookies, resolveSteamId } from "@/infrastructure/steam";
 import { USER_AGENTS } from "@/utils/api-client";
 
 export const dynamic = "force-dynamic";
@@ -240,7 +240,7 @@ function extractSteamIdFromCookie(cookieValue: string): string | null {
         }
       }
     }
-  } catch (e) {
+  } catch {
     // Ignore error and fallback
   }
 
@@ -249,7 +249,7 @@ function extractSteamIdFromCookie(cookieValue: string): string | null {
     const decoded = decodeURIComponent(cookieValue);
     const parts = decoded.split(/[|%]+/);
     return parts[0] && /^\d{17}$/.test(parts[0]) ? parts[0] : null;
-  } catch (e) {
+  } catch {
     return null;
   }
 }
@@ -865,10 +865,12 @@ async function runScanJob(
       }
 
       if (caseItem) {
-        const priceSnapshot = await priceService.getCurrentPrice(caseItem);
+        const priceSnapshot = await priceService.getCurrentPrice(caseItem, {
+          preferFallback: true,
+        });
         price = priceSnapshot?.price || 0;
         imageUrl = caseItem.imageUrl ?? null;
-        lastFetchedFromSteam = true;
+        lastFetchedFromSteam = priceSnapshot ? !priceSnapshot.isCached && priceSnapshot.source === "steam-market" : false;
       } else {
         const virtualItem = {
           id: `ext_${marketHashName}`,
@@ -877,10 +879,13 @@ async function runScanJob(
           isActive: false,
         };
         try {
-          const priceSnapshot = await priceService.getCurrentPrice(virtualItem);
+          const priceSnapshot = await priceService.getCurrentPrice(virtualItem, {
+            preferFallback: true,
+          });
           price = priceSnapshot?.price || 0;
+          lastFetchedFromSteam = priceSnapshot ? !priceSnapshot.isCached && priceSnapshot.source === "steam-market" : false;
         } catch {
-          /* ignore */
+          lastFetchedFromSteam = false;
         }
 
         if (iconUrl) {
@@ -892,7 +897,6 @@ async function runScanJob(
             /* ignore */
           }
         }
-        lastFetchedFromSteam = true;
       }
 
       items.push({

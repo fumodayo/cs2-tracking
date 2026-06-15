@@ -11,5 +11,8 @@ yarn-debug.log*
 yarn-error.log*
 pnpm-debug.log*
 dev-server*.log
+eslint-results.txt
+steam_prices_fallback_cache.json
 .agent
 scratch
+scratch_lint.txt

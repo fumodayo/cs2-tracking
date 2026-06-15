@@ -3,18 +3,15 @@
 import React, {
   useCallback,
   useEffect,
-  useRef,
   useState,
   useMemo,
 } from "react";
 import { Plus } from "lucide-react";
 import { CaseItemData } from "./types";
-import { formatVND } from "./utils";
 import {
   CaseSearchSelect,
   type CaseItemSearchData,
-} from "../dashboard/case-search-select";
-import { CaseThumbnail } from "../dashboard/case-thumbnail";
+} from "@/components/portfolio/case-search-select";
 import { useQuery } from "@tanstack/react-query";
 import {
   Dialog,
@@ -102,7 +99,7 @@ export const AddCaseSearch: React.FC<AddCaseSearchProps> = ({
     enabled: isOpen,
   });
 
-  const dbAccounts = accountsQuery.data ?? [];
+  const dbAccounts = useMemo(() => accountsQuery.data ?? [], [accountsQuery.data]);
 
   // Combine database and scanned accounts uniquely
   const accounts = useMemo(() => {
@@ -216,17 +213,15 @@ export const AddCaseSearch: React.FC<AddCaseSearchProps> = ({
   };
 
   return (
-    <div>
-      <div className="mb-4 flex justify-end">
-        <Button
-          type="button"
-          onClick={() => setIsOpen(true)}
-          className="inline-flex h-10 items-center gap-2 rounded-md bg-blue-400 px-4 text-sm font-semibold text-stone-950 shadow-[0_2px_10px_rgba(59,130,246,0.2)] transition-all hover:bg-blue-300"
-        >
-          <Plus className="size-4" />
-          Thêm vật phẩm
-        </Button>
-      </div>
+    <>
+      <Button
+        type="button"
+        onClick={() => setIsOpen(true)}
+        className="inline-flex h-10 items-center gap-2 rounded-md bg-blue-400 px-4 text-sm font-semibold text-stone-950 shadow-[0_2px_10px_rgba(59,130,246,0.2)] transition-all hover:bg-blue-300"
+      >
+        <Plus className="size-4" />
+        Thêm vật phẩm
+      </Button>
 
       <Dialog open={isOpen} onOpenChange={setIsOpen}>
         <DialogContent className="border-stone-850 max-h-[95vh] max-w-xl overflow-y-auto rounded-[6px] bg-[#06080c]/98 p-6 text-stone-100 shadow-[0_30px_90px_rgba(0,0,0,0.9)] backdrop-blur-3xl">
@@ -436,6 +431,6 @@ export const AddCaseSearch: React.FC<AddCaseSearchProps> = ({
           </form>
         </DialogContent>
       </Dialog>
-    </div>
+    </>
   );
 };

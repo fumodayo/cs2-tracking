@@ -1,10 +1,9 @@
 import React, { useState, useEffect } from "react";
 import { Loader2, Search, ChevronDown, ChevronUp, X, AlertCircle, ShoppingBag } from "lucide-react";
-import { Tooltip } from "@/components/ui/tooltip";
 import { AccountEntry } from "../types";
 import { formatVND, formatProgressDetail } from "../utils";
 import { AccountCookieConfig } from "./account-cookie-config";
-import { toast } from "@/utils/toast-store";
+import { toast } from "@/stores/toast-store";
 
 interface CookieStatus {
   status: "idle" | "loading" | "live" | "expired" | "error";
@@ -18,6 +17,7 @@ export interface AccountCardProps {
   onToggleExpandAccId: () => void;
   isAnyScanPending: boolean;
   onScan: (accountId: string) => void;
+  onCancelScan?: (accountId: string) => void;
   onRemove: (accountId: string) => void;
   onUpdateUrl: (accountId: string, url: string) => void;
   onUpdateCookie: (accountId: string, cookie: string) => void;
@@ -33,6 +33,7 @@ export function AccountCard({
   onToggleExpandAccId,
   isAnyScanPending,
   onScan,
+  onCancelScan,
   onRemove,
   onUpdateUrl,
   onUpdateCookie,
@@ -87,7 +88,7 @@ export function AccountCard({
         setCookieStatus({ status: "error", message: data.message || "Lỗi kiểm tra" });
         toast.error(data.message || "Lỗi kiểm tra cookie.");
       }
-    } catch (err) {
+    } catch {
       setCookieStatus({ status: "error", message: "Không thể kết nối máy chủ." });
       toast.error("Lỗi khi kết nối đến máy chủ.");
     }
@@ -153,21 +154,27 @@ export function AccountCard({
         <div className="flex shrink-0 items-center gap-1">
           <button
             type="button"
-            onClick={() => onScan(acc.id)}
-            disabled={isAnyScanPending || !acc.url.trim()}
-            className={`inline-flex h-7 px-2 items-center justify-center gap-1.5 rounded-md text-[10px] font-semibold transition-all duration-200 disabled:cursor-not-allowed disabled:opacity-40 cursor-pointer focus:outline-none ${
+            onClick={() => {
+              if (acc.status === "scanning") {
+                onCancelScan?.(acc.id);
+              } else {
+                onScan(acc.id);
+              }
+            }}
+            disabled={acc.status !== "scanning" && (isAnyScanPending || !acc.url.trim())}
+            className={`inline-flex h-7 px-2 items-center justify-center gap-1.5 rounded-md text-[10px] font-semibold transition-all duration-200 cursor-pointer focus:outline-none ${
               acc.status === "scanning"
-                ? "border border-blue-500/30 bg-blue-500/10 text-blue-300"
-                : "bg-blue-400 text-stone-950 hover:bg-blue-300 active:scale-98"
+                ? "border border-red-500/35 bg-red-950/20 text-red-300 hover:bg-red-950/30 active:scale-98"
+                : "bg-blue-400 text-stone-950 hover:bg-blue-300 active:scale-98 disabled:cursor-not-allowed disabled:opacity-40"
             }`}
-            title="Quét tài khoản này"
+            title={acc.status === "scanning" ? "Dừng quét" : "Quét tài khoản này"}
           >
             {acc.status === "scanning" ? (
-              <Loader2 className="size-3 animate-spin" />
+              <Loader2 className="size-3 animate-spin text-red-400" />
             ) : (
               <Search className="size-3" />
             )}
-            <span>{acc.status === "scanning" ? "Quét" : "Quét"}</span>
+            <span>{acc.status === "scanning" ? "Dừng" : "Quét"}</span>
           </button>
 
           {acc.status === "done" && (

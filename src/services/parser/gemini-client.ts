@@ -1,5 +1,5 @@
 import { DEFAULT_CASES } from "@/infrastructure/cases/default-cases";
-import { fetchWithRetry } from "@/utils/gemini-retry";
+import { fetchWithRetry } from "@/infrastructure/gemini-retry";
 import { isRecord } from "@/utils/type-guards";
 import type {
   GeminiParsedPost,

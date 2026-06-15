@@ -1,3 +1,4 @@
+/* eslint-disable react-refresh/only-export-components */
 import { getCurrentUser } from "@/services/auth-service";
 import { redirect } from "next/navigation";
 import { AdminBugReportsClient } from "@/components/admin/bug-reports-client";

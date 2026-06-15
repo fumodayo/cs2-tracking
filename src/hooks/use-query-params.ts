@@ -33,6 +33,31 @@ export type QueryParamsSetters<T extends QueryParamsConfig> = {
  * - Debouncing high-frequency updates (e.g. search query typing) to keep browser history clean
  * - Correctly handling browser back/forward navigation.
  */
+// Helper to check array equality (order-sensitive check for filters)
+const isArrayEqual = (a: any[], b: any[]) => {
+  if (a.length !== b.length) return false;
+  return a.every((v, i) => v === b[i]);
+};
+
+// Helper to compare values deeply enough for our primitive/array settings
+const isValueEqual = (a: any, b: any) => {
+  if (Array.isArray(a) && Array.isArray(b)) {
+    return isArrayEqual(a, b);
+  }
+  return a === b;
+};
+
+/**
+ * A highly reusable React hook to synchronize multiple states with Next.js URL query parameters.
+ * Complies with SOLID principles by remaining decoupled from specific business logic, open to configuration,
+ * and single-focused on URL state synchronization.
+ *
+ * Includes support for:
+ * - Parsing custom types (numbers, arrays, strings)
+ * - Serializing states back to URL strings (cleaning up defaults)
+ * - Debouncing high-frequency updates (e.g. search query typing) to keep browser history clean
+ * - Correctly handling browser back/forward navigation.
+ */
 export function useQueryParamsState<T extends QueryParamsConfig>(
   config: T,
 ): [QueryParamsState<T>, QueryParamsSetters<T>] {
@@ -48,20 +73,6 @@ export function useQueryParamsState<T extends QueryParamsConfig>(
 
   // Keys string dependency for tracking changes to the configuration structure
   const configKeysStr = useMemo(() => Object.keys(config).join(","), [config]);
-
-  // Helper to check array equality (order-sensitive check for filters)
-  const isArrayEqual = (a: any[], b: any[]) => {
-    if (a.length !== b.length) return false;
-    return a.every((v, i) => v === b[i]);
-  };
-
-  // Helper to compare values deeply enough for our primitive/array settings
-  const isValueEqual = (a: any, b: any) => {
-    if (Array.isArray(a) && Array.isArray(b)) {
-      return isArrayEqual(a, b);
-    }
-    return a === b;
-  };
 
   // Initialize local states from URL query parameters or default value
   const [states, setStates] = useState<QueryParamsState<T>>(() => {
@@ -131,7 +142,7 @@ export function useQueryParamsState<T extends QueryParamsConfig>(
     return () => {
       timers.forEach((t) => clearTimeout(t));
     };
-  }, [states, configKeysStr]);
+  }, [states, configKeysStr, debouncedStates]);
 
   // 3. Sync debounced states back into Next.js router URL query params
   useEffect(() => {
@@ -166,7 +177,7 @@ export function useQueryParamsState<T extends QueryParamsConfig>(
   // 4. Generate stable memoized setters for callers to update individual states
   const setters = useMemo(() => {
     const s: any = {};
-    const keys = Object.keys(config);
+    const keys = configKeysStr.split(",");
 
     for (const key of keys) {
       s[key] = (value: any) => {

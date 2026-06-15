@@ -3,7 +3,7 @@ import { createHash } from "node:crypto";
 import { SteamMarketPriceProvider } from "@/infrastructure/price/steam-market-price-provider";
 import { MongoPostAnalysisHistoryRepository } from "@/infrastructure/repositories/mongo-post-analysis-history-repository";
 import { PostAnalysisService } from "@/services/post-analysis-service";
-import { extractSteamUrl } from "@/utils/facebook-parser";
+import { extractSteamUrl } from "@/services/parser/facebook-parser";
 
 export const dynamic = "force-dynamic";
 

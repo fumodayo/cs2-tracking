@@ -1,6 +1,6 @@
 "use client";
 
-import { useSyncStore } from "@/utils/sync-store";
+import { useSyncStore } from "@/stores/sync-store";
 import { usePathname } from "next/navigation";
 import { Loader2 } from "lucide-react";
 

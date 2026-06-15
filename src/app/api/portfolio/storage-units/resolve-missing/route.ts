@@ -13,6 +13,13 @@ type MissingItemResolution = {
   storageUnitId?: string;
 };
 
+type StorageUnitItem = {
+  caseId: string;
+  marketHashName: string;
+  quantity: number;
+  addedAt?: Date;
+};
+
 /**
  * POST /api/portfolio/storage-units/resolve-missing
  * Resolve missing items detected during sync.
@@ -67,11 +74,11 @@ export async function POST(request: Request) {
             continue;
           }
 
-          const existingItems: any[] = Array.isArray(suDoc.items)
+          const existingItems: StorageUnitItem[] = Array.isArray(suDoc.items)
             ? suDoc.items
             : [];
           const currentCount = existingItems.reduce(
-            (sum: number, item: any) => sum + (Number(item.quantity) || 0),
+            (sum, item) => sum + (Number(item.quantity) || 0),
             0,
           );
 
@@ -86,7 +93,7 @@ export async function POST(request: Request) {
           }
 
           const existingIdx = existingItems.findIndex(
-            (ei: any) => ei.caseId === caseId,
+            (ei) => ei.caseId === caseId,
           );
           if (existingIdx >= 0) {
             existingItems[existingIdx].quantity += missingQuantity;

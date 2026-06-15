@@ -23,3 +23,10 @@ export {
   formatDateTimeVi as formatDateTime,
   formatInputDate,
 } from "@/utils/date";
+
+export function formatVND(value: number): string {
+  return new Intl.NumberFormat("vi-VN", {
+    style: "currency",
+    currency: "VND",
+  }).format(value);
+}

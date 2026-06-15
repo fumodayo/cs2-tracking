@@ -4,16 +4,12 @@ import { getPortfolioOwnerId } from "@/services/auth-service";
 import { decrypt } from "@/services/crypto-service";
 import { createServices } from "@/infrastructure/container";
 import { ObjectId, Db } from "mongodb";
-import type { CreatePortfolioItemInput } from "@/domain/portfolio-item";
 import {
-  isRecord,
-  normalizeHexColor,
   normalizeRarity,
   mergeSourceAccounts,
-  updateSourceAccounts,
   resolveSyncTransactions,
   type ExistingPortfolioItem,
-} from "@/utils/portfolio-sync";
+} from "@/services/portfolio-sync";
 
 export const dynamic = "force-dynamic";
 
@@ -89,8 +85,17 @@ type SyncProgressEvent = {
     importedCount: number;
     skippedAccounts: string[];
     missingItems?: MissingItem[];
+    extraItems?: ExtraItem[];
     storageUnits?: SyncStorageUnit[];
   };
+};
+
+type AccountChangeDetail = {
+  steamId64: string;
+  name: string;
+  change: number;
+  previousQuantity: number;
+  currentQuantity: number;
 };
 
 type MissingItem = {
@@ -101,6 +106,18 @@ type MissingItem = {
   previousQuantity: number;
   currentQuantity: number;
   missingQuantity: number;
+  accounts?: AccountChangeDetail[];
+};
+
+type ExtraItem = {
+  caseId: string;
+  marketHashName: string;
+  caseName: string;
+  imageUrl: string | null;
+  previousQuantity: number;
+  currentQuantity: number;
+  extraQuantity: number;
+  accounts?: AccountChangeDetail[];
 };
 
 type SyncStorageUnit = {
@@ -564,39 +581,142 @@ export async function POST(request: NextRequest) {
             }));
           }
 
-          // Detect missing items (items that decreased in quantity)
+          // Detect missing and extra items (changes in quantity)
           const missingItems: MissingItem[] = [];
-          if (existingPortfolioItems.length > 0) {
-            // Build a map of caseId -> previous quantity from existing portfolio
-            const previousQuantities = new Map<
-              string,
-              { quantity: number; caseId: string }
-            >();
-            for (const doc of existingPortfolioItems) {
-              const caseId = String(doc.caseId);
-              const existing = previousQuantities.get(caseId);
-              previousQuantities.set(caseId, {
-                caseId,
-                quantity: (existing?.quantity ?? 0) + Number(doc.quantity),
-              });
+          const extraItems: ExtraItem[] = [];
+
+          const getAccountChanges = (caseId: string) => {
+            const prevMap = new Map<string, { steamId64: string; name: string; quantity: number }>();
+            const newMap = new Map<string, { steamId64: string; name: string; quantity: number }>();
+
+            const prevItems = existingPortfolioItems.filter(item => String(item.caseId) === caseId);
+            for (const item of prevItems) {
+              if (item.sourceAccounts) {
+                for (const sa of item.sourceAccounts) {
+                  const qty = sa.breakdown
+                    ? (sa.breakdown.tradeable ?? 0) +
+                      (sa.breakdown.onMarket ?? 0) +
+                      (sa.breakdown.tradeProtected ?? 0) +
+                      (sa.breakdown.hold ?? 0)
+                    : 0;
+                  const existing = prevMap.get(sa.steamId64);
+                  if (existing) {
+                    existing.quantity += qty;
+                  } else {
+                    prevMap.set(sa.steamId64, { steamId64: sa.steamId64, name: sa.name, quantity: qty });
+                  }
+                }
+              }
             }
 
-            // Compare with new scan
-            for (const [caseId, prev] of previousQuantities) {
-              const newQuantity = groupedInputs.get(caseId)?.quantity ?? 0;
-              if (newQuantity < prev.quantity) {
-                // Look up case info for display
-                const caseDoc = await caseRepository.findById(caseId);
-                missingItems.push({
-                  caseId,
-                  marketHashName: caseDoc?.marketHashName ?? "unknown",
-                  caseName: caseDoc?.name ?? "Unknown Item",
-                  imageUrl: caseDoc?.imageUrl ?? null,
+            const input = groupedInputs.get(caseId);
+            if (input?.sourceAccounts) {
+              for (const sa of input.sourceAccounts) {
+                const qty = sa.breakdown
+                  ? (sa.breakdown.tradeable ?? 0) +
+                    (sa.breakdown.onMarket ?? 0) +
+                    (sa.breakdown.tradeProtected ?? 0) +
+                    (sa.breakdown.hold ?? 0)
+                  : 0;
+                const existing = newMap.get(sa.steamId64);
+                if (existing) {
+                  existing.quantity += qty;
+                } else {
+                  newMap.set(sa.steamId64, { steamId64: sa.steamId64, name: sa.name, quantity: qty });
+                }
+              }
+            }
+
+            const changes: AccountChangeDetail[] = [];
+
+            for (const [steamId64, prev] of prevMap) {
+              const current = newMap.get(steamId64);
+              const currentQty = current?.quantity ?? 0;
+              const diff = currentQty - prev.quantity;
+              if (diff !== 0) {
+                changes.push({
+                  steamId64,
+                  name: prev.name,
+                  change: diff,
                   previousQuantity: prev.quantity,
-                  currentQuantity: newQuantity,
-                  missingQuantity: prev.quantity - newQuantity,
+                  currentQuantity: currentQty
                 });
               }
+            }
+
+            for (const [steamId64, current] of newMap) {
+              if (!prevMap.has(steamId64)) {
+                changes.push({
+                  steamId64,
+                  name: current.name,
+                  change: current.quantity,
+                  previousQuantity: 0,
+                  currentQuantity: current.quantity
+                });
+              }
+            }
+
+            return changes;
+          };
+
+          // Build a map of caseId -> previous quantity from existing portfolio
+          const previousQuantities = new Map<
+            string,
+            { quantity: number; caseId: string }
+          >();
+          for (const doc of existingPortfolioItems) {
+            const caseId = String(doc.caseId);
+            const existing = previousQuantities.get(caseId);
+            previousQuantities.set(caseId, {
+              caseId,
+              quantity: (existing?.quantity ?? 0) + Number(doc.quantity),
+            });
+          }
+
+          // 1. Compare items that were in previous portfolio
+          for (const [caseId, prev] of previousQuantities) {
+            const newQuantity = groupedInputs.get(caseId)?.quantity ?? 0;
+            if (newQuantity < prev.quantity) {
+              const caseDoc = await caseRepository.findById(caseId);
+              missingItems.push({
+                caseId,
+                marketHashName: caseDoc?.marketHashName ?? "unknown",
+                caseName: caseDoc?.name ?? "Unknown Item",
+                imageUrl: caseDoc?.imageUrl ?? null,
+                previousQuantity: prev.quantity,
+                currentQuantity: newQuantity,
+                missingQuantity: prev.quantity - newQuantity,
+                accounts: getAccountChanges(caseId),
+              });
+            } else if (newQuantity > prev.quantity) {
+              const caseDoc = await caseRepository.findById(caseId);
+              extraItems.push({
+                caseId,
+                marketHashName: caseDoc?.marketHashName ?? "unknown",
+                caseName: caseDoc?.name ?? "Unknown Item",
+                imageUrl: caseDoc?.imageUrl ?? null,
+                previousQuantity: prev.quantity,
+                currentQuantity: newQuantity,
+                extraQuantity: newQuantity - prev.quantity,
+                accounts: getAccountChanges(caseId),
+              });
+            }
+          }
+
+          // 2. Identify brand new items (not in previous portfolio at all)
+          for (const [caseId, input] of groupedInputs) {
+            if (!previousQuantities.has(caseId)) {
+              const caseDoc = await caseRepository.findById(caseId);
+              extraItems.push({
+                caseId,
+                marketHashName: caseDoc?.marketHashName ?? "unknown",
+                caseName: caseDoc?.name ?? "Unknown Item",
+                imageUrl: caseDoc?.imageUrl ?? null,
+                previousQuantity: 0,
+                currentQuantity: input.quantity,
+                extraQuantity: input.quantity,
+                accounts: getAccountChanges(caseId),
+              });
             }
           }
 
@@ -608,6 +728,7 @@ export async function POST(request: NextRequest) {
             importedCount: groupedInputs.size,
             skippedAccounts,
             missingItems: missingItems.length > 0 ? missingItems : undefined,
+            extraItems: extraItems.length > 0 ? extraItems : undefined,
             storageUnits:
               syncedStorageUnits.length > 0 ? syncedStorageUnits : undefined,
           };
@@ -618,9 +739,15 @@ export async function POST(request: NextRequest) {
             { $set: { lastSyncedAt: new Date() } }
           );
 
+          const changesMsg = [
+            missingItems.length > 0 ? `thiếu ${missingItems.length} loại` : "",
+            extraItems.length > 0 ? `thừa ${extraItems.length} loại` : ""
+          ].filter(Boolean).join(" và ");
+          const messageDetail = changesMsg ? ` Phát hiện ${changesMsg}.` : "";
+
           send({
             type: "complete",
-            message: `Đồng bộ thành công tài khoản ${accountName}.${missingItems.length > 0 ? ` Phát hiện ${missingItems.length} loại item biến mất.` : ""}`,
+            message: `Đồng bộ thành công tài khoản ${accountName}.${messageDetail}`,
             percent: 100,
             summary,
           });

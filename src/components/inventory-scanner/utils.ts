@@ -60,7 +60,7 @@ export function extractSteamKey(raw: string): string | null {
   const profileMatch = s.match(/\/profiles\/(\d{17})/);
   if (profileMatch) return profileMatch[1];
 
-  const idMatch = s.match(/\/id\/([^\/]+)/);
+  const idMatch = s.match(/\/id\/([^/]+)/);
   if (idMatch) return `vanity:${idMatch[1]}`;
 
   if (/^\d{17}$/.test(s)) return s;
@@ -69,15 +69,8 @@ export function extractSteamKey(raw: string): string | null {
   return s;
 }
 
-/**
- * Formats a currency value into standard Vietnamese Dong string format.
- */
-export function formatVND(value: number): string {
-  return new Intl.NumberFormat("vi-VN", {
-    style: "currency",
-    currency: "VND",
-  }).format(value);
-}
+import { formatVND } from "@/utils/format";
+export { formatVND };
 
 /**
  * Formats a raw number with local grouping separators.

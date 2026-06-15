@@ -1,50 +1,40 @@
 "use client";
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { TbPackage } from "react-icons/tb";
 import {
   Download,
   LogIn,
   Plus,
-  RefreshCcw,
   Upload,
-  Users,
   Loader2,
-  Trash2,
-  CheckCircle2,
-  AlertCircle,
-  ChevronDown,
-  ChevronUp,
-  HelpCircle,
-  Search,
 } from "lucide-react";
-import { useRef, useState, useMemo, useCallback, useEffect } from "react";
+import { useRef, useState, useMemo } from "react";
 import { useSession } from "@/components/auth/use-session";
 import type { PortfolioReportDto } from "@/types/report";
 import { AddCaseDialog } from "./add-case-dialog";
-import { EmptyState } from "./empty-state";
+import { ImportExcelConfirmDialog } from "@/components/portfolio/import-excel-confirm-dialog";
+import { EmptyState } from "@/components/portfolio/empty-state";
 import {
   exportPortfolioToExcel,
   parsePortfolioExcelFile,
   type PortfolioImportRow,
-} from "./portfolio-excel";
-import { PortfolioTable } from "./portfolio-table";
+} from "@/components/portfolio/portfolio-excel";
+import { PortfolioTable } from "@/components/portfolio/portfolio-table";
 import { SummaryCards } from "./summary-cards";
 import { RateCards } from "./rate-cards";
 import {
   buildPortfolioTableRows,
   type PortfolioTableRow,
-} from "./portfolio-table-model";
+} from "@/components/portfolio/portfolio-table-model";
 import { FadeIn } from "@/components/ui/animation";
-import { useImportStore, importStore } from "@/utils/import-store";
-import { useSyncStore, syncStore } from "@/utils/sync-store";
+import { useImportStore, importStore } from "@/stores/import-store";
 import {
   RecentImportsPopover,
   useRecentImports,
 } from "./recent-imports-popover";
-import { toast, toastStore } from "@/utils/toast-store";
+import { toast, toastStore } from "@/stores/toast-store";
 import { useTranslation } from "react-i18next";
-import { SteamAccountsCard } from "./components/steam-accounts-card";
+import { SteamAccountsCard } from "@/components/steam-accounts/components/steam-accounts-card";
 import { useLocalStorage } from "@/hooks/use-local-storage";
 
 import { Button } from "@/components/ui/button";
@@ -72,23 +62,11 @@ export function Dashboard() {
   const [filteredRows, setFilteredRows] = useState<PortfolioTableRow[] | null>(
     null,
   );
+  const [excelImportRows, setExcelImportRows] = useState<PortfolioImportRow[] | null>(null);
+  const [excelFileName, setExcelFileName] = useState<string>("");
   const { user, googleConfigured } = useSession();
   const { t } = useTranslation();
 
-  const [selectedStorageUnit, setSelectedStorageUnit] = useState<{
-    id: string;
-    name: string;
-    currentCount: number;
-    maxCapacity: number;
-    items: Array<{
-      caseId: string;
-      marketHashName: string;
-      name: string;
-      imageUrl?: string;
-      rarity?: { name: string; color: string } | null;
-      quantity: number;
-    }>;
-  } | null>(null);
 
   const [buffPricesCny, setBuffPricesCny] = useLocalStorage<
     Record<string, number>
@@ -480,12 +458,9 @@ const report = reportQuery.data ?? null;
       setError(null);
       importStore.setState({ phase: "reading", fileName: file.name });
       const rows = await parsePortfolioExcelFile(file);
-      importStore.setState({
-        phase: "uploading",
-        fileName: file.name,
-        rowsCount: rows.length,
-      });
-      importMutation.mutate(rows);
+      importStore.setState({ phase: "idle" });
+      setExcelImportRows(rows);
+      setExcelFileName(file.name);
     } catch (importError) {
       importStore.setState({
         phase: "error",
@@ -690,6 +665,31 @@ const report = reportQuery.data ?? null;
         }
         defaultBuffRate={buffCnyToVndRate}
       />
+
+      {excelImportRows && (
+        <ImportExcelConfirmDialog
+          open={excelImportRows !== null}
+          fileName={excelFileName}
+          rows={excelImportRows}
+          existingItems={
+            report?.rows.map((r) => ({
+              marketHashName: r.case.marketHashName,
+              quantity: r.item.quantity,
+            })) ?? []
+          }
+          onClose={() => setExcelImportRows(null)}
+          onConfirm={(confirmedRows) => {
+            setExcelImportRows(null);
+            if (confirmedRows.length === 0) return;
+            importStore.setState({
+              phase: "uploading",
+              fileName: excelFileName,
+              rowsCount: confirmedRows.length,
+            });
+            importMutation.mutate(confirmedRows);
+          }}
+        />
+      )}
 
       </div>
   );

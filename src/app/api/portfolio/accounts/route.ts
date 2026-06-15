@@ -3,7 +3,7 @@ import { getDatabase } from "@/infrastructure/db/mongo-client";
 import { getPortfolioOwnerId } from "@/services/auth-service";
 import { encrypt, decrypt } from "@/services/crypto-service";
 import { ObjectId } from "mongodb";
-import { resolveSteamId } from "@/utils/steam";
+import { resolveSteamId } from "@/infrastructure/steam";
 
 export const dynamic = "force-dynamic";
 

@@ -19,42 +19,13 @@ const springTransition = {
 } as const;
 const slideTransition = { duration: 0.15, ease: "easeOut" } as const;
 
-// Custom high-performance circular SVG flags for UK and Vietnam (Premium SaaS Style)
+// Custom high-performance circular flags using flag-icons CDN (Premium SaaS Style)
 const UKFlag = () => (
-  <svg
-    viewBox="0 0 24 24"
-    className="size-5.5 shrink-0 rounded-full border border-border shadow-sm"
-  >
-    <defs>
-      <clipPath id="uk-clip">
-        <circle cx="12" cy="12" r="12" />
-      </clipPath>
-    </defs>
-    <g clipPath="url(#uk-clip)">
-      <rect width="24" height="24" fill="#00247d" />
-      <line x1="0" y1="0" x2="24" y2="24" stroke="#ffffff" strokeWidth="3" />
-      <line x1="24" y1="0" x2="0" y2="24" stroke="#ffffff" strokeWidth="3" />
-      <line x1="0" y1="0" x2="24" y2="24" stroke="#cf142b" strokeWidth="1.2" />
-      <line x1="24" y1="0" x2="0" y2="24" stroke="#cf142b" strokeWidth="1.2" />
-      <line x1="12" y1="0" x2="12" y2="24" stroke="#ffffff" strokeWidth="4.5" />
-      <line x1="0" y1="12" x2="24" y2="12" stroke="#ffffff" strokeWidth="4.5" />
-      <line x1="12" y1="0" x2="12" y2="24" stroke="#cf142b" strokeWidth="2.7" />
-      <line x1="0" y1="12" x2="24" y2="12" stroke="#cf142b" strokeWidth="2.7" />
-    </g>
-  </svg>
+  <span className="fi fi-gb fis size-5.5 rounded-full inline-block overflow-hidden shrink-0 border border-border shadow-sm" />
 );
 
 const VietnamFlag = () => (
-  <svg
-    viewBox="0 0 24 24"
-    className="size-5.5 shrink-0 rounded-full border border-border shadow-sm"
-  >
-    <circle cx="12" cy="12" r="12" fill="#da251d" />
-    <polygon
-      fill="#ffff00"
-      points="12,5.5 13.5,10 18.2,10 14.4,12.8 15.8,17.3 12,14.5 8.2,17.3 9.6,12.8 5.8,10 10.5,10"
-    />
-  </svg>
+  <span className="fi fi-vn fis size-5.5 rounded-full inline-block overflow-hidden shrink-0 border border-border shadow-sm" />
 );
 
 export function AuthStatus() {
@@ -128,11 +99,11 @@ export function AuthStatus() {
         href="/api/auth/google"
         aria-disabled={!googleConfigured}
         className={cn(
-          "inline-flex h-9 cursor-pointer items-center justify-center gap-2 rounded-lg bg-accent px-4 text-xs font-bold text-slate-950 shadow-sm shadow-blue-950/20 transition-all hover:bg-[color-mix(in_srgb,var(--accent)_80%,white)]",
+          "inline-flex h-9 cursor-pointer items-center justify-center gap-2.5 rounded-lg bg-accent px-4.5 text-xs font-bold text-accent-foreground shadow-md shadow-accent/10 transition-all hover:bg-accent-hover hover:shadow-lg hover:shadow-accent/20 active:scale-95",
           !googleConfigured && "pointer-events-none opacity-50",
         )}
       >
-        <LogIn className="size-3.5 text-slate-950" strokeWidth={3} />
+        <LogIn className="size-4" strokeWidth={2.5} />
         <span>{t("auth.loginGmail")}</span>
       </a>
     );

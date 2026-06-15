@@ -3,9 +3,8 @@
 import React, { useState, useEffect, useRef } from "react";
 import { useTranslation } from "react-i18next";
 import { FaCoffee } from "react-icons/fa";
-import { FaHeart, FaCopy, FaCheck, FaBowlFood, FaBowlRice } from "react-icons/fa6";
+import { FaCopy, FaCheck, FaBowlFood, FaBowlRice } from "react-icons/fa6";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { ChevronLeft, ChevronRight, Search } from "lucide-react";
 import { cn } from "@/utils/cn";

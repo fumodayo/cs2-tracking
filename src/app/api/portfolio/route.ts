@@ -10,8 +10,6 @@ export const dynamic = "force-dynamic";
 export async function GET() {
   try {
     const ownerId = await getPortfolioOwnerId();
-    const db = await getDatabase();
-
     const { portfolioReportService } = createServices({ ownerId });
     const report = await portfolioReportService.buildReport({
       refreshStalePrices: false,

@@ -8,6 +8,7 @@ const STEAM_PRICE_CACHE_MINUTES = 15;
 type PriceLookupOptions = {
   forceRefresh?: boolean;
   refreshStale?: boolean;
+  preferFallback?: boolean;
 };
 
 export class PriceService {
@@ -29,20 +30,23 @@ export class PriceService {
       (!shouldRefreshStale ||
         isFresh(latest.capturedAt, STEAM_PRICE_CACHE_MINUTES))
     ) {
-      return latest;
+      return { ...latest, isCached: true };
     }
 
     if (!options?.forceRefresh && !shouldRefreshStale) {
-      return latest;
+      return latest ? { ...latest, isCached: true } : null;
     }
 
-    const livePrice = await this.priceProvider.getCurrentPrice(caseItem);
+    const livePrice = await this.priceProvider.getCurrentPrice(caseItem, {
+      preferFallback: options?.preferFallback,
+    });
 
     if (!livePrice) {
-      return latest;
+      return latest ? { ...latest, isCached: true } : null;
     }
 
-    return this.snapshotRepository.create(livePrice);
+    const created = await this.snapshotRepository.create(livePrice);
+    return { ...created, isCached: false };
   }
 }
 

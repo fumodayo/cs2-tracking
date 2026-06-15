@@ -50,6 +50,7 @@ export type ScannerAction =
       progress: ScanProgress;
     }
   | { type: "SCAN_FAILURE"; accountId: string; error: string }
+  | { type: "CANCEL_SCAN"; accountId: string }
   | { type: "SET_SCANNING_ALL"; scanning: boolean }
   | { type: "SET_EXPANDED_ACCOUNT"; id: string | null }
   | { type: "TOGGLE_TYPE_FILTER"; itemType: string }
@@ -128,7 +129,9 @@ export function scannerReducer(
     case "INIT_LOAD":
       return {
         ...state,
-        accounts: action.accounts,
+        accounts: action.accounts.map((a) =>
+          a.status === "scanning" ? { ...a, status: "idle", progress: null } : a,
+        ),
         manualItems: action.manualItems,
         buffPricesCny: action.buffPricesCny,
       };
@@ -251,6 +254,16 @@ export function scannerReducer(
         accounts: state.accounts.map((a) =>
           a.id === action.accountId
             ? { ...a, status: "error", error: action.error }
+            : a,
+        ),
+      };
+
+    case "CANCEL_SCAN":
+      return {
+        ...state,
+        accounts: state.accounts.map((a) =>
+          a.id === action.accountId
+            ? { ...a, status: "idle", progress: null, error: null }
             : a,
         ),
       };

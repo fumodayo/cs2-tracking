@@ -2,9 +2,9 @@
 
 import { useState, useEffect } from "react";
 import { Card } from "@/components/ui/card";
-import type { PortfolioTableRow } from "./portfolio-table-model";
+import type { PortfolioTableRow } from "@/components/portfolio/portfolio-table-model";
 import { TbPercentage, TbShoppingBag, TbInfoCircle } from "react-icons/tb";
-import { CountUp } from "@/components/ui/animation/CountUp";
+import { CountUp } from "@/components/ui/animation/count-up";
 import { Tooltip, TooltipProvider } from "@/components/ui/tooltip";
 
 type RateCardsProps = {
@@ -140,6 +140,7 @@ export function RateCards({ rows, totalInvested }: RateCardsProps) {
                   max={100}
                   value={rateSi}
                   onChange={(e) => setRateSi(Number(e.target.value) || 0)}
+                  aria-label="Tỷ lệ chiết khấu sỉ"
                   className="w-10 [appearance:textfield] bg-transparent text-center text-sm font-bold text-foreground outline-none [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
                 />
                 <span className="text-xs text-muted-foreground">
@@ -149,7 +150,7 @@ export function RateCards({ rows, totalInvested }: RateCardsProps) {
             </div>
             <p className="mt-2 text-2xl font-semibold tracking-normal text-accent">
               <CountUp to={valueSi} decimals={0} separator="." />
-               ₫
+              ₫
             </p>
             <div className="mt-2">
               <ProfitBadge profit={profitSi} invested={totalInvested} />
@@ -194,6 +195,7 @@ export function RateCards({ rows, totalInvested }: RateCardsProps) {
                   max={100}
                   value={rateLe}
                   onChange={(e) => setRateLe(Number(e.target.value) || 0)}
+                  aria-label="Tỷ lệ chiết khấu lẻ"
                   className="w-10 [appearance:textfield] bg-transparent text-center text-sm font-bold text-foreground outline-none [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
                 />
                 <span className="text-xs text-muted-foreground">
@@ -203,7 +205,7 @@ export function RateCards({ rows, totalInvested }: RateCardsProps) {
             </div>
             <p className="mt-2 text-2xl font-semibold tracking-normal text-amber-500 dark:text-amber-400">
               <CountUp to={valueLe} decimals={0} separator="." />
-               ₫
+              ₫
             </p>
             <div className="mt-2">
               <ProfitBadge profit={profitLe} invested={totalInvested} />

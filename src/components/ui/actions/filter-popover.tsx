@@ -2,7 +2,7 @@
 
 import * as React from "react";
 import * as Popover from "@radix-ui/react-popover";
-import { Plus, Search, Check, ChevronDown } from "lucide-react";
+import { Plus, Search, Check } from "lucide-react";
 import { useMemo, useState } from "react";
 import { cn } from "@/utils/cn";
 import { Button } from "@/components/ui/button";

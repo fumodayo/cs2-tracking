@@ -4,7 +4,7 @@ import { USER_AGENTS } from "@/utils/api-client";
 import { getPortfolioOwnerId } from "@/services/auth-service";
 import { decrypt } from "@/services/crypto-service";
 import { ObjectId } from "mongodb";
-import { resolveSteamId } from "@/utils/steam";
+import { resolveSteamId } from "@/infrastructure/steam";
 
 export const dynamic = "force-dynamic";
 
@@ -27,11 +27,6 @@ function parseSteamLoginSecure(rawCookie: string): string {
   return trimmed;
 }
 
-function extractAccessToken(cookieValue: string): string | null {
-  const decoded = decodeURIComponent(cookieValue);
-  const parts = decoded.split("||");
-  return parts.length >= 2 && parts[1] ? parts[1] : null;
-}
 
 function getOwnerFilter(ownerId: string) {
   if (ownerId === "guest") {

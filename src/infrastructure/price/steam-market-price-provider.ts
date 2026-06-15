@@ -128,7 +128,9 @@ async function getFallbackPrices(): Promise<Record<string, number>> {
       lastLoadedTime = Date.now();
       return inMemoryFallbackPrices!;
     }
-  } catch (err) {}
+  } catch {
+    // ignore fallback cache failure
+  }
 
   return {};
 }
@@ -152,14 +154,29 @@ async function fetchFallbackUsdPrice(
 }
 
 export class SteamMarketPriceProvider implements PriceProvider {
-  async getCurrentPrice(caseItem: CaseItem): Promise<CurrentPrice | null> {
-    for (let attempt = 1; attempt <= STEAM_PRICE_MAX_ATTEMPTS; attempt++) {
-      const usdPrice = await fetchUsdMarketPrice(caseItem.marketHashName);
-      if (usdPrice !== null) {
-        const usdToVndRate = await getUsdToVndRate();
+  async getCurrentPrice(
+    caseItem: CaseItem,
+    options?: { preferFallback?: boolean },
+  ): Promise<CurrentPrice | null> {
+    if (options?.preferFallback) {
+      const vndPrice = await fetchFallbackVndPrice(caseItem.marketHashName);
+      if (vndPrice !== null) {
         return {
           caseId: caseItem.id,
-          price: Math.round(usdPrice * usdToVndRate),
+          price: vndPrice,
+          currency: "VND",
+          source: "csgotrader-fallback",
+          capturedAt: new Date(),
+        };
+      }
+    }
+
+    for (let attempt = 1; attempt <= STEAM_PRICE_MAX_ATTEMPTS; attempt++) {
+      const vndPrice = await fetchVndMarketPrice(caseItem.marketHashName);
+      if (vndPrice !== null) {
+        return {
+          caseId: caseItem.id,
+          price: vndPrice,
           currency: "VND",
           source: "steam-market",
           capturedAt: new Date(),
@@ -175,13 +192,24 @@ export class SteamMarketPriceProvider implements PriceProvider {
   }
 }
 
-async function fetchUsdMarketPrice(
+async function fetchFallbackVndPrice(
+  marketHashName: string,
+): Promise<number | null> {
+  const usdPrice = await fetchFallbackUsdPrice(marketHashName);
+  if (usdPrice !== null) {
+    const usdToVndRate = await getUsdToVndRate();
+    return Math.round(usdPrice * usdToVndRate);
+  }
+  return null;
+}
+
+async function fetchVndMarketPrice(
   marketHashName: string,
 ): Promise<number | null> {
   try {
     const params = new URLSearchParams({
       appid: "730",
-      currency: "1",
+      currency: "15", // 15 = VND
       market_hash_name: marketHashName,
     });
 
@@ -198,31 +226,33 @@ async function fetchUsdMarketPrice(
 
     if (response.status === 429) {
       console.warn(
-        `Steam rate limit hit (429) for ${marketHashName}. Using CSGOTrader steam price database.`,
+        `Steam rate limit hit (429) for ${marketHashName}. Using CSGOTrader steam price database fallback.`,
       );
-      return await fetchFallbackUsdPrice(marketHashName);
+      return await fetchFallbackVndPrice(marketHashName);
     }
 
     if (!response.ok) {
-      return await fetchFallbackUsdPrice(marketHashName);
+      return await fetchFallbackVndPrice(marketHashName);
     }
 
     const data = (await response.json()) as SteamPriceOverviewResponse;
     const rawPrice = data.lowest_price ?? data.median_price;
-    const usdPrice = rawPrice ? parseUsdPrice(rawPrice) : null;
 
-    if (!data.success || usdPrice === null) {
-      return await fetchFallbackUsdPrice(marketHashName);
+    const usdToVndRate = await getUsdToVndRate();
+    const vndPrice = rawPrice ? parseVndPrice(rawPrice, usdToVndRate) : null;
+
+    if (!data.success || vndPrice === null) {
+      return await fetchFallbackVndPrice(marketHashName);
     }
 
-    return usdPrice;
+    return vndPrice;
   } catch (error) {
     console.warn(
       `Error fetching Steam price for ${marketHashName}:`,
       error,
       ". Falling back to CSGOTrader database.",
     );
-    return await fetchFallbackUsdPrice(marketHashName);
+    return await fetchFallbackVndPrice(marketHashName);
   }
 }
 
@@ -230,6 +260,26 @@ function parseUsdPrice(value: string): number | null {
   const normalized = value.replace(/[^0-9.,]/g, "").replace(",", "");
   const parsed = Number(normalized);
   return Number.isFinite(parsed) ? parsed : null;
+}
+
+function parseVndPrice(value: string, usdToVndRate: number): number | null {
+  if (value.includes("$")) {
+    const usd = parseUsdPrice(value);
+    return usd !== null ? Math.round(usd * usdToVndRate) : null;
+  }
+
+  // Keep only digits, dots, and commas
+  const cleaned = value.replace(/[^0-9.,]/g, "");
+
+  let noThousands = cleaned;
+  if (cleaned.includes(",")) {
+    noThousands = cleaned.replace(/\./g, "").replace(",", ".");
+  } else {
+    noThousands = cleaned.replace(/\./g, "");
+  }
+
+  const parsed = Number(noThousands);
+  return Number.isFinite(parsed) ? Math.round(parsed) : null;
 }
 
 export async function getUsdToVndRate(): Promise<number> {

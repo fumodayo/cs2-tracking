@@ -5,6 +5,7 @@ export type PriceSnapshot = {
   currency: "VND";
   source: string;
   capturedAt: Date;
+  isCached?: boolean;
 };
 
 export type CurrentPrice = Omit<PriceSnapshot, "id">;

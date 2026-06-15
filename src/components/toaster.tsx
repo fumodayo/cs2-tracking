@@ -1,6 +1,6 @@
 "use client";
 
-import { useToasts, toastStore } from "@/utils/toast-store";
+import { useToasts, toastStore, type Toast } from "@/stores/toast-store";
 import { CheckCircle2, Loader2, XCircle, Info, X } from "lucide-react";
 import { useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
@@ -22,7 +22,7 @@ export function Toaster() {
   );
 }
 
-function ToastItem({ toast }: { toast: any }) {
+function ToastItem({ toast }: { toast: Toast }) {
   const [isActionLoading, setIsActionLoading] = useState(false);
 
   const handleAction = async () => {

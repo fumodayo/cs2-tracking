@@ -158,6 +158,19 @@
     "undoing": "Đang hoàn tác...",
     "undoImport": "Hoàn tác import"
   },
+  "importExcelConfirm": {
+    "title": "Xác nhận nhập từ Excel",
+    "description": "Kiểm tra lại danh sách vật phẩm từ file. Bạn có thể chọn/bỏ chọn các vật phẩm để nhập và chỉnh sửa nhanh số lượng hoặc giá mua.",
+    "itemName": "Tên vật phẩm",
+    "quantity": "Số lượng",
+    "buyPrice": "Giá mua (VND)",
+    "status": "Trạng thái",
+    "alreadyExists": "Đã có",
+    "alreadyExistsTooltip": "Vật phẩm này đã tồn tại trong portfolio.",
+    "selectedCount": "Đã chọn {{selected}} / {{total}} vật phẩm",
+    "confirmButton": "Xác nhận nhập",
+    "cancelButton": "Hủy bỏ"
+  },
   "scanner": {
     "title": "Quét hòm đồ Steam",
     "description": "Quét inventory từ các tài khoản Steam để xem tổng tài sản và giá trị.",

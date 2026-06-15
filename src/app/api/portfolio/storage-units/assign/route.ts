@@ -12,6 +12,13 @@ type AssignItem = {
   quantity: number;
 };
 
+type StorageUnitItem = {
+  caseId: string;
+  marketHashName: string;
+  quantity: number;
+  addedAt?: Date;
+};
+
 /**
  * POST /api/portfolio/storage-units/assign
  * Assign items to a Storage Unit.
@@ -44,9 +51,9 @@ export async function POST(request: Request) {
       );
     }
 
-    const existingItems: any[] = Array.isArray(doc.items) ? doc.items : [];
+    const existingItems: StorageUnitItem[] = Array.isArray(doc.items) ? doc.items : [];
     const currentCount = existingItems.reduce(
-      (sum: number, item: any) => sum + (Number(item.quantity) || 0),
+      (sum, item) => sum + (Number(item.quantity) || 0),
       0,
     );
     const addingCount = items.reduce(
@@ -80,7 +87,7 @@ export async function POST(request: Request) {
       }
 
       const existingIdx = updatedItems.findIndex(
-        (ei: any) => ei.caseId === item.caseId,
+        (ei) => ei.caseId === item.caseId,
       );
 
       if (existingIdx >= 0) {
@@ -104,7 +111,7 @@ export async function POST(request: Request) {
     );
 
     const newCount = updatedItems.reduce(
-      (sum: number, item: any) => sum + (Number(item.quantity) || 0),
+      (sum, item) => sum + (Number(item.quantity) || 0),
       0,
     );
 

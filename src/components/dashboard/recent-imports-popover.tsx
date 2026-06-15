@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { History, Loader2, RotateCcw, Trash2, X } from "lucide-react";
+import { History, Loader2, RotateCcw } from "lucide-react";
 import * as Popover from "@radix-ui/react-popover";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { formatRelative } from "@/utils/date";
@@ -15,6 +15,7 @@ export type RecentImport = {
   importedIds: string[];
 };
 
+// eslint-disable-next-line react-refresh/only-export-components
 export function useRecentImports() {
   const [recentImports, setRecentImports] = useState<RecentImport[]>([]);
 

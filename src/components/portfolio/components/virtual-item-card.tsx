@@ -1,0 +1,108 @@
+"use client";
+
+import React from "react";
+import { CaseThumbnail } from "../case-thumbnail";
+import { useCurrency } from "@/components/currency-provider";
+import { PortfolioTableRow } from "../portfolio-table-model";
+
+interface VirtualItemCardProps {
+  item: PortfolioTableRow;
+  typeColor: string;
+}
+
+export function VirtualItemCard({ item, typeColor }: VirtualItemCardProps) {
+  const { formatCurrency } = useCurrency();
+
+  return (
+    <div className="w-[25rem] text-left">
+      <div className="relative overflow-hidden rounded-2xl border border-slate-800/80 bg-[#0e121a] text-slate-100 shadow-[0_20px_50px_rgba(0,0,0,0.65)] backdrop-blur-xl transition-all duration-300 hover:border-slate-700/80">
+        <div
+          className="pointer-events-none absolute -top-24 -left-24 h-48 w-48 rounded-full opacity-[0.08] blur-3xl"
+          style={{ backgroundColor: typeColor }}
+        />
+
+        <div className="flex items-center gap-4 border-b border-slate-800/80 bg-gradient-to-r from-slate-900/60 to-slate-900/10 px-4 py-4">
+          <div className="group relative flex shrink-0 items-center justify-center rounded-xl border border-slate-800/50 bg-slate-950/80 p-1 shadow-inner">
+            <CaseThumbnail
+              imageUrl={item.case.imageUrl}
+              name={item.case.name}
+              size="lg"
+            />
+            <div
+              className="absolute inset-0 -z-10 rounded-xl opacity-20 blur-md"
+              style={{ backgroundColor: typeColor }}
+            />
+          </div>
+          <div className="min-w-0 flex-1">
+            <p
+              className="text-sm leading-snug font-bold tracking-wide text-slate-100"
+              title={item.case.name}
+            >
+              {item.case.name}
+            </p>
+            <p className="mt-1 flex items-center gap-1 text-xs font-medium text-amber-500">
+              <span>🔒 Chỉ lưu trong Storage Unit</span>
+            </p>
+          </div>
+        </div>
+
+        <div className="space-y-4 px-4 py-4">
+          {item.storageUnitDetails && item.storageUnitDetails.length > 0 && (
+            <div className="mb-3 space-y-1.5 border-b border-slate-800/80 pb-3 text-xs">
+              <div className="mb-1 text-[10px] font-bold tracking-wider text-slate-500 uppercase">
+                Lưu trữ trong Storage Unit
+              </div>
+              {item.storageUnitDetails.map((su) => (
+                <div
+                  key={su.storageUnitId}
+                  className="flex items-center justify-between text-slate-300"
+                >
+                  <span className="flex items-center gap-1.5">
+                    <span className="size-1.5 rounded-full bg-amber-500" />
+                    <span>{su.storageUnitName}</span>
+                  </span>
+                  <span className="font-bold text-amber-400">
+                    {su.quantity}
+                  </span>
+                </div>
+              ))}
+            </div>
+          )}
+
+          <div className="border-slate-850 grid grid-cols-2 gap-3 rounded-lg border bg-slate-950/45 p-3 text-xs">
+            <div>
+              <p className="text-[10px] font-bold text-slate-500 uppercase">
+                Tổng số lượng
+              </p>
+              <p className="mt-0.5 text-sm font-bold text-slate-200">
+                {item.quantity} items
+              </p>
+            </div>
+            <div>
+              <p className="text-[10px] font-bold text-slate-500 uppercase">
+                Giá hiện tại
+              </p>
+              <p className="mt-0.5 text-sm font-bold text-emerald-400">
+                {formatCurrency(item.currentPrice ?? 0)}
+              </p>
+            </div>
+            <div className="col-span-2 border-t border-slate-800/40 pt-2">
+              <p className="text-[10px] font-bold text-slate-500 uppercase">
+                Tổng giá trị hiện tại
+              </p>
+              <p className="mt-0.5 text-base font-extrabold text-emerald-400">
+                {formatCurrency((item.currentPrice ?? 0) * item.quantity)}
+              </p>
+            </div>
+          </div>
+
+          <div className="border-stone-850 rounded-lg border bg-stone-950/20 p-3 text-xs leading-relaxed text-stone-400">
+            💡 <strong>Lưu ý:</strong> Vật phẩm này chỉ tồn tại trong Storage
+            Unit, không có trong inventory chính. Số lượng được đồng bộ tự
+            động khi quét tài khoản Steam.
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}

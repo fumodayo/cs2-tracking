@@ -1,9 +1,9 @@
 import React, { useState, useEffect } from "react";
 import { ChevronDown, ChevronUp, AlertCircle, HelpCircle, Eye, EyeOff } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
-import { parseSteamCookies, buildSteamCookie } from "@/utils/steam";
+import { parseSteamCookies, buildSteamCookie } from "@/infrastructure/steam";
 import { AccountEntry } from "../types";
-import { toast } from "@/utils/toast-store";
+import { toast } from "@/stores/toast-store";
 import { Button } from "@/components/ui/button";
 
 interface CookieStatus {

@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
-import { fetchWithRetry } from "@/utils/gemini-retry";
-import { extractPostImagesFromHtml } from "@/utils/facebook-image-extractor";
+import { fetchWithRetry } from "@/infrastructure/gemini-retry";
+import { extractPostImagesFromHtml } from "@/services/parser/facebook-image-extractor";
 
 export const dynamic = "force-dynamic";
 

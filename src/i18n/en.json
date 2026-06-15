@@ -158,6 +158,19 @@
     "undoing": "Undoing...",
     "undoImport": "Undo import"
   },
+  "importExcelConfirm": {
+    "title": "Confirm Excel Import",
+    "description": "Review the items list from the file. You can select/deselect items to import and quickly edit their quantity or buy price.",
+    "itemName": "Item Name",
+    "quantity": "Quantity",
+    "buyPrice": "Buy Price (VND)",
+    "status": "Status",
+    "alreadyExists": "Exists",
+    "alreadyExistsTooltip": "This item already exists in your portfolio.",
+    "selectedCount": "Selected {{selected}} / {{total}} items",
+    "confirmButton": "Confirm Import",
+    "cancelButton": "Cancel"
+  },
   "scanner": {
     "title": "Steam Inventory Scanner",
     "description": "Scan inventories from Steam accounts to view total assets and value.",

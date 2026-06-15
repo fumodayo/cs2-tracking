@@ -4,27 +4,24 @@ import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { motion, AnimatePresence } from "framer-motion";
 import {
-  Bug,
   CheckCircle,
   Clock,
   User,
-  ExternalLink,
   Eye,
   RefreshCw,
   AlertCircle,
   Check,
-  CheckCircle2,
-  Trash2,
 } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
-import { toast } from "@/utils/toast-store";
+import { toast } from "@/stores/toast-store";
 
 interface BugReport {
   id: string;
   description: string;
   imageUrl: string | null;
+  imageUrls?: string[];
   user: {
     id: string;
     email: string;
@@ -80,8 +77,9 @@ export function AdminBugReportsClient() {
       );
       queryClient.invalidateQueries({ queryKey: ["bug-reports"] });
     },
-    onError: (err: any) => {
-      toast.error(err.message || "Đã xảy ra lỗi.");
+    onError: (err: unknown) => {
+      const message = err instanceof Error ? err.message : "Đã xảy ra lỗi.";
+      toast.error(message);
     },
   });
 
@@ -246,22 +244,45 @@ export function AdminBugReportsClient() {
                       </p>
 
                       {/* Image Attachment */}
-                      {report.imageUrl && (
-                        <div 
-                          onClick={() => setSelectedImage(report.imageUrl)}
-                          className="group relative cursor-pointer overflow-hidden rounded-lg border border-stone-800 bg-stone-950/30 transition-all hover:border-accent"
-                        >
-                          <img
-                            src={report.imageUrl}
-                            alt="Bug report screenshot"
-                            className="max-h-48 w-full object-contain transition-transform duration-300 group-hover:scale-[1.02]"
-                          />
-                          <div className="absolute inset-0 flex items-center justify-center bg-stone-950/40 opacity-0 transition-opacity group-hover:opacity-100">
-                            <span className="flex items-center gap-1.5 rounded-full bg-stone-900/90 px-3 py-1.5 text-[10px] font-semibold text-stone-200">
-                              <Eye className="size-3.5" /> Phóng to ảnh
-                            </span>
-                          </div>
+                      {report.imageUrls && report.imageUrls.length > 0 ? (
+                        <div className="grid grid-cols-2 gap-3">
+                          {report.imageUrls.map((url, idx) => (
+                            <div 
+                              key={idx}
+                              onClick={() => setSelectedImage(url)}
+                              className="group relative cursor-pointer overflow-hidden rounded-xl border border-stone-850 bg-[#07090d] p-1.5 flex items-center justify-center h-32 transition-all hover:border-stone-700 hover:shadow-lg"
+                            >
+                              <img
+                                src={url}
+                                alt={`Bug report screenshot ${idx + 1}`}
+                                className="h-full w-full object-contain rounded-lg transition-transform duration-300 group-hover:scale-[1.02]"
+                              />
+                              <div className="absolute inset-0 flex items-center justify-center bg-stone-950/50 opacity-0 transition-opacity group-hover:opacity-100">
+                                <span className="flex items-center gap-1.5 rounded-full bg-stone-900/90 px-3 py-1.5 text-[10px] font-semibold text-stone-200 shadow-md shadow-black/40">
+                                  <Eye className="size-3.5" /> Phóng to
+                                </span>
+                              </div>
+                            </div>
+                          ))}
                         </div>
+                      ) : (
+                        report.imageUrl && (
+                          <div 
+                            onClick={() => setSelectedImage(report.imageUrl)}
+                            className="group relative cursor-pointer overflow-hidden rounded-xl border border-stone-850 bg-[#07090d] p-1.5 flex items-center justify-center h-48 transition-all hover:border-stone-700 hover:shadow-lg"
+                          >
+                            <img
+                              src={report.imageUrl}
+                              alt="Bug report screenshot"
+                              className="h-full w-full object-contain rounded-lg transition-transform duration-300 group-hover:scale-[1.02]"
+                            />
+                            <div className="absolute inset-0 flex items-center justify-center bg-stone-950/50 opacity-0 transition-opacity group-hover:opacity-100">
+                              <span className="flex items-center gap-1.5 rounded-full bg-stone-900/90 px-3 py-1.5 text-[10px] font-semibold text-stone-200 shadow-md shadow-black/40">
+                                <Eye className="size-3.5" /> Phóng to ảnh
+                              </span>
+                            </div>
+                          </div>
+                        )
                       )}
                     </div>
 

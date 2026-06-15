@@ -9,7 +9,7 @@ export const dynamic = "force-dynamic";
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const { description, image, mimeType } = body;
+    const { description, image, mimeType, images } = body;
 
     if (!description || typeof description !== "string" || !description.trim()) {
       return NextResponse.json(
@@ -19,11 +19,34 @@ export async function POST(request: NextRequest) {
     }
 
     let imageUrl = "";
+    const imageUrls: string[] = [];
 
-    if (image && typeof image === "string" && image.trim()) {
+    // Support multiple images upload
+    if (images && Array.isArray(images) && images.length > 0) {
+      try {
+        for (const imgObj of images) {
+          if (imgObj.base64 && typeof imgObj.base64 === "string" && imgObj.base64.trim()) {
+            const resolvedMime = imgObj.mimeType || "image/png";
+            const uploadedUrl = await uploadImageToCloudinary(imgObj.base64, resolvedMime);
+            imageUrls.push(uploadedUrl);
+          }
+        }
+        if (imageUrls.length > 0) {
+          imageUrl = imageUrls[0]; // fallback for legacy code
+        }
+      } catch (uploadError) {
+        console.error("Failed to upload screenshots to Cloudinary:", uploadError);
+        return NextResponse.json(
+          { message: "Không thể upload một hoặc nhiều hình ảnh lên Cloudinary." },
+          { status: 500 }
+        );
+      }
+    } else if (image && typeof image === "string" && image.trim()) {
+      // Legacy single image support
       try {
         const resolvedMimeType = mimeType || "image/png";
         imageUrl = await uploadImageToCloudinary(image, resolvedMimeType);
+        imageUrls.push(imageUrl);
       } catch (uploadError) {
         console.error("Failed to upload screenshot to Cloudinary:", uploadError);
         return NextResponse.json(
@@ -39,6 +62,7 @@ export async function POST(request: NextRequest) {
     const report = {
       description: description.trim(),
       imageUrl: imageUrl || null,
+      imageUrls: imageUrls.length > 0 ? imageUrls : (imageUrl ? [imageUrl] : []),
       user: user
         ? {
             id: user.id,

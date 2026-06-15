@@ -8,20 +8,23 @@ import {
 } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { Select } from "@/components/ui/select";
+import { cn } from "@/utils/cn";
 
 interface TablePaginationProps<TData> {
   table: Table<TData>;
   pageSizeOptions?: number[];
+  className?: string;
 }
 
 export function TablePagination<TData>({
   table,
   pageSizeOptions = [5, 10, 20, 50, 100],
+  className,
 }: TablePaginationProps<TData>) {
   const { t } = useTranslation();
 
   return (
-    <div className="flex items-center justify-between border-t border-stone-800 bg-stone-900/50 px-4 py-2.5 text-xs text-stone-400">
+    <div className={cn("flex items-center justify-between border-t border-stone-800 bg-stone-900/50 px-4 py-2.5 text-xs text-stone-400", className)}>
       <div className="flex items-center gap-2">
         <span className="font-medium text-stone-400">
           {t("common.rowsPerPage") || "Rows per page"}
