@@ -5,6 +5,7 @@ import { useTranslation } from "react-i18next";
 import { useLocalStorage } from "@/hooks/use-local-storage";
 import { useImportStore, importStore, toast, toastStore } from "@/stores";
 import { useRecentImports } from "./recent-imports-popover";
+import { refreshBuffPrice } from "@/services/buff-api";
 import {
   parsePortfolioExcelFile,
   buildPortfolioTableRows,
@@ -20,8 +21,8 @@ import {
   deleteManyPortfolioItems,
   updatePortfolioItem,
   importPortfolioRows,
-  getErrorMessage,
 } from "@/services/portfolio-api";
+import { getErrorMessage } from "@/utils/error";
 
 export function useDashboard() {
   const queryClient = useQueryClient();
@@ -150,25 +151,12 @@ export function useDashboard() {
           while (nextIndex < items.length) {
             const currentHashName = items[nextIndex++];
             try {
-              const response = await fetch("/api/inventory/buff-price", {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({
-                  marketHashName: currentHashName,
-                  cnyToVndRate: buffCnyToVndRate,
-                  forceRefresh: true,
-                }),
-              });
-
-              if (response.ok) {
-                const data = await response.json();
-                if (
-                  data &&
-                  typeof data.priceCny === "number" &&
-                  data.priceCny > 0
-                ) {
-                  newPrices[currentHashName] = data.priceCny;
-                }
+              const data = await refreshBuffPrice(
+                currentHashName,
+                buffCnyToVndRate,
+              );
+              if (data) {
+                newPrices[currentHashName] = data.priceCny;
               }
             } catch (err) {
               console.error(

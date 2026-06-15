@@ -700,5 +700,3 @@ async function updateImportedCaseMetadata(input: {
     .collection("cases")
     .updateOne({ marketHashName: input.marketHashName }, { $set });
 }
-
-

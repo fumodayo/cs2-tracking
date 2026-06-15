@@ -189,8 +189,6 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
-
-
 function getErrorStatus(error: unknown): number {
   if (!isRecord(error) || typeof error.statusCode !== "number") {
     return isClientError(error) ? 400 : 500;

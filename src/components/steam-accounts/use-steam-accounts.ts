@@ -4,6 +4,14 @@ import { useSyncStore, syncStore, toast, toastStore } from "@/stores";
 import { useTranslation } from "react-i18next";
 import type { MissingItem, SyncStorageUnit, ExtraItem } from "@/components/portfolio";
 import { getErrorMessage } from "@/utils/error";
+import {
+  fetchSteamAccounts,
+  triggerBackgroundSync,
+  checkSteamCookieStatus,
+  addSteamAccount,
+  updateSteamAccountCookie,
+  deleteSteamAccount,
+} from "@/services/steam-accounts-api";
 
 export function useSteamAccounts({
   reportQuery,
@@ -86,21 +94,7 @@ export function useSteamAccounts({
 
   const accountsQuery = useQuery({
     queryKey: ["portfolio-accounts"],
-    queryFn: async () => {
-      const res = await fetch("/api/portfolio/accounts");
-      if (!res.ok) throw new Error(t("dashboard.cannotLoadAccounts"));
-      return res.json() as Promise<
-        Array<{
-          id: string;
-          steamId64: string;
-          steamUrl: string;
-          name: string;
-          avatarUrl: string | null;
-          steamCookie?: string | null;
-          cookieError?: string | null;
-        }>
-      >;
-    },
+    queryFn: () => fetchSteamAccounts(t("dashboard.cannotLoadAccounts")),
   });
 
   // Silent periodic background sync every 1 hour
@@ -109,9 +103,7 @@ export function useSteamAccounts({
     if (!hasAccounts) return;
 
     const interval = setInterval(() => {
-      fetch("/api/portfolio/accounts/sync?bypassCooldown=true", {
-        method: "POST",
-      })
+      triggerBackgroundSync()
         .then(() => {
           accountsQuery.refetch();
           reportQuery.refetch();
@@ -132,14 +124,8 @@ export function useSteamAccounts({
       }));
 
       try {
-        const res = await fetch("/api/portfolio/accounts/check", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ accountId }),
-        });
-
-        const data = await res.json();
-        if (res.ok && data.isValid) {
+        const data = await checkSteamCookieStatus(accountId);
+        if (data.isValid) {
           setCookieStatuses((prev) => ({
             ...prev,
             [accountId]: { status: "live" },
@@ -184,23 +170,8 @@ export function useSteamAccounts({
   // activeSteamCookie removed since it was unused
 
   const updateCookieMutation = useMutation({
-    mutationFn: async ({
-      id,
-      steamCookie,
-    }: {
-      id: string;
-      steamCookie: string;
-    }) => {
-      const res = await fetch("/api/portfolio/accounts", {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ id, steamCookie }),
-      });
-      const data = await res.json();
-      if (!res.ok)
-        throw new Error(data.message ?? t("dashboard.cannotUpdateCookie"));
-      return data;
-    },
+    mutationFn: (payload: { id: string; steamCookie: string }) =>
+      updateSteamAccountCookie(payload, t("dashboard.cannotUpdateCookie")),
     onSuccess: (data, variables) => {
       const accountId = variables.id;
       setCookieInputs((prev) => {
@@ -289,17 +260,8 @@ export function useSteamAccounts({
   );
 
   const addAccountMutation = useMutation({
-    mutationFn: async (payload: { steamUrl: string; steamCookie?: string }) => {
-      const res = await fetch("/api/portfolio/accounts", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
-      });
-      const data = await res.json();
-      if (!res.ok)
-        throw new Error(data.message ?? t("dashboard.cannotAddAccount"));
-      return data;
-    },
+    mutationFn: (payload: { steamUrl: string; steamCookie?: string }) =>
+      addSteamAccount(payload, t("dashboard.cannotAddAccount")),
     onSuccess: () => {
       accountsQuery.refetch();
       toast.success(t("dashboard.accountLinked"));
@@ -312,15 +274,8 @@ export function useSteamAccounts({
   });
 
   const deleteAccountMutation = useMutation({
-    mutationFn: async (id: string) => {
-      const res = await fetch(`/api/portfolio/accounts?id=${id}`, {
-        method: "DELETE",
-      });
-      const data = await res.json();
-      if (!res.ok)
-        throw new Error(data.message ?? t("dashboard.cannotDeleteAccount"));
-      return data;
-    },
+    mutationFn: (id: string) =>
+      deleteSteamAccount(id, t("dashboard.cannotDeleteAccount")),
     onSuccess: () => {
       accountsQuery.refetch();
       reportQuery.refetch();

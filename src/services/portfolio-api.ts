@@ -1,6 +1,5 @@
 import type { PortfolioReportDto } from "@/types/report";
 import type { PortfolioImportRow } from "@/components/portfolio";
-import { getErrorMessage } from "@/utils/error";
 
 export const PORTFOLIO_QUERY_KEY = ["portfolio-report"];
 
@@ -124,4 +123,4 @@ async function parseResponse<T>(response: Response): Promise<T> {
   return data as T;
 }
 
-export { getErrorMessage };
+
