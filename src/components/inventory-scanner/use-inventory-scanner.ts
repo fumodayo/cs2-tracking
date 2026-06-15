@@ -6,7 +6,7 @@ import {
   useState,
 } from "react";
 import { useSession } from "@/components/auth/use-session";
-import { toast } from "@/stores/toast-store";
+import { toast } from "@/stores";
 import {
   AccountEntry,
   CaseItemData,

@@ -6,7 +6,7 @@ import { motion } from "framer-motion";
 
 import { Tooltip } from "@/components/ui/tooltip";
 import { CopyButton } from "@/components/ui/actions";
-import { CaseThumbnail } from "@/components/portfolio/case-thumbnail";
+import { CaseThumbnail } from "@/components/portfolio";
 import type { ScanResultItem } from "./types";
 import { Button } from "@/components/ui/button";
 import {

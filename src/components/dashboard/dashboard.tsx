@@ -12,29 +12,26 @@ import { useRef, useState, useMemo } from "react";
 import { useSession } from "@/components/auth/use-session";
 import type { PortfolioReportDto } from "@/types/report";
 import { AddCaseDialog } from "./add-case-dialog";
-import { ImportExcelConfirmDialog } from "@/components/portfolio/import-excel-confirm-dialog";
-import { EmptyState } from "@/components/portfolio/empty-state";
 import {
+  ImportExcelConfirmDialog,
+  EmptyState,
   exportPortfolioToExcel,
   parsePortfolioExcelFile,
   type PortfolioImportRow,
-} from "@/components/portfolio/portfolio-excel";
-import { PortfolioTable } from "@/components/portfolio/portfolio-table";
-import { SummaryCards } from "./summary-cards";
-import { RateCards } from "./rate-cards";
-import {
+  PortfolioTable,
   buildPortfolioTableRows,
   type PortfolioTableRow,
-} from "@/components/portfolio/portfolio-table-model";
+} from "@/components/portfolio";
+import { SummaryCards } from "./summary-cards";
+import { RateCards } from "./rate-cards";
 import { FadeIn } from "@/components/ui/animation";
-import { useImportStore, importStore } from "@/stores/import-store";
+import { useImportStore, importStore, toast, toastStore } from "@/stores";
 import {
   RecentImportsPopover,
   useRecentImports,
 } from "./recent-imports-popover";
-import { toast, toastStore } from "@/stores/toast-store";
 import { useTranslation } from "react-i18next";
-import { SteamAccountsCard } from "@/components/steam-accounts/components/steam-accounts-card";
+import { SteamAccountsCard } from "@/components/steam-accounts";
 import { useLocalStorage } from "@/hooks/use-local-storage";
 
 import { Button } from "@/components/ui/button";

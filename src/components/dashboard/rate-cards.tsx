@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { Card } from "@/components/ui/card";
-import type { PortfolioTableRow } from "@/components/portfolio/portfolio-table-model";
+import type { PortfolioTableRow } from "@/components/portfolio";
 import { TbPercentage, TbShoppingBag, TbInfoCircle } from "react-icons/tb";
 import { CountUp } from "@/components/ui/animation/count-up";
 import { Tooltip, TooltipProvider } from "@/components/ui/tooltip";

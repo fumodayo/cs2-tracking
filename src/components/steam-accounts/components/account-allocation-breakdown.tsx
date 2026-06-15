@@ -2,7 +2,7 @@
 
 import React from "react";
 import { TbUser } from "react-icons/tb";
-import { PortfolioTableRow } from "@/components/portfolio/portfolio-table-model";
+import { PortfolioTableRow } from "@/components/portfolio";
 
 interface AccountAllocationBreakdownProps {
   relatedRows: PortfolioTableRow[];

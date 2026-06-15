@@ -2,7 +2,7 @@ import React from "react";
 import { Loader2, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { CopyButton } from "@/components/ui/actions";
-import { CaseThumbnail } from "@/components/portfolio/case-thumbnail";
+import { CaseThumbnail } from "@/components/portfolio";
 import { Table } from "@tanstack/react-table";
 import { ScanResultItem } from "../types";
 import { formatVND, formatPlainNumber, colorWithAlpha, getItemTypeColor, getSteamMarketListingUrl } from "../utils";

@@ -23,7 +23,7 @@ import {
 } from "../portfolio-table-utils";
 
 import { VirtualItemCard } from "./virtual-item-card";
-import { AccountAllocationBreakdown } from "@/components/steam-accounts/components/account-allocation-breakdown";
+import { AccountAllocationBreakdown } from "@/components/steam-accounts";
 import { ItemLotsList } from "./item-lots-list";
 
 export function ItemHoverCard({

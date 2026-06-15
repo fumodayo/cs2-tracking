@@ -11,7 +11,7 @@ import { CaseItemData } from "./types";
 import {
   CaseSearchSelect,
   type CaseItemSearchData,
-} from "@/components/portfolio/case-search-select";
+} from "@/components/portfolio";
 import { useQuery } from "@tanstack/react-query";
 import {
   Dialog,

@@ -1,6 +1,6 @@
 "use client";
 
-import { useImportStore, importStore } from "@/stores/import-store";
+import { useImportStore, importStore } from "@/stores";
 import { CheckCircle2, Loader2, XCircle, X, RotateCcw } from "lucide-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";

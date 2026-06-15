@@ -1,4 +1,4 @@
-import { PostAnalyzer } from "@/components/post-analyzer/post-analyzer";
+import { PostAnalyzer } from "@/components/post-analyzer";
 
 export default function PostAnalysisPage() {
   return (

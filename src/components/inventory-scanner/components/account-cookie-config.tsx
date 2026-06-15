@@ -3,7 +3,7 @@ import { ChevronDown, ChevronUp, AlertCircle, HelpCircle, Eye, EyeOff } from "lu
 import { motion, AnimatePresence } from "framer-motion";
 import { parseSteamCookies, buildSteamCookie } from "@/infrastructure/steam";
 import { AccountEntry } from "../types";
-import { toast } from "@/stores/toast-store";
+import { toast } from "@/stores";
 import { Button } from "@/components/ui/button";
 
 interface CookieStatus {

@@ -9,7 +9,7 @@ import type { ReactNode } from "react";
 import type { PortfolioReportDto } from "@/types/report";
 import { useCurrency } from "@/components/currency-provider";
 import { StatCard } from "@/components/ui/stat-card";
-import type { PortfolioTableRow } from "@/components/portfolio/portfolio-table-model";
+import type { PortfolioTableRow } from "@/components/portfolio";
 import { FadeIn, CountUp } from "@/components/ui/animation";
 
 type SummaryCardsProps = {

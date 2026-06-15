@@ -3,7 +3,7 @@ import { Loader2, Search, ChevronDown, ChevronUp, X, AlertCircle, ShoppingBag } 
 import { AccountEntry } from "../types";
 import { formatVND, formatProgressDetail } from "../utils";
 import { AccountCookieConfig } from "./account-cookie-config";
-import { toast } from "@/stores/toast-store";
+import { toast } from "@/stores";
 
 interface CookieStatus {
   status: "idle" | "loading" | "live" | "expired" | "error";

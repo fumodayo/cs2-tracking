@@ -1,9 +1,8 @@
 import { useState, useRef, useEffect, useCallback } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
-import { useSyncStore, syncStore } from "@/stores/sync-store";
-import { toast, toastStore } from "@/stores/toast-store";
+import { useSyncStore, syncStore, toast, toastStore } from "@/stores";
 import { useTranslation } from "react-i18next";
-import { MissingItem, SyncStorageUnit, ExtraItem } from "@/components/portfolio/missing-items-dialog";
+import type { MissingItem, SyncStorageUnit, ExtraItem } from "@/components/portfolio";
 
 function getErrorMessage(error: unknown): string {
   return error instanceof Error ? error.message : "Có lỗi xảy ra.";

@@ -12,7 +12,7 @@ import {
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
-import { toast, toastStore } from "@/stores/toast-store";
+import { toast, toastStore } from "@/stores";
 
 interface BugReportDialogProps {
   open: boolean;

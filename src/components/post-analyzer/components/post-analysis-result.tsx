@@ -1,7 +1,7 @@
 import { FileImage } from "lucide-react";
 import Image from "next/image";
 import { useCurrency } from "@/components/currency-provider";
-import { CaseThumbnail } from "@/components/portfolio/case-thumbnail";
+import { CaseThumbnail } from "@/components/portfolio";
 import type { PostAnalysisDto } from "@/types/post-analysis";
 
 export function Metric({

@@ -5,7 +5,7 @@ import { useMemo, useState, useEffect, useCallback } from "react";
 import {
   CaseSearchSelect,
   type CaseItemSearchData,
-} from "@/components/portfolio/case-search-select";
+} from "@/components/portfolio";
 import { useForm, Controller } from "react-hook-form";
 import { Button } from "@/components/ui/button";
 import {

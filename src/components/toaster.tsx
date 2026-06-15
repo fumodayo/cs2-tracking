@@ -1,6 +1,6 @@
 "use client";
 
-import { useToasts, toastStore, type Toast } from "@/stores/toast-store";
+import { useToasts, toastStore, type Toast } from "@/stores";
 import { CheckCircle2, Loader2, XCircle, Info, X } from "lucide-react";
 import { useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
