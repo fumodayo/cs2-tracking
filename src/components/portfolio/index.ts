@@ -19,3 +19,4 @@ export type {
   PortfolioRowItemType,
   PortfolioSourceAccount,
 } from "./portfolio-table-model";
+export { AddCaseDialog } from "./components/add-case-dialog";

@@ -13,6 +13,7 @@ import {
   EmptyState,
   exportPortfolioToExcel,
   PortfolioTable,
+  AddCaseDialog,
 } from "@/components/portfolio";
 import { SummaryCards } from "./summary-cards";
 import { RateCards } from "./rate-cards";
@@ -22,7 +23,6 @@ import {
 } from "./recent-imports-popover";
 import { SteamAccountsCard } from "@/components/steam-accounts";
 import { Button } from "@/components/ui/button";
-import { AddCaseDialog } from "./add-case-dialog";
 
 export function Dashboard() {
   const {
