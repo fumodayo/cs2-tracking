@@ -15,7 +15,7 @@ import { ShoppingBag, Users } from "lucide-react";
 import { useInventoryScanner } from "./use-inventory-scanner";
 
 import { AddCaseSearch } from "./add-case-search";
-import { CookieGuideModal } from "./cookie-guide-modal";
+import { CookieGuideModal } from "@/components/shared/cookie-guide-modal";
 import { ScanResultItem } from "./types";
 import { buildInventoryColumns } from "./inventory-scanner-columns";
 

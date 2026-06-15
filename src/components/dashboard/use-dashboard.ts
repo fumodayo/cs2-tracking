@@ -11,15 +11,17 @@ import {
 } from "@/components/portfolio";
 import type { PortfolioReportDto } from "@/types/report";
 import type { PortfolioTableRow, PortfolioImportRow } from "@/components/portfolio";
-
-export const PORTFOLIO_QUERY_KEY = ["portfolio-report"];
-
-type PortfolioImportResponse = PortfolioReportDto & {
-  importResult?: {
-    importedCount: number;
-    importedIds: string[];
-  };
-};
+import {
+  PORTFOLIO_QUERY_KEY,
+  fetchPortfolioReport,
+  refreshPortfolioPrices,
+  addPortfolioItem,
+  deletePortfolioItem,
+  deleteManyPortfolioItems,
+  updatePortfolioItem,
+  importPortfolioRows,
+  getErrorMessage,
+} from "@/services/portfolio-api";
 
 export function useDashboard() {
   const queryClient = useQueryClient();
@@ -70,6 +72,58 @@ export function useDashboard() {
     queryKey: PORTFOLIO_QUERY_KEY,
     queryFn: fetchPortfolioReport,
   });
+
+  function setMutationError(mutationError: unknown) {
+    setError(getErrorMessage(mutationError));
+  }
+
+  // Helper to standardise loading, success and error toast callbacks for mutations
+  const toastCallbacks = <TData, TVariables>(
+    loadingKey: string,
+    successKey: string,
+    errorKey: string,
+  ) => {
+    return {
+      onMutate: () => {
+        const id = toast.loading(t(loadingKey));
+        return { toastId: id };
+      },
+      onSuccess: (
+        _data: TData,
+        _variables: TVariables,
+        context: { toastId: string } | undefined,
+      ) => {
+        if (context?.toastId) {
+          toastStore.update(context.toastId, {
+            type: "success",
+            title: t(successKey),
+            duration: 4000,
+          });
+        }
+      },
+      onError: (
+        err: unknown,
+        _variables: TVariables,
+        context: { toastId: string } | undefined,
+      ) => {
+        if (context?.toastId) {
+          toastStore.update(context.toastId, {
+            type: "error",
+            title: t(errorKey),
+            description: getErrorMessage(err),
+            duration: 5000,
+          });
+        }
+        setMutationError(err);
+      },
+    };
+  };
+
+  const refreshCallbacks = toastCallbacks<PortfolioReportDto, void>(
+    "dashboard.refreshingPrices",
+    "dashboard.refreshSuccess",
+    "dashboard.refreshError",
+  );
 
   const refreshMutation = useMutation({
     mutationFn: async () => {
@@ -142,65 +196,43 @@ export function useDashboard() {
 
       return report;
     },
-    onMutate: () => {
-      const id = toast.loading(t("dashboard.refreshingPrices"));
-      return { toastId: id };
-    },
+    onMutate: refreshCallbacks.onMutate,
     onSuccess: (report, variables, context) => {
-      if (context?.toastId) {
-        toastStore.update(context.toastId, {
-          type: "success",
-          title: t("dashboard.refreshSuccess"),
-          duration: 4000,
-        });
-      }
+      refreshCallbacks.onSuccess(report, variables, context);
       queryClient.setQueryData(PORTFOLIO_QUERY_KEY, report);
       setError(null);
     },
     onError: (err, variables, context) => {
-      if (context?.toastId) {
-        toastStore.update(context.toastId, {
-          type: "error",
-          title: t("dashboard.refreshError"),
-          description: getErrorMessage(err),
-          duration: 5000,
-        });
-      }
-      setMutationError(err);
+      refreshCallbacks.onError(err, variables, context);
     },
   });
 
+  const addCallbacks = toastCallbacks<PortfolioReportDto, Parameters<typeof addPortfolioItem>[0]>(
+    "dashboard.savingItem",
+    "dashboard.itemSaved",
+    "dashboard.itemSaveError",
+  );
+
   const addMutation = useMutation({
     mutationFn: addPortfolioItem,
-    onMutate: () => {
-      const id = toast.loading(t("dashboard.savingItem"));
-      return { toastId: id };
-    },
+    onMutate: addCallbacks.onMutate,
     onSuccess: (report, variables, context) => {
-      if (context?.toastId) {
-        toastStore.update(context.toastId, {
-          type: "success",
-          title: t("dashboard.itemSaved"),
-          duration: 4000,
-        });
-      }
+      addCallbacks.onSuccess(report, variables, context);
       queryClient.setQueryData(PORTFOLIO_QUERY_KEY, report);
       queryClient.invalidateQueries({ queryKey: ["storage_units"] });
       setDialogOpen(false);
       setError(null);
     },
     onError: (err, variables, context) => {
-      if (context?.toastId) {
-        toastStore.update(context.toastId, {
-          type: "error",
-          title: t("dashboard.itemSaveError"),
-          description: getErrorMessage(err),
-          duration: 5000,
-        });
-      }
-      setMutationError(err);
+      addCallbacks.onError(err, variables, context);
     },
   });
+
+  const deleteCallbacks = toastCallbacks<PortfolioReportDto, string>(
+    "dashboard.deletingItem",
+    "dashboard.itemDeleted",
+    "dashboard.itemDeleteError",
+  );
 
   const deleteMutation = useMutation({
     mutationFn: deletePortfolioItem,
@@ -214,17 +246,11 @@ export function useDashboard() {
           rows: previousReport.rows.filter((row) => row.item.id !== id),
         });
       }
-      const toastId = toast.loading(t("dashboard.deletingItem"));
-      return { previousReport, toastId };
+      const toastContext = deleteCallbacks.onMutate();
+      return { previousReport, toastId: toastContext.toastId };
     },
     onSuccess: (report, id, context) => {
-      if (context?.toastId) {
-        toastStore.update(context.toastId, {
-          type: "success",
-          title: t("dashboard.itemDeleted"),
-          duration: 4000,
-        });
-      }
+      deleteCallbacks.onSuccess(report, id, context);
       queryClient.setQueryData(PORTFOLIO_QUERY_KEY, report);
       queryClient.invalidateQueries({ queryKey: ["storage_units"] });
       setError(null);
@@ -233,17 +259,15 @@ export function useDashboard() {
       if (context?.previousReport) {
         queryClient.setQueryData(PORTFOLIO_QUERY_KEY, context.previousReport);
       }
-      if (context?.toastId) {
-        toastStore.update(context.toastId, {
-          type: "error",
-          title: t("dashboard.itemDeleteError"),
-          description: getErrorMessage(err),
-          duration: 5000,
-        });
-      }
-      setMutationError(err);
+      deleteCallbacks.onError(err, id, context);
     },
   });
+
+  const deleteManyCallbacks = toastCallbacks<PortfolioReportDto, string[]>(
+    "dashboard.deletingItems",
+    "dashboard.itemsDeleted",
+    "dashboard.itemsDeleteError",
+  );
 
   const deleteManyMutation = useMutation({
     mutationFn: deleteManyPortfolioItems,
@@ -257,17 +281,11 @@ export function useDashboard() {
           rows: previousReport.rows.filter((row) => !ids.includes(row.item.id)),
         });
       }
-      const toastId = toast.loading(t("dashboard.deletingItems"));
-      return { previousReport, toastId };
+      const toastContext = deleteManyCallbacks.onMutate();
+      return { previousReport, toastId: toastContext.toastId };
     },
     onSuccess: (report, ids, context) => {
-      if (context?.toastId) {
-        toastStore.update(context.toastId, {
-          type: "success",
-          title: t("dashboard.itemsDeleted"),
-          duration: 4000,
-        });
-      }
+      deleteManyCallbacks.onSuccess(report, ids, context);
       queryClient.setQueryData(PORTFOLIO_QUERY_KEY, report);
       queryClient.invalidateQueries({ queryKey: ["storage_units"] });
       setError(null);
@@ -276,17 +294,15 @@ export function useDashboard() {
       if (context?.previousReport) {
         queryClient.setQueryData(PORTFOLIO_QUERY_KEY, context.previousReport);
       }
-      if (context?.toastId) {
-        toastStore.update(context.toastId, {
-          type: "error",
-          title: t("dashboard.itemsDeleteError"),
-          description: getErrorMessage(err),
-          duration: 5000,
-        });
-      }
-      setMutationError(err);
+      deleteManyCallbacks.onError(err, ids, context);
     },
   });
+
+  const updateCallbacks = toastCallbacks<PortfolioReportDto, Parameters<typeof updatePortfolioItem>[0]>(
+    "dashboard.updatingItem",
+    "dashboard.itemUpdated",
+    "dashboard.itemUpdateError",
+  );
 
   const updateMutation = useMutation({
     mutationFn: updatePortfolioItem,
@@ -316,17 +332,11 @@ export function useDashboard() {
           }),
         });
       }
-      const toastId = toast.loading(t("dashboard.updatingItem"));
-      return { previousReport, toastId };
+      const toastContext = updateCallbacks.onMutate();
+      return { previousReport, toastId: toastContext.toastId };
     },
     onSuccess: (report, variables, context) => {
-      if (context?.toastId) {
-        toastStore.update(context.toastId, {
-          type: "success",
-          title: t("dashboard.itemUpdated"),
-          duration: 4000,
-        });
-      }
+      updateCallbacks.onSuccess(report, variables, context);
       queryClient.setQueryData(PORTFOLIO_QUERY_KEY, report);
       queryClient.invalidateQueries({ queryKey: ["storage_units"] });
       setError(null);
@@ -335,15 +345,7 @@ export function useDashboard() {
       if (context?.previousReport) {
         queryClient.setQueryData(PORTFOLIO_QUERY_KEY, context.previousReport);
       }
-      if (context?.toastId) {
-        toastStore.update(context.toastId, {
-          type: "error",
-          title: t("dashboard.itemUpdateError"),
-          description: getErrorMessage(err),
-          duration: 5000,
-        });
-      }
-      setMutationError(err);
+      updateCallbacks.onError(err, variables, context);
     },
   });
 
@@ -414,10 +416,6 @@ export function useDashboard() {
     );
   }, [report, buffPricesCny, buffCnyToVndRate]);
 
-  function setMutationError(mutationError: unknown) {
-    setError(getErrorMessage(mutationError));
-  }
-
   async function handleImportFile(event: React.ChangeEvent<HTMLInputElement>) {
     const file = event.target.files?.[0];
     event.target.value = "";
@@ -453,138 +451,64 @@ export function useDashboard() {
   };
 
   return {
+    // Core data
     report,
     loading,
     error,
     setError,
-    dialogOpen,
-    setDialogOpen,
-    importBusy,
-    importStatus,
-    recentImports,
-    removeRecentImport,
-    filteredRows,
-    setFilteredRows,
-    excelImportRows,
-    setExcelImportRows,
-    excelFileName,
     user,
     googleConfigured,
-    buffPricesCny,
-    buffCnyToVndRate,
-    handleUpdateBuffPrice,
-    handleUpdateBuffRate,
-    reportQuery,
-    deletingId,
-    computedTransactionRows,
-    handleImportFile,
-    handleConfirmExcelImport,
-    importInputRef,
-    addMutation,
-    deleteMutation,
-    deleteManyMutation,
-    updateMutation,
-    refreshMutation,
-    importMutation,
     t,
+
+    // Dialog state
+    dialog: {
+      open: dialogOpen,
+      setOpen: setDialogOpen,
+    },
+
+    // Buff pricing
+    buff: {
+      pricesCny: buffPricesCny,
+      cnyToVndRate: buffCnyToVndRate,
+      updatePrice: handleUpdateBuffPrice,
+      updateRate: handleUpdateBuffRate,
+    },
+
+    // Excel import
+    excel: {
+      busy: importBusy,
+      status: importStatus,
+      rows: excelImportRows,
+      setRows: setExcelImportRows,
+      fileName: excelFileName,
+      inputRef: importInputRef,
+      handleFile: handleImportFile,
+      handleConfirm: handleConfirmExcelImport,
+    },
+
+    // Recent imports
+    recentImports: {
+      list: recentImports,
+      remove: removeRecentImport,
+    },
+
+    // Table state
+    table: {
+      filteredRows,
+      setFilteredRows,
+      computedTransactionRows,
+      deletingId,
+    },
+
+    // Queries & Mutations
+    reportQuery,
+    mutations: {
+      add: addMutation,
+      delete: deleteMutation,
+      deleteMany: deleteManyMutation,
+      update: updateMutation,
+      refresh: refreshMutation,
+      import: importMutation,
+    },
   };
-}
-
-async function fetchPortfolioReport(): Promise<PortfolioReportDto> {
-  const response = await fetch("/api/portfolio", { cache: "no-store" });
-  return parseReportResponse(response);
-}
-
-async function refreshPortfolioPrices(): Promise<PortfolioReportDto> {
-  const response = await fetch("/api/prices/refresh", { method: "POST" });
-  return parseReportResponse(response);
-}
-
-async function addPortfolioItem(payload: {
-  caseId: string;
-  quantity: number;
-  buyPrice: number;
-  buyDate: string;
-  note?: string;
-  sourceAccounts?: Array<{ steamId64: string; name: string }>;
-  storageUnitId?: string;
-  tradeHoldUntil?: string | null;
-}): Promise<PortfolioReportDto> {
-  const response = await fetch("/api/portfolio", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(payload),
-  });
-  return parseReportResponse(response);
-}
-
-async function deletePortfolioItem(id: string): Promise<PortfolioReportDto> {
-  const response = await fetch(`/api/portfolio/${id}`, { method: "DELETE" });
-  return parseReportResponse(response);
-}
-
-async function deleteManyPortfolioItems(
-  ids: string[],
-): Promise<PortfolioReportDto> {
-  const response = await fetch("/api/portfolio", {
-    method: "DELETE",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ ids }),
-  });
-  return parseReportResponse(response);
-}
-
-async function updatePortfolioItem(payload: {
-  id: string;
-  buyPrice?: number;
-  quantity?: number;
-  note?: string;
-  sourceAccounts?: Array<{ steamId64: string; name: string }>;
-  storageUnitId?: string;
-  tradeHoldUntil?: string | null;
-}): Promise<PortfolioReportDto> {
-  const body: Record<string, unknown> = {};
-  if (payload.buyPrice !== undefined) body.buyPrice = payload.buyPrice;
-  if (payload.quantity !== undefined) body.quantity = payload.quantity;
-  if (payload.note !== undefined) body.note = payload.note;
-  if (payload.sourceAccounts !== undefined)
-    body.sourceAccounts = payload.sourceAccounts;
-  if (payload.storageUnitId !== undefined)
-    body.storageUnitId = payload.storageUnitId;
-  if (payload.tradeHoldUntil !== undefined)
-    body.tradeHoldUntil = payload.tradeHoldUntil;
-
-  const response = await fetch(`/api/portfolio/${payload.id}`, {
-    method: "PATCH",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(body),
-  });
-  return parseReportResponse(response);
-}
-
-async function importPortfolioRows(
-  rows: PortfolioImportRow[],
-): Promise<PortfolioImportResponse> {
-  const response = await fetch("/api/portfolio/import", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ rows }),
-  });
-  return parseReportResponse(response);
-}
-
-async function parseReportResponse(
-  response: Response,
-): Promise<PortfolioReportDto> {
-  const data = await response.json();
-
-  if (!response.ok) {
-    throw new Error(data.message ?? "Request thất bại.");
-  }
-
-  return data as PortfolioReportDto;
-}
-
-function getErrorMessage(error: unknown): string {
-  return error instanceof Error ? error.message : "Có lỗi xảy ra.";
 }

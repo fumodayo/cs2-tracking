@@ -24,7 +24,7 @@ import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { SlidePanel, SlidePanelContent } from "@/components/ui/slide-panel";
 import { FadeIn } from "@/components/ui/animation";
 
-import { CookieGuideModal } from "@/components/inventory-scanner/cookie-guide-modal";
+import { CookieGuideModal } from "@/components/shared/cookie-guide-modal";
 import { MissingItemsDialog, StorageUnitInspectPanel } from "@/components/portfolio";
 import { useSteamAccounts } from "../use-steam-accounts";
 import { parseSteamCookies, buildSteamCookie } from "@/infrastructure/steam";
