@@ -7,8 +7,16 @@ export { MissingItemsDialog } from "./missing-items-dialog";
 export type { MissingItem, SyncStorageUnit, ExtraItem } from "./missing-items-dialog";
 export { StorageUnitInspectPanel } from "./storage-unit-panel";
 export { ImportExcelConfirmDialog } from "./import-excel-confirm-dialog";
-export { exportPortfolioToExcel, parsePortfolioExcelFile } from "./portfolio-excel";
-export type { PortfolioImportRow } from "./portfolio-excel";
+export { ImportExcelMappingDialog } from "./import-excel-mapping-dialog";
+export {
+  exportPortfolioToExcel,
+  parsePortfolioExcelFile,
+  readExcelHeaders,
+  parseExcelWithMapping,
+  parseMatrixWithMapping,
+  autoSuggestMapping,
+} from "./portfolio-excel";
+export type { PortfolioImportRow, ColumnMapping, MappingTemplate } from "./portfolio-excel";
 export {
   buildPortfolioTableRows,
 } from "./portfolio-table-model";

@@ -8,6 +8,16 @@ interface AccountAllocationBreakdownProps {
   relatedRows: PortfolioTableRow[];
 }
 
+const PALETTES = [
+  { barColor: "#38bdf8", bgClass: "bg-sky-500/5", borderClass: "border-sky-500/10" },
+  { barColor: "#34d399", bgClass: "bg-emerald-500/5", borderClass: "border-emerald-500/10" },
+  { barColor: "#fbbf24", bgClass: "bg-amber-500/5", borderClass: "border-amber-500/10" },
+  { barColor: "#f87171", bgClass: "bg-rose-500/5", borderClass: "border-rose-500/10" },
+  { barColor: "#2dd4bf", bgClass: "bg-teal-500/5", borderClass: "border-teal-500/10" },
+  { barColor: "#fb923c", bgClass: "bg-orange-500/5", borderClass: "border-orange-500/10" },
+  { barColor: "#a1a1aa", bgClass: "bg-zinc-500/5", borderClass: "border-zinc-500/10" },
+];
+
 export function AccountAllocationBreakdown({
   relatedRows,
 }: AccountAllocationBreakdownProps) {
@@ -74,9 +84,34 @@ export function AccountAllocationBreakdown({
     return Array.from(map.values()).filter((a) => a.total > 0);
   }, [relatedRows]);
 
-  if (combinedAccounts.length === 0) return null;
+  const totalQuantity = React.useMemo(() => {
+    return combinedAccounts.reduce((acc, curr) => acc + curr.total, 0);
+  }, [combinedAccounts]);
 
-  const totalQuantity = combinedAccounts.reduce((acc, curr) => acc + curr.total, 0);
+  const slices = React.useMemo(() => {
+    let accumulatedPercent = 0;
+    const R = 35;
+    const C = 2 * Math.PI * R; // ~219.911
+
+    return combinedAccounts.map((accStats, idx) => {
+      const percent = totalQuantity > 0 ? (accStats.total / totalQuantity) * 100 : 0;
+      const strokeDasharray = `${(percent / 100) * C} ${C}`;
+      const strokeDashoffset = - (accumulatedPercent / 100) * C;
+      accumulatedPercent += percent;
+
+      const palette = PALETTES[idx % PALETTES.length];
+
+      return {
+        ...accStats,
+        percent,
+        strokeDasharray,
+        strokeDashoffset,
+        palette,
+      };
+    });
+  }, [combinedAccounts, totalQuantity]);
+
+  if (combinedAccounts.length <= 1) return null;
 
   return (
     <div className="mb-5 space-y-3 border-b border-slate-800/60 pb-5">
@@ -89,74 +124,93 @@ export function AccountAllocationBreakdown({
           {totalQuantity} tổng
         </span>
       </div>
-      <div className="space-y-2.5">
-        {combinedAccounts.map((accStats) => {
-          const percent = totalQuantity > 0 ? (accStats.total / totalQuantity) * 100 : 0;
-          return (
+
+      <div className="flex items-center gap-5 rounded-xl border border-slate-850 bg-slate-950/20 p-3">
+        {/* SVG Donut Chart */}
+        <div className="relative flex size-20 shrink-0 items-center justify-center">
+          <svg className="size-full -rotate-90" viewBox="0 0 100 100">
+            {/* Background track circle */}
+            <circle
+              cx="50"
+              cy="50"
+              r="35"
+              className="fill-transparent stroke-slate-900/60"
+              strokeWidth="9"
+            />
+            {slices.map((slice) => (
+              <circle
+                key={slice.steamId64}
+                cx="50"
+                cy="50"
+                r="35"
+                className="fill-transparent transition-all duration-500"
+                style={{
+                  stroke: slice.palette.barColor,
+                  strokeWidth: 9,
+                  strokeDasharray: slice.strokeDasharray,
+                  strokeDashoffset: slice.strokeDashoffset,
+                }}
+              />
+            ))}
+          </svg>
+          {/* Inner Total count */}
+          <div className="absolute inset-0 flex flex-col items-center justify-center text-center">
+            <span className="font-mono text-sm font-extrabold text-slate-100 leading-none">
+              {totalQuantity}
+            </span>
+            <span className="text-[7.5px] font-bold text-slate-500 tracking-wider uppercase mt-0.5">
+              tổng
+            </span>
+          </div>
+        </div>
+
+        {/* Legend list on the right */}
+        <div className="flex-1 min-w-0 space-y-1.5">
+          {slices.map((slice) => (
             <div
-              key={accStats.steamId64}
-              className="group relative flex flex-col gap-2 rounded-xl border border-slate-800/40 bg-slate-950/20 p-3 transition duration-200 hover:border-slate-800 hover:bg-slate-900/10"
+              key={slice.steamId64}
+              className="flex items-center justify-between gap-2 text-[11px]"
             >
-              <div className="flex items-center justify-between">
-                <span className="flex items-center gap-2 text-xs font-bold text-slate-200">
-                  <span className="flex size-6 items-center justify-center rounded-lg bg-sky-500/10 text-sky-400">
-                    <TbUser className="size-3.5" />
-                  </span>
-                  <span className="truncate max-w-[12rem]">{accStats.name}</span>
+              <div className="flex items-center gap-1.5 min-w-0">
+                <span
+                  className="size-2 shrink-0 rounded-full"
+                  style={{ backgroundColor: slice.palette.barColor }}
+                />
+                <span className="font-bold text-slate-300 truncate" title={slice.name}>
+                  {slice.name}
                 </span>
-                <div className="flex items-center gap-1.5">
-                  <span className="font-mono text-xs font-extrabold text-slate-100">
-                    {accStats.total}
-                  </span>
-                  <span className="text-[10px] text-slate-500 font-semibold">
-                    ({percent.toFixed(0)}%)
-                  </span>
+              </div>
+              <div className="flex items-center gap-1.5 shrink-0 font-mono text-[10px] text-slate-400 font-medium">
+                <span className="text-slate-100 font-bold">{slice.total}</span>
+                <span>({slice.percent.toFixed(0)}%)</span>
+                
+                {/* Breakdown badges */}
+                <div className="flex items-center gap-0.5 ml-1">
+                  {slice.tradeable > 0 && (
+                    <span className="text-[8px] font-extrabold text-emerald-450 text-emerald-400/80" title={`${slice.tradeable} Tradeable`}>
+                      {slice.tradeable}T
+                    </span>
+                  )}
+                  {slice.hold > 0 && (
+                    <span className="text-[8px] font-extrabold text-rose-450 text-rose-400/80" title={`${slice.hold} Hold`}>
+                      {slice.hold}H
+                    </span>
+                  )}
+                  {slice.tradeProtected > 0 && (
+                    <span className="text-[8px] font-extrabold text-cyan-450 text-cyan-400/80" title={`${slice.tradeProtected} Protected`}>
+                      {slice.tradeProtected}P
+                    </span>
+                  )}
+                  {slice.onMarket > 0 && (
+                    <span className="text-[8px] font-extrabold text-amber-450 text-amber-400/80" title={`${slice.onMarket} Market`}>
+                      {slice.onMarket}M
+                    </span>
+                  )}
                 </div>
               </div>
-
-              {/* Progress Bar */}
-              <div className="h-1 w-full rounded-full bg-slate-900/60 overflow-hidden">
-                <div
-                  className="h-full bg-gradient-to-r from-sky-400/90 to-blue-500/90 transition-all duration-500"
-                  style={{ width: `${percent}%` }}
-                />
-              </div>
-
-              {/* Badges Breakdown */}
-              {(accStats.tradeable > 0 ||
-                accStats.onMarket > 0 ||
-                accStats.hold > 0 ||
-                accStats.tradeProtected > 0) && (
-                  <div className="flex flex-wrap items-center gap-1.5 text-[9px] font-bold">
-                    {accStats.tradeable > 0 && (
-                      <span className="inline-flex items-center gap-1 rounded bg-emerald-500/10 px-1.5 py-0.5 text-emerald-400 border border-emerald-500/20">
-                        <span className="size-1 rounded-full bg-emerald-400" />
-                        {accStats.tradeable} Tradeable
-                      </span>
-                    )}
-                    {accStats.onMarket > 0 && (
-                      <span className="inline-flex items-center gap-1 rounded bg-amber-500/10 px-1.5 py-0.5 text-amber-400 border border-amber-500/20">
-                        <span className="size-1 rounded-full bg-amber-400" />
-                        {accStats.onMarket} Market
-                      </span>
-                    )}
-                    {accStats.hold > 0 && (
-                      <span className="inline-flex items-center gap-1 rounded bg-rose-500/10 px-1.5 py-0.5 text-rose-400 border border-rose-500/20">
-                        <span className="size-1 rounded-full bg-rose-400" />
-                        {accStats.hold} Hold
-                      </span>
-                    )}
-                    {accStats.tradeProtected > 0 && (
-                      <span className="inline-flex items-center gap-1 rounded bg-cyan-500/10 px-1.5 py-0.5 text-cyan-400 border border-cyan-500/20">
-                        <span className="size-1 rounded-full bg-cyan-400" />
-                        {accStats.tradeProtected} Protected
-                      </span>
-                    )}
-                  </div>
-                )}
             </div>
-          );
-        })}
+          ))}
+        </div>
       </div>
     </div>
   );

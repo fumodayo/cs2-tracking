@@ -2,7 +2,7 @@
 
 import React, { useState, useMemo, useEffect } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { TbUser, TbPackage, TbShield, TbClock, TbCoins, TbHash, TbFileText, TbRefresh } from "react-icons/tb";
+import { TbUser, TbPackage, TbCoins } from "react-icons/tb";
 import { Loader2 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
@@ -25,6 +25,7 @@ import {
 import { VirtualItemCard } from "./virtual-item-card";
 import { AccountAllocationBreakdown } from "@/components/steam-accounts";
 import { ItemLotsList } from "./item-lots-list";
+import { calculateTradeHoldUntil } from "@/utils/date";
 
 export function ItemHoverCard({
   item,
@@ -81,6 +82,7 @@ export function ItemHoverCard({
   const [note, setNote] = useState(() => item.note ?? "");
   const [saving, setSaving] = useState(false);
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
+  const [isResetting, setIsResetting] = useState(false);
 
   const initialHoldDays = useMemo(() => {
     if (!item.tradeHoldUntil) return 0;
@@ -147,16 +149,78 @@ export function ItemHoverCard({
 
   const isVirtual = item.sourceType === "existing" && item.isVirtual;
 
+  // Load draft from localStorage on mount/props changes, falling back to props values
   useEffect(() => {
-    setQuantity(String(item.quantity));
-    setPriceVnd(toInputNumber(item.buyPrice));
-    setPriceCny(toInputNumber(item.buyPrice / (buffCnyToVndRate ?? 3600)));
-    setNote(item.note ?? "");
+    let loadedFromDraft = false;
+    try {
+      const saved = localStorage.getItem(`item_hover_card_draft_${item.id}`);
+      if (saved) {
+        const draft = JSON.parse(saved);
+        if (draft) {
+          setQuantity(draft.quantity ?? String(item.quantity));
+          setPriceVnd(draft.priceVnd ?? toInputNumber(item.buyPrice));
+          setPriceCny(draft.priceCny ?? toInputNumber(item.buyPrice / (buffCnyToVndRate ?? 3600)));
+          setBuyRate(draft.buyRate ?? toInputNumber(buffCnyToVndRate ?? 3600));
+          setNote(draft.note ?? (item.note ?? ""));
+          setEditAccountId(draft.editAccountId ?? (item.sourceAccounts?.[0]?.steamId64 ?? ""));
+          setEditStorageUnitId(draft.editStorageUnitId ?? (item.storageUnitId ?? ""));
+          setEditState(draft.editState ?? "tradeable");
+          setEditHoldDays(draft.editHoldDays ?? "");
+          loadedFromDraft = true;
+        }
+      }
+    } catch (e) {
+      console.error("Failed to parse item draft from localStorage", e);
+    }
 
-    const steamId = item.sourceAccounts?.[0]?.steamId64 ?? "";
-    setEditAccountId(steamId);
-    setEditStorageUnitId(item.storageUnitId ?? "");
+    if (!loadedFromDraft) {
+      setQuantity(String(item.quantity));
+      setPriceVnd(toInputNumber(item.buyPrice));
+      setPriceCny(toInputNumber(item.buyPrice / (buffCnyToVndRate ?? 3600)));
+      setBuyRate(toInputNumber(buffCnyToVndRate ?? 3600));
+      setNote(item.note ?? "");
 
+      const steamId = item.sourceAccounts?.[0]?.steamId64 ?? "";
+      setEditAccountId(steamId);
+      setEditStorageUnitId(item.storageUnitId ?? "");
+
+      const lotHoldDays = (() => {
+        if (!item.tradeHoldUntil) return 0;
+        const parsedHoldUntil = new Date(item.tradeHoldUntil);
+        if (isNaN(parsedHoldUntil.getTime())) return 0;
+        const diffMs = parsedHoldUntil.getTime() - new Date().getTime();
+        const diffDays = Math.ceil(diffMs / (1000 * 60 * 60 * 24));
+        return Math.max(0, diffDays);
+      })();
+
+      const isProtected = Boolean(
+        item.sourceAccounts?.[0]?.breakdown?.tradeProtected &&
+        item.sourceAccounts[0].breakdown.tradeProtected > 0,
+      );
+      if (isProtected) {
+        setEditState("protected");
+        setEditHoldDays("");
+      } else if (lotHoldDays > 0) {
+        setEditState("hold");
+        setEditHoldDays(String(lotHoldDays));
+      } else {
+        setEditState("tradeable");
+        setEditHoldDays("");
+      }
+    }
+  }, [
+    item.id,
+    item.quantity,
+    item.buyPrice,
+    item.note,
+    buffCnyToVndRate,
+    item.sourceAccounts,
+    item.storageUnitId,
+    item.tradeHoldUntil,
+  ]);
+
+  // Check if form values match default values from props
+  const isDefault = useMemo(() => {
     const lotHoldDays = (() => {
       if (!item.tradeHoldUntil) return 0;
       const parsedHoldUntil = new Date(item.tradeHoldUntil);
@@ -165,29 +229,74 @@ export function ItemHoverCard({
       const diffDays = Math.ceil(diffMs / (1000 * 60 * 60 * 24));
       return Math.max(0, diffDays);
     })();
-
     const isProtected = Boolean(
       item.sourceAccounts?.[0]?.breakdown?.tradeProtected &&
       item.sourceAccounts[0].breakdown.tradeProtected > 0,
     );
-    if (isProtected) {
-      setEditState("protected");
-      setEditHoldDays("");
-    } else if (lotHoldDays > 0) {
-      setEditState("hold");
-      setEditHoldDays(String(lotHoldDays));
-    } else {
-      setEditState("tradeable");
-      setEditHoldDays("");
+    const defaultEditState = isProtected
+      ? "protected"
+      : lotHoldDays > 0
+        ? "hold"
+        : "tradeable";
+
+    return (
+      quantity === String(item.quantity) &&
+      priceVnd === toInputNumber(item.buyPrice) &&
+      buyRate === toInputNumber(buffCnyToVndRate ?? 3600) &&
+      note === (item.note ?? "") &&
+      editAccountId === (item.sourceAccounts?.[0]?.steamId64 ?? "") &&
+      editStorageUnitId === (item.storageUnitId ?? "") &&
+      editState === defaultEditState &&
+      (editState !== "hold" || editHoldDays === String(lotHoldDays))
+    );
+  }, [
+    item,
+    quantity,
+    priceVnd,
+    buyRate,
+    note,
+    editAccountId,
+    editStorageUnitId,
+    editState,
+    editHoldDays,
+    buffCnyToVndRate,
+  ]);
+
+  // Auto-save draft on changes
+  useEffect(() => {
+    if (!item.id) return;
+    try {
+      if (isDefault) {
+        localStorage.removeItem(`item_hover_card_draft_${item.id}`);
+      } else {
+        const draft = {
+          quantity,
+          priceCny,
+          buyRate,
+          priceVnd,
+          note,
+          editAccountId,
+          editStorageUnitId,
+          editState,
+          editHoldDays,
+        };
+        localStorage.setItem(`item_hover_card_draft_${item.id}`, JSON.stringify(draft));
+      }
+    } catch (e) {
+      console.error("Failed to save draft to localStorage", e);
     }
   }, [
-    item.quantity,
-    item.buyPrice,
-    item.note,
-    buffCnyToVndRate,
-    item.sourceAccounts,
-    item.storageUnitId,
-    item.tradeHoldUntil,
+    item.id,
+    isDefault,
+    quantity,
+    priceCny,
+    buyRate,
+    priceVnd,
+    note,
+    editAccountId,
+    editStorageUnitId,
+    editState,
+    editHoldDays,
   ]);
 
   function updateCny(value: string) {
@@ -271,8 +380,8 @@ export function ItemHoverCard({
         ) {
           const days = Number(editHoldDays) || 0;
           if (days > 0) {
-            const holdDate = new Date();
-            holdDate.setDate(holdDate.getDate() + days);
+            const baseDate = item.buyDate ? new Date(item.buyDate) : new Date();
+            const holdDate = calculateTradeHoldUntil(baseDate, days);
             tradeHoldUntil = holdDate.toISOString();
           }
         }
@@ -299,6 +408,9 @@ export function ItemHoverCard({
           await onUpdateNote(targetId, note);
         }
       }
+      try {
+        localStorage.removeItem(`item_hover_card_draft_${item.id}`);
+      } catch { /* ignore */ }
     } finally {
       setSaving(false);
     }
@@ -319,7 +431,7 @@ export function ItemHoverCard({
     (!hasBuffPrice || isLoadingBuff);
 
   if (isVirtual) {
-    return <VirtualItemCard item={item} typeColor={typeColor} />;
+    return <VirtualItemCard item={item} typeColor={typeColor} accounts={accountsQuery.data} />;
   }
 
   return (
@@ -394,239 +506,275 @@ export function ItemHoverCard({
                 Lưu trữ trong Storage Unit
               </div>
               <div className="grid gap-2">
-                {item.storageUnitDetails.map((su) => (
-                  <div
-                    key={su.storageUnitId}
-                    className="flex items-center justify-between rounded-xl border border-slate-800/40 bg-slate-950/20 px-3 py-2.5 hover:bg-slate-900/10 transition duration-200"
-                  >
-                    <span className="flex items-center gap-2 text-xs font-semibold text-slate-300">
-                      <span className="flex size-5.5 items-center justify-center rounded-lg bg-amber-500/10 text-amber-500">
-                        <TbPackage className="size-3" />
+                {item.storageUnitDetails.map((su) => {
+                  const account = accountsQuery.data?.find(
+                    (a) => a.steamId64 === su.steamId64
+                  );
+                  const accountName = account ? account.name : "";
+                  return (
+                    <div
+                      key={su.storageUnitId}
+                      className="flex items-center justify-between rounded-xl border border-slate-800/40 bg-slate-950/20 px-3 py-2.5 hover:bg-slate-900/10 transition duration-200"
+                    >
+                      <span className="flex items-center gap-2 text-xs font-semibold text-slate-300 min-w-0 flex-1">
+                        <span className="flex size-5.5 items-center justify-center rounded-lg bg-amber-500/10 text-amber-500 shrink-0">
+                          <TbPackage className="size-3" />
+                        </span>
+                        <span className="truncate">{su.storageUnitName}</span>
+                        {accountName && (
+                          <span className="inline-flex max-w-[7rem] shrink-0 items-center gap-0.5 truncate rounded bg-sky-500/5 border border-sky-500/10 px-1.5 py-0.5 text-[8.5px] font-bold text-sky-400 tracking-wide">
+                            {accountName}
+                          </span>
+                        )}
                       </span>
-                      <span>{su.storageUnitName}</span>
-                    </span>
-                    <span className="font-mono text-xs font-extrabold text-amber-400">
-                      {su.quantity}
-                    </span>
-                  </div>
-                ))}
+                      <span className="font-mono text-xs font-extrabold text-amber-400 shrink-0">
+                        {su.quantity}
+                      </span>
+                    </div>
+                  );
+                })}
               </div>
             </div>
           )}
 
           {relatedRows.length <= 1 ? (
-            <>
-              <div className="grid grid-cols-2 gap-x-3 gap-y-3">
-                <div className="flex flex-col gap-1.5">
-                  <label className="flex items-center gap-1.5 text-[10px] font-bold tracking-wider text-slate-400 uppercase">
-                    <TbHash className="size-3.5 text-slate-500" />
-                    Số lượng
-                  </label>
-                  <div className="relative flex items-center">
-                    <input
-                      type="number"
-                      aria-label="Số lượng"
-                      value={quantity}
-                      onChange={(e) => setQuantity(e.target.value)}
-                      className="h-9 w-full [appearance:textfield] rounded-lg border border-slate-800 bg-slate-950/60 pr-3 pl-11 text-right text-xs font-bold text-slate-100 placeholder-slate-600 transition duration-200 outline-none focus:border-sky-500/60 focus:ring-1 focus:ring-sky-500/20 focus:shadow-[0_0_12px_rgba(56,189,248,0.15)] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
-                    />
-                    <span className="pointer-events-none absolute left-3 text-[9px] font-bold tracking-wider text-slate-500 uppercase select-none">
-                      QTY
-                    </span>
+            <div className={`space-y-4 transition-all duration-350 ${isResetting ? "animate-reset-flash" : ""}`}>
+              {/* Section 1: Ownership & Status */}
+              <div className="rounded-xl border border-slate-800/40 bg-slate-950/20 p-3.5 space-y-3">
+                <div className="text-[10px] font-bold tracking-wider text-slate-400 uppercase flex items-center justify-between gap-1.5">
+                  <div className="flex items-center gap-1.5">
+                    <TbUser className="size-3.5 text-sky-400" />
+                    Sở hữu & Trạng thái
                   </div>
+                  {item.sourceType === "existing" && (
+                    <span className="text-[8px] font-bold text-cyan-400 bg-cyan-950/40 px-1.5 py-0.5 rounded border border-cyan-500/20 select-none">
+                      Scan từ Inventory
+                    </span>
+                  )}
                 </div>
 
-                <div className="flex flex-col gap-1.5">
-                  <label className="flex items-center gap-1.5 text-[10px] font-bold tracking-wider text-slate-400 uppercase">
-                    <TbCoins className="size-3.5 text-slate-500" />
-                    Giá mua CNY
-                  </label>
-                  <div className="relative flex items-center">
-                    <input
-                      type="number"
-                      aria-label="Giá CNY"
-                      value={priceCny}
-                      onChange={(e) => updateCny(e.target.value)}
-                      className="h-9 w-full [appearance:textfield] rounded-lg border border-slate-800 bg-slate-950/60 pr-3 pl-11 text-right text-xs font-bold text-slate-100 placeholder-slate-600 transition duration-200 outline-none focus:border-sky-500/60 focus:ring-1 focus:ring-sky-500/20 focus:shadow-[0_0_12px_rgba(56,189,248,0.15)] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
-                    />
-                    <span className="pointer-events-none absolute left-3 text-[9px] font-bold tracking-wider text-slate-500 uppercase select-none">
-                      CNY
-                    </span>
-                  </div>
-                </div>
-
-                <div className="col-span-2 flex flex-col gap-1.5">
-                  <label className="flex items-center gap-1.5 text-[10px] font-bold tracking-wider text-slate-400 uppercase">
-                    <TbRefresh className="size-3.5 text-slate-500" />
-                    Tỷ giá mua
-                  </label>
-                  <div className="relative flex items-center">
-                    <input
-                      type="number"
-                      aria-label="Tỷ giá mua"
-                      value={buyRate}
-                      onChange={(e) => updateBuyRate(e.target.value)}
-                      className="h-9 w-full [appearance:textfield] rounded-lg border border-slate-800 bg-slate-950/60 pr-3 pl-11 text-right text-xs font-bold text-slate-100 placeholder-slate-600 transition duration-200 outline-none focus:border-sky-500/60 focus:ring-1 focus:ring-sky-500/20 focus:shadow-[0_0_12px_rgba(56,189,248,0.15)] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
-                    />
-                    <span className="pointer-events-none absolute left-3 text-[9px] font-bold tracking-wider text-slate-500 uppercase select-none">
-                      RATE
-                    </span>
-                  </div>
-                </div>
-
-                <div className="flex flex-col gap-1.5">
-                  <label className="flex items-center gap-1.5 text-[10px] font-bold tracking-wider text-slate-400 uppercase">
-                    <TbUser className="size-3.5 text-slate-500" />
-                    Tài khoản sở hữu
-                  </label>
-                  <Select
-                    value={editAccountId || "__manual__"}
-                    onValueChange={(val) => {
-                      setEditAccountId(val === "__manual__" ? "" : val);
-                      setEditStorageUnitId("");
-                    }}
-                    onOpenChange={onSelectOpenChange}
-                  >
-                    <Select.Trigger className="h-9 border-slate-800 bg-slate-950/60 focus:border-sky-500/60">
-                      <Select.Value placeholder="Thủ công (Không liên kết)" />
-                    </Select.Trigger>
-                    <Select.Content className="border-slate-800 bg-slate-950">
-                      <Select.Item value="__manual__">
-                        Thủ công (Không liên kết)
-                      </Select.Item>
-                      {accountsQuery.data?.map((acc) => (
-                        <Select.Item key={acc.steamId64} value={acc.steamId64}>
-                          {acc.name}
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="flex flex-col gap-1.5">
+                    <label className="text-[9px] font-bold tracking-wider text-slate-450 text-slate-400 uppercase">
+                      Tài khoản sở hữu
+                    </label>
+                    <Select
+                      value={editAccountId || "__manual__"}
+                      onValueChange={(val) => {
+                        setEditAccountId(val === "__manual__" ? "" : val);
+                        setEditStorageUnitId("");
+                      }}
+                      disabled={item.sourceType === "existing"}
+                      onOpenChange={onSelectOpenChange}
+                    >
+                      <Select.Trigger className="h-9 border-slate-800/80 bg-slate-950/40 text-xs text-slate-200 hover:border-slate-700/60 focus:border-sky-500/60 transition">
+                        <Select.Value placeholder="Thủ công (Không liên kết)" />
+                      </Select.Trigger>
+                      <Select.Content className="border-slate-850 bg-[#0e121a]">
+                        <Select.Item value="__manual__">
+                          Thủ công (Không liên kết)
                         </Select.Item>
-                      ))}
-                    </Select.Content>
-                  </Select>
-                </div>
+                        {accountsQuery.data?.map((acc) => (
+                          <Select.Item key={acc.steamId64} value={acc.steamId64}>
+                            {acc.name}
+                          </Select.Item>
+                        ))}
+                      </Select.Content>
+                    </Select>
+                  </div>
 
-                <div className="flex flex-col gap-1.5">
-                  <label className="flex items-center gap-1.5 text-[10px] font-bold tracking-wider text-slate-400 uppercase">
-                    <TbPackage className="size-3.5 text-slate-500" />
-                    Lưu trữ ở
-                  </label>
-                  <Select
-                    value={editStorageUnitId || "__inventory__"}
-                    onValueChange={(val) => setEditStorageUnitId(val === "__inventory__" ? "" : val)}
-                    disabled={!editAccountId}
-                    onOpenChange={onSelectOpenChange}
-                  >
-                    <Select.Trigger className="h-9 border-slate-800 bg-slate-950/60 focus:border-sky-500/60">
-                      <Select.Value
-                        placeholder={
-                          !editAccountId
-                            ? "Chọn tài khoản trước"
-                            : "Hòm đồ cá nhân (Inventory)"
-                        }
-                      />
-                    </Select.Trigger>
-                    <Select.Content className="border-slate-800 bg-slate-950">
-                      <Select.Item value="__inventory__">
-                        Hòm đồ cá nhân (Inventory)
-                      </Select.Item>
-                      {storageUnitsQuery.data?.map((su) => (
-                        <Select.Item key={su.id} value={su.id}>
-                          {su.name} ({su.currentCount} items)
+                  <div className="flex flex-col gap-1.5">
+                    <label className="text-[9px] font-bold tracking-wider text-slate-450 text-slate-400 uppercase">
+                      Lưu trữ ở
+                    </label>
+                    <Select
+                      value={editStorageUnitId || "__inventory__"}
+                      onValueChange={(val) => setEditStorageUnitId(val === "__inventory__" ? "" : val)}
+                      disabled={item.sourceType === "existing" || !editAccountId}
+                      onOpenChange={onSelectOpenChange}
+                    >
+                      <Select.Trigger className="h-9 border-slate-800/80 bg-slate-950/40 text-xs text-slate-200 hover:border-slate-700/60 focus:border-sky-500/60 transition disabled:opacity-40">
+                        <Select.Value
+                          placeholder={
+                            !editAccountId
+                              ? "Chọn tài khoản trước"
+                              : "Hòm đồ cá nhân (Inventory)"
+                          }
+                        />
+                      </Select.Trigger>
+                      <Select.Content className="border-slate-850 bg-[#0e121a]">
+                        <Select.Item value="__inventory__">
+                          Hòm đồ cá nhân (Inventory)
                         </Select.Item>
-                      ))}
-                    </Select.Content>
-                  </Select>
-                </div>
+                        {storageUnitsQuery.data?.map((su) => (
+                          <Select.Item key={su.id} value={su.id}>
+                            {su.name} ({su.currentCount} items)
+                          </Select.Item>
+                        ))}
+                      </Select.Content>
+                    </Select>
+                  </div>
 
-                <div className="flex flex-col gap-1.5">
-                  <label className="flex items-center gap-1.5 text-[10px] font-bold tracking-wider text-slate-400 uppercase">
-                    <TbShield className="size-3.5 text-slate-500" />
-                    Trạng thái
-                  </label>
-                  <Select
-                    value={editState}
-                    onValueChange={(val) =>
-                      setEditState(
-                        val as "tradeable" | "hold" | "protected",
-                      )
-                    }
-                    onOpenChange={onSelectOpenChange}
-                  >
-                    <Select.Trigger className="h-9 border-slate-800 bg-slate-950/60 focus:border-sky-500/60">
-                      <Select.Value />
-                    </Select.Trigger>
-                    <Select.Content className="border-slate-800 bg-slate-950">
-                      <Select.Item value="tradeable">Trade được ngay</Select.Item>
-                      <Select.Item value="hold">Hold trade</Select.Item>
-                      <Select.Item value="protected">Trade Protected</Select.Item>
-                    </Select.Content>
-                  </Select>
-                </div>
+                  <div className={editState === "hold" || editState === "protected" ? "flex flex-col gap-1.5" : "col-span-2 flex flex-col gap-1.5"}>
+                    <label className="text-[9px] font-bold tracking-wider text-slate-455 text-slate-400 uppercase">
+                      Trạng thái
+                    </label>
+                    <Select
+                      value={editState}
+                      onValueChange={(val) =>
+                        setEditState(
+                          val as "tradeable" | "hold" | "protected",
+                        )
+                      }
+                      disabled={item.sourceType === "existing"}
+                      onOpenChange={onSelectOpenChange}
+                    >
+                      <Select.Trigger className="h-9 border-slate-800/80 bg-slate-950/40 text-xs text-slate-200 hover:border-slate-700/60 focus:border-sky-500/60 transition">
+                        <Select.Value />
+                      </Select.Trigger>
+                      <Select.Content className="border-slate-850 bg-[#0e121a]">
+                        <Select.Item value="tradeable">Trade được ngay</Select.Item>
+                        <Select.Item value="hold">Hold trade</Select.Item>
+                        <Select.Item value="protected">Trade Protected</Select.Item>
+                      </Select.Content>
+                    </Select>
+                  </div>
 
-                <div className="flex flex-col gap-1.5">
-                  {editState === "hold" || editState === "protected" ? (
-                    <>
-                      <label className="flex items-center gap-1.5 text-[10px] font-bold tracking-wider text-slate-400 uppercase">
-                        <TbClock className="size-3.5 text-slate-500" />
-                        Số ngày hold còn lại
+                  {(editState === "hold" || editState === "protected") && (
+                    <div className="flex flex-col gap-1.5">
+                      <label className="text-[9px] font-bold tracking-wider text-slate-455 text-slate-400 uppercase">
+                        Số ngày hold
                       </label>
                       <input
                         type="number"
                         value={editHoldDays}
                         onChange={(e) => setEditHoldDays(e.target.value)}
                         placeholder="Ví dụ: 7"
-                        className="h-9 w-full rounded-lg border border-slate-800 bg-slate-950/60 px-3 text-xs font-bold text-slate-100 transition duration-200 outline-none focus:border-sky-500/60 focus:ring-1 focus:ring-sky-500/20 focus:shadow-[0_0_12px_rgba(56,189,248,0.15)]"
+                        disabled={item.sourceType === "existing"}
+                        className="h-9 w-full rounded-lg border border-slate-800/80 bg-slate-950/40 px-3 text-xs font-bold text-slate-100 placeholder-slate-650 placeholder:text-slate-600 transition duration-200 hover:border-slate-700/60 focus:border-sky-500/60 focus:ring-1 focus:ring-sky-500/20 focus:outline-none disabled:opacity-40 disabled:cursor-not-allowed"
                       />
-                    </>
-                  ) : (
-                    <div className="h-full" />
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* Section 2: Value & Quantity */}
+              <div className="rounded-xl border border-slate-800/40 bg-slate-950/20 p-3.5 space-y-3">
+                <div className="text-[10px] font-bold tracking-wider text-slate-400 uppercase flex items-center justify-between gap-1.5">
+                  <div className="flex items-center gap-1.5">
+                    <TbCoins className="size-3.5 text-amber-500" />
+                    Số lượng & Đơn giá
+                  </div>
+                  {item.sourceType === "existing" && (
+                    <span className="text-[8px] font-bold text-cyan-400 bg-cyan-950/40 px-1.5 py-0.5 rounded border border-cyan-500/20 select-none">
+                      Scan từ Inventory
+                    </span>
                   )}
                 </div>
 
-                <div className="col-span-2 flex flex-col gap-1.5">
-                  <label className="flex items-center gap-1.5 text-[10px] font-bold tracking-wider text-slate-400 uppercase">
-                    <TbFileText className="size-3.5 text-slate-500" />
-                    Ghi chú
-                  </label>
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="flex flex-col gap-1.5">
+                    <label className="text-[9px] font-bold tracking-wider text-slate-455 text-slate-400 uppercase">
+                      Số lượng
+                    </label>
+                    <div className="relative flex items-center">
+                      <input
+                        type="number"
+                        aria-label="Số lượng"
+                        value={quantity}
+                        onChange={(e) => setQuantity(e.target.value)}
+                        disabled={item.sourceType === "existing"}
+                        className="h-9 w-full [appearance:textfield] rounded-lg border border-slate-800/80 bg-slate-950/40 pr-3 pl-12 text-right text-xs font-bold text-slate-100 placeholder-slate-650 placeholder:text-slate-600 transition duration-200 hover:border-slate-700/60 focus:border-sky-500/60 focus:ring-1 focus:ring-sky-500/20 focus:outline-none [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none disabled:opacity-40 disabled:cursor-not-allowed"
+                      />
+                      <span className="pointer-events-none absolute left-2 text-[8px] font-extrabold tracking-wider text-slate-400 bg-slate-900 border border-slate-800/60 px-1.5 py-0.5 rounded select-none">
+                        QTY
+                      </span>
+                    </div>
+                  </div>
+
+                  <div className="flex flex-col gap-1.5">
+                    <label className="text-[9px] font-bold tracking-wider text-slate-455 text-slate-400 uppercase">
+                      Giá mua CNY
+                    </label>
+                    <div className="relative flex items-center">
+                      <input
+                        type="number"
+                        aria-label="Giá CNY"
+                        value={priceCny}
+                        onChange={(e) => updateCny(e.target.value)}
+                        className="h-9 w-full [appearance:textfield] rounded-lg border border-slate-800/80 bg-slate-950/40 pr-3 pl-12 text-right text-xs font-bold text-slate-100 placeholder-slate-655 placeholder:text-slate-600 transition duration-200 hover:border-slate-700/60 focus:border-sky-500/60 focus:ring-1 focus:ring-sky-500/20 focus:outline-none [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
+                      />
+                      <span className="pointer-events-none absolute left-2 text-[8px] font-extrabold tracking-wider text-slate-400 bg-slate-900 border border-slate-800/60 px-1.5 py-0.5 rounded select-none">
+                        CNY
+                      </span>
+                    </div>
+                  </div>
+
+                  <div className="flex flex-col gap-1.5">
+                    <label className="text-[9px] font-bold tracking-wider text-slate-455 text-slate-400 uppercase">
+                      Tỷ giá mua
+                    </label>
+                    <div className="relative flex items-center">
+                      <input
+                        type="number"
+                        aria-label="Tỷ giá mua"
+                        value={buyRate}
+                        onChange={(e) => updateBuyRate(e.target.value)}
+                        className="h-9 w-full [appearance:textfield] rounded-lg border border-slate-800/80 bg-slate-950/40 pr-3 pl-14 text-right text-xs font-bold text-slate-100 placeholder-slate-650 placeholder:text-slate-600 transition duration-200 hover:border-slate-700/60 focus:border-sky-500/60 focus:ring-1 focus:ring-sky-500/20 focus:outline-none [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
+                      />
+                      <span className="pointer-events-none absolute left-2 text-[8px] font-extrabold tracking-wider text-slate-400 bg-slate-900 border border-slate-800/60 px-1.5 py-0.5 rounded select-none">
+                        RATE
+                      </span>
+                    </div>
+                  </div>
+
+                  <div className="flex flex-col gap-1.5">
+                    <label className="text-[9px] font-bold tracking-wider text-slate-455 text-slate-400 uppercase">
+                      Ghi chú
+                    </label>
+                    <div className="relative flex items-center">
+                      <input
+                        type="text"
+                        placeholder="Ví dụ: Cất hòm..."
+                        value={note}
+                        onChange={(e) => setNote(e.target.value)}
+                        className="h-9 w-full rounded-lg border border-slate-800/80 bg-slate-950/40 pr-3 pl-14 text-xs font-semibold text-slate-100 placeholder-slate-650 placeholder:text-slate-600 transition duration-200 hover:border-slate-700/60 focus:border-sky-500/60 focus:ring-1 focus:ring-sky-500/20 focus:outline-none"
+                      />
+                      <span className="pointer-events-none absolute left-2 text-[8px] font-extrabold tracking-wider text-slate-400 bg-slate-900 border border-slate-800/60 px-1.5 py-0.5 rounded select-none">
+                        NOTE
+                      </span>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Tổng giá mua VND */}
+                <div className="mt-3.5 flex items-center justify-between rounded-xl border border-emerald-500/20 bg-emerald-500/5 p-3.5 shadow-[inset_0_1px_1px_rgba(255,255,255,0.05)] transition-all duration-300 hover:border-emerald-500/35 hover:bg-emerald-500/10">
+                  <div className="flex flex-col">
+                    <span className="text-[9px] font-extrabold tracking-wider text-emerald-400 uppercase">
+                      Tổng giá mua (VND)
+                    </span>
+                    <span className="text-[8px] text-slate-500">
+                      Tự động quy đổi CNY
+                    </span>
+                  </div>
                   <div className="relative flex items-center">
                     <input
-                      type="text"
-                      placeholder="Ví dụ: Storage Unit 1, Cất hòm..."
-                      value={note}
-                      onChange={(e) => setNote(e.target.value)}
-                      className="h-9 w-full rounded-lg border border-slate-800 bg-slate-950/60 pr-3 pl-11 text-xs font-semibold text-slate-100 placeholder-slate-600 transition duration-200 outline-none focus:border-sky-500/60 focus:ring-1 focus:ring-sky-500/20 focus:shadow-[0_0_12px_rgba(56,189,248,0.15)]"
+                      type="number"
+                      aria-label="Giá mua VND"
+                      value={priceVnd}
+                      onChange={(e) => updateVnd(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter") void submit();
+                      }}
+                      className="w-36 [appearance:textfield] bg-transparent pr-5 text-right text-lg font-extrabold text-emerald-400 outline-none focus:ring-0 [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
                     />
-                    <span className="pointer-events-none absolute left-3 text-[9px] font-bold tracking-wider text-slate-500 uppercase select-none">
-                      NOTE
+                    <span className="absolute right-0 text-sm font-bold text-emerald-500">
+                      ₫
                     </span>
                   </div>
                 </div>
               </div>
-
-              <div className="mt-4 flex items-center justify-between rounded-xl border border-emerald-500/20 bg-emerald-500/5 p-3.5 shadow-[inset_0_1px_1px_rgba(255,255,255,0.05)] transition-all duration-300 hover:border-emerald-500/35 hover:bg-emerald-500/10">
-                <div className="flex flex-col">
-                  <span className="text-[10px] font-extrabold tracking-wider text-emerald-400 uppercase">
-                    Tổng giá mua (VND)
-                  </span>
-                  <span className="text-[9px] text-slate-500">
-                    Tự động quy đổi CNY
-                  </span>
-                </div>
-                <div className="relative flex items-center">
-                  <input
-                    type="number"
-                    aria-label="Giá mua VND"
-                    value={priceVnd}
-                    onChange={(e) => updateVnd(e.target.value)}
-                    onKeyDown={(e) => {
-                      if (e.key === "Enter") void submit();
-                    }}
-                    className="w-36 [appearance:textfield] bg-transparent pr-5 text-right text-xl font-extrabold text-emerald-400 outline-none focus:ring-0 [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
-                  />
-                  <span className="absolute right-0 text-sm font-bold text-emerald-500">
-                    ₫
-                  </span>
-                </div>
-              </div>
-            </>
+            </div>
           ) : (
             <ItemLotsList
               relatedRows={relatedRows}
@@ -641,98 +789,173 @@ export function ItemHoverCard({
           )}
         </div>
 
-        {(showBuffButton || hasBuffPrice || relatedRows.length <= 1) && (
+        {(relatedRows.length <= 1 || ((showBuffButton || hasBuffPrice) && relatedRows.length > 1)) && (
           <div
-            className={`border-t border-slate-800/80 flex items-center justify-between gap-2 p-3.5 ${
+            className={`border-t border-slate-800/80 ${
               embedded
-                ? "sticky bottom-0 z-10 bg-[#0e121a]/95 backdrop-blur-md"
-                : "bg-slate-950/45 rounded-b-2xl"
+                ? "sticky bottom-0 z-10 bg-[#0e121a]/95 backdrop-blur-md px-2 py-3"
+                : "bg-slate-950/45 rounded-b-2xl p-3.5"
             }`}
           >
-            {showBuffButton ? (
-              <Button
-                type="button"
-                onClick={() => fetchBuffPrice?.(item.case.marketHashName)}
-                disabled={isLoadingBuff}
-                className="inline-flex h-9 flex-1 cursor-pointer items-center justify-center gap-1 rounded-lg border border-amber-500/20 bg-amber-950/20 px-1.5 text-[11px] font-bold text-amber-400 shadow-sm transition-all duration-200 hover:border-amber-500/45 hover:bg-amber-950/35 active:scale-[0.98] disabled:cursor-wait disabled:opacity-50 whitespace-nowrap"
-              >
-                {isLoadingBuff && (
-                  <Loader2 className="size-3 animate-spin text-amber-500" />
+            {relatedRows.length > 1 ? (
+              <div className="flex gap-2 w-full">
+                {showBuffButton && (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() => fetchBuffPrice?.(item.case.marketHashName)}
+                    disabled={isLoadingBuff}
+                    className="flex-1 border-amber-500/20 bg-amber-950/20 text-xs font-bold text-amber-400 hover:border-amber-500/45 hover:bg-amber-950/35 disabled:cursor-wait"
+                  >
+                    {isLoadingBuff && (
+                      <Loader2 className="mr-1.5 size-4 animate-spin" />
+                    )}
+                    <span>{embedded ? "Giá BUFF" : "Lấy giá BUFF"}</span>
+                  </Button>
                 )}
-                <span>Lấy giá BUFF</span>
-              </Button>
-            ) : null}
 
-            {hasBuffPrice ? (
-              <Button
-                type="button"
-                onClick={() => onUpdateBuffPrice?.(item.case.marketHashName, null)}
-                className="inline-flex h-9 flex-1 cursor-pointer items-center justify-center gap-1 rounded-lg border border-sky-500/20 bg-sky-950/20 px-1.5 text-[11px] font-bold text-sky-400 shadow-sm transition-all duration-200 hover:border-sky-500/45 hover:bg-sky-950/35 active:scale-[0.98] whitespace-nowrap"
-              >
-                <span>Lấy giá Steam</span>
-              </Button>
-            ) : null}
+                {hasBuffPrice && (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() => onUpdateBuffPrice?.(item.case.marketHashName, null)}
+                    className="flex-1 border-sky-500/20 bg-sky-950/20 text-xs font-bold text-sky-400 hover:border-sky-500/45 hover:bg-sky-950/35"
+                  >
+                    <span>{embedded ? "Giá Steam" : "Dùng giá Steam"}</span>
+                  </Button>
+                )}
+              </div>
+            ) : (
+              <div className="flex flex-wrap items-center justify-between w-full gap-y-2 gap-x-1">
+                {onDelete ? (
+                  <>
+                    <Button
+                      type="button"
+                      variant="danger"
+                      size="sm"
+                      onClick={() => setDeleteConfirmOpen(true)}
+                      disabled={deletingId === item.id}
+                      className="text-xs font-bold px-2"
+                    >
+                      {deletingId === item.id && (
+                        <Loader2 className="mr-1.5 size-4 animate-spin" />
+                      )}
+                      <span>Xóa</span>
+                    </Button>
+                    <ConfirmDialog
+                      open={deleteConfirmOpen}
+                      onClose={() => setDeleteConfirmOpen(false)}
+                      title="Xác nhận xóa vật phẩm"
+                      description={`Bạn có chắc chắn muốn xóa vật phẩm "${item.case.name}" khỏi danh mục portfolio? Thao tác này không thể hoàn tác.`}
+                      confirmText="Đồng ý xóa"
+                      cancelText="Hủy"
+                      variant="danger"
+                      onConfirm={async () => {
+                        if (onDelete) {
+                          const targetId =
+                            relatedRows.length === 1 ? relatedRows[0].id : item.id;
+                          await onDelete(targetId);
+                        }
+                      }}
+                    />
+                  </>
+                ) : (
+                  <div />
+                )}
 
-            {relatedRows.length <= 1 && onDelete && (
-              <>
-                <Button
-                  type="button"
-                  onClick={() => setDeleteConfirmOpen(true)}
-                  disabled={deletingId === item.id}
-                  className="inline-flex h-9 flex-1 cursor-pointer items-center justify-center gap-1 rounded-lg border border-red-500/20 bg-red-950/20 px-1.5 text-[11px] font-bold text-red-450 text-red-400 shadow-sm transition-all duration-200 hover:border-red-500/45 hover:bg-red-950/35 active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-40 whitespace-nowrap"
-                >
-                  {deletingId === item.id && (
-                    <Loader2 className="size-3 animate-spin text-red-400" />
+                <div className="flex flex-wrap items-center gap-1">
+                  {showBuffButton && (
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={() => fetchBuffPrice?.(item.case.marketHashName)}
+                      disabled={isLoadingBuff}
+                      className="border-amber-500/20 bg-amber-950/20 text-xs font-bold text-amber-400 hover:border-amber-500/45 hover:bg-amber-950/35 disabled:cursor-wait px-2"
+                    >
+                      {isLoadingBuff && (
+                        <Loader2 className="mr-1.5 size-4 animate-spin" />
+                      )}
+                      <span>{embedded ? "Giá BUFF" : "Lấy giá BUFF"}</span>
+                    </Button>
                   )}
-                  <span>Xóa</span>
-                </Button>
-                <ConfirmDialog
-                  open={deleteConfirmOpen}
-                  onClose={() => setDeleteConfirmOpen(false)}
-                  title="Xác nhận xóa vật phẩm"
-                  description={`Bạn có chắc chắn muốn xóa vật phẩm "${item.case.name}" khỏi danh mục portfolio? Thao tác này không thể hoàn tác.`}
-                  confirmText="Đồng ý xóa"
-                  cancelText="Hủy"
-                  variant="danger"
-                  onConfirm={async () => {
-                    if (onDelete) {
-                      const targetId =
-                        relatedRows.length === 1 ? relatedRows[0].id : item.id;
-                      await onDelete(targetId);
-                    }
-                  }}
-                />
-              </>
-            )}
 
-            {relatedRows.length <= 1 && (
-              <Button
-                type="button"
-                onClick={() => void submit()}
-                disabled={
-                  saving ||
-                  (quantity === String(item.quantity) &&
-                    priceVnd === toInputNumber(item.buyPrice) &&
-                    note === (item.note ?? "") &&
-                    editAccountId ===
-                    (item.sourceAccounts?.[0]?.steamId64 ?? "") &&
-                    editStorageUnitId === (item.storageUnitId ?? "") &&
-                    editState ===
-                    (initialIsProtected
-                      ? "protected"
-                      : initialHoldDays > 0
-                        ? "hold"
-                        : "tradeable") &&
-                    (editState !== "hold" ||
-                      editHoldDays === String(initialHoldDays)))
-                }
-                className="inline-flex h-9 flex-1 cursor-pointer items-center justify-center gap-1 rounded-lg bg-accent px-1.5 text-[11px] font-bold text-accent-foreground shadow-[0_0_12px_rgba(244,63,94,0.15)] transition-all duration-200 hover:bg-[color-mix(in_srgb,var(--accent)_80%,white)] active:scale-[0.98] disabled:cursor-not-allowed disabled:bg-stone-900/50 disabled:text-stone-600 disabled:border disabled:border-stone-850/50 disabled:shadow-none whitespace-nowrap"
-              >
-                {saving && (
-                  <Loader2 className="size-3 animate-spin text-slate-900" />
-                )}
-                <span>Lưu thay đổi</span>
-              </Button>
+                  {hasBuffPrice && (
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={() => onUpdateBuffPrice?.(item.case.marketHashName, null)}
+                      className="border-sky-500/20 bg-sky-950/20 text-xs font-bold text-sky-400 hover:border-sky-500/45 hover:bg-sky-950/35 px-2"
+                    >
+                      <span>{embedded ? "Giá Steam" : "Dùng giá Steam"}</span>
+                    </Button>
+                  )}
+
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() => {
+                      setIsResetting(true);
+                      try {
+                        localStorage.removeItem(`item_hover_card_draft_${item.id}`);
+                      } catch { /* ignore */ }
+                      setQuantity(String(item.quantity));
+                      setPriceVnd(toInputNumber(item.buyPrice));
+                      setPriceCny(toInputNumber(item.buyPrice / (buffCnyToVndRate ?? 3600)));
+                      setBuyRate(toInputNumber(buffCnyToVndRate ?? 3600));
+                      setNote(item.note ?? "");
+                      const steamId = item.sourceAccounts?.[0]?.steamId64 ?? "";
+                      setEditAccountId(steamId);
+                      setEditStorageUnitId(item.storageUnitId ?? "");
+                      const lotHoldDays = (() => {
+                        if (!item.tradeHoldUntil) return 0;
+                        const parsedHoldUntil = new Date(item.tradeHoldUntil);
+                        if (isNaN(parsedHoldUntil.getTime())) return 0;
+                        const diffMs = parsedHoldUntil.getTime() - new Date().getTime();
+                        const diffDays = Math.ceil(diffMs / (1000 * 60 * 60 * 24));
+                        return Math.max(0, diffDays);
+                      })();
+                      const isProtected = Boolean(
+                        item.sourceAccounts?.[0]?.breakdown?.tradeProtected &&
+                        item.sourceAccounts[0].breakdown.tradeProtected > 0,
+                      );
+                      if (isProtected) {
+                        setEditState("protected");
+                        setEditHoldDays("");
+                      } else if (lotHoldDays > 0) {
+                        setEditState("hold");
+                        setEditHoldDays(String(lotHoldDays));
+                      } else {
+                        setEditState("tradeable");
+                        setEditHoldDays("");
+                      }
+                      setTimeout(() => setIsResetting(false), 400);
+                    }}
+                    disabled={isDefault}
+                    className="text-xs font-bold px-2"
+                  >
+                    <span>Xóa nháp</span>
+                  </Button>
+
+                  <Button
+                    type="button"
+                    variant="primary"
+                    size="sm"
+                    onClick={() => void submit()}
+                    disabled={saving || isDefault}
+                    className="text-xs font-bold px-2"
+                  >
+                    {saving && (
+                      <Loader2 className="mr-1.5 size-4 animate-spin" />
+                    )}
+                    <span>{embedded ? "Lưu" : "Lưu thay đổi"}</span>
+                  </Button>
+                </div>
+              </div>
             )}
           </div>
         )}

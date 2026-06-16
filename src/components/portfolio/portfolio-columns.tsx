@@ -303,7 +303,7 @@ export function buildColumns({
         const hasBuffPrice = buffPriceCny !== undefined && buffPriceCny > 0;
 
         return (
-          <div className="flex min-h-[3rem] items-center justify-end gap-3">
+          <div className="flex flex-col items-end justify-center py-1 gap-1 min-h-[3rem]">
             {/* Steam Price */}
             <div className="group relative flex cursor-help items-center gap-1.5">
               <span className="text-[13px] font-medium text-foreground">
@@ -317,21 +317,20 @@ export function buildColumns({
               </div>
             </div>
 
-            {hasBuffPrice && (
-              <span className="text-slate-700 select-none">|</span>
-            )}
-
             {/* Buff Price */}
             {hasBuffPrice && (
               <div className="group relative flex cursor-help items-center gap-1.5">
-                <span className="text-xs font-semibold text-accent">
-                  {formatCurrency(Math.round(buffPriceCny * rate))}
+                <span className="text-[13px] font-medium text-accent">
+                  {formatCurrency(Math.round(buffPriceCny * rate))}{" "}
+                  <span className="text-[10px] text-muted-foreground font-normal">
+                    ({new Intl.NumberFormat("vi-VN").format(buffPriceCny)} x {new Intl.NumberFormat("vi-VN").format(rate)})
+                  </span>
                 </span>
-                <FaCoins className="size-3.5 text-accent opacity-80 transition-opacity group-hover:opacity-100" />
+                <FaCoins className="size-3.5 text-accent" />
 
                 {/* Premium Tooltip */}
                 <div className="pointer-events-none absolute bottom-full left-1/2 z-50 mb-2 -translate-x-1/2 rounded border border-slate-800/80 bg-slate-950 px-2 py-1 text-[10px] font-medium whitespace-nowrap text-slate-200 opacity-0 shadow-[0_4px_12px_rgba(0,0,0,0.5)] transition-all duration-200 group-hover:opacity-100">
-                  Giá Buff
+                  Giá Buff (¥{new Intl.NumberFormat("vi-VN").format(buffPriceCny)} × {new Intl.NumberFormat("vi-VN").format(rate)})
                 </div>
               </div>
             )}

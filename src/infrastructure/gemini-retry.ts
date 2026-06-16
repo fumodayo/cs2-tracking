@@ -101,7 +101,7 @@ export async function fetchWithRetry(
 
       // If we got here, either it's successful, a non-retryable error, or we ran out of retries
       return response;
-    } catch (error: any) {
+    } catch (error: unknown) {
       const isAbort = error instanceof Error && error.name === "AbortError";
       const isAttemptTimeout =
         isAbort && controller.signal.aborted && !abortedByCaller;
@@ -117,7 +117,7 @@ export async function fetchWithRetry(
 
       if (isRetryableError && attempt <= maxRetries) {
         console.warn(
-          `[Gemini Retry] Call failed: ${error?.message || "Timeout"}. Retrying (attempt ${attempt}/${maxRetries}) in ${Math.round(delay)}ms...`,
+          `[Gemini Retry] Call failed: ${error instanceof Error ? error.message : "Timeout"}. Retrying (attempt ${attempt}/${maxRetries}) in ${Math.round(delay)}ms...`,
         );
         await sleep(delay, callerSignal);
         delay *= backoffFactor;

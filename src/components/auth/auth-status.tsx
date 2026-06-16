@@ -99,12 +99,12 @@ export function AuthStatus() {
         href="/api/auth/google"
         aria-disabled={!googleConfigured}
         className={cn(
-          "inline-flex h-9 cursor-pointer items-center justify-center gap-2.5 rounded-lg bg-accent px-4.5 text-xs font-bold text-accent-foreground shadow-md shadow-accent/10 transition-all hover:bg-accent-hover hover:shadow-lg hover:shadow-accent/20 active:scale-95",
+          "inline-flex h-9 cursor-pointer items-center justify-center gap-0 sm:gap-2.5 rounded-lg bg-accent px-2.5 sm:px-4.5 text-xs font-bold text-accent-foreground shadow-md shadow-accent/10 transition-all hover:bg-accent-hover hover:shadow-lg hover:shadow-accent/20 active:scale-95",
           !googleConfigured && "pointer-events-none opacity-50",
         )}
       >
         <LogIn className="size-4" strokeWidth={2.5} />
-        <span>{t("auth.loginGmail")}</span>
+        <span className="hidden sm:inline">{t("auth.loginGmail")}</span>
       </a>
     );
   }

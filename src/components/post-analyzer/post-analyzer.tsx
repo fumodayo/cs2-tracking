@@ -89,7 +89,7 @@ export function PostAnalyzer() {
               {activeTab === "manual" && (
                 <motion.div
                   layoutId="postAnalyzerActiveTab"
-                  className="absolute inset-0 rounded bg-accent shadow-md shadow-blue-500/25"
+                  className="absolute inset-0 rounded bg-accent shadow-md shadow-accent/25"
                   transition={{ type: "spring", stiffness: 380, damping: 30 }}
                 />
               )}
@@ -111,7 +111,7 @@ export function PostAnalyzer() {
               {activeTab === "facebook" && (
                 <motion.div
                   layoutId="postAnalyzerActiveTab"
-                  className="absolute inset-0 rounded bg-accent shadow-md shadow-blue-500/25"
+                  className="absolute inset-0 rounded bg-accent shadow-md shadow-accent/25"
                   transition={{ type: "spring", stiffness: 380, damping: 30 }}
                 />
               )}

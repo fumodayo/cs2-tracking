@@ -2,13 +2,15 @@
 import React from "react";
 import { FaSteam, FaCoins } from "react-icons/fa";
 import { TbCircleFilled, TbPencil, TbDatabase } from "react-icons/tb";
-import { RefreshCcw, Search, ShoppingBag, Trash2, Loader2 } from "lucide-react";
+import { RefreshCcw, Search } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { motion } from "framer-motion";
 import { FilterPopover, ResetButton, ViewButton } from "@/components/ui/actions";
 import { BuffRateInput } from "../portfolio-columns";
-import { PortfolioSourceFilter, PortfolioTableMode } from "../portfolio-table-model";
+import { PortfolioSourceFilter, PortfolioTableMode, PortfolioTableRow } from "../portfolio-table-model";
 import { Table } from "@tanstack/react-table";
+import { PortfolioBulkActions } from "./portfolio-bulk-actions";
+import type { TFunction } from "i18next";
 
 export const SOURCE_FILTER_OPTIONS: Array<{
   label: string;
@@ -36,12 +38,12 @@ export interface PortfolioTableToolbarProps {
   setPriceSourceFilters: (val: string[]) => void;
   accountOptions: Array<{ steamId64: string; name: string }>;
   itemTypeOptions: Array<{ label: string; value: string; icon?: React.ComponentType<{ className?: string }> }>;
-  t: (key: string, fallback?: string) => string;
+  t: TFunction;
   onRefreshPrices?: () => void;
   isRefreshingPrices?: boolean;
   onUpdateBuffRate?: (rate: number) => void;
   buffCnyToVndRate: number;
-  table: Table<Record<string, unknown>>;
+  table: Table<PortfolioTableRow>;
   
   // Bulk actions
   selectedIds: string[];
@@ -82,12 +84,13 @@ export function PortfolioTableToolbar({
 }: PortfolioTableToolbarProps) {
   return (
     <>
-      <div className="flex flex-col gap-3 rounded-t-xl border-b border-stone-800 bg-stone-900/60 p-3">
-        {/* Row 1: Modes & Main Actions & Search */}
-        <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+      <div className="flex flex-col gap-3 rounded-t-xl border-b border-stone-850 bg-stone-900/60 p-3">
+        {/* Row 1: Modes, Rates & Search/Refresh Actions */}
+        <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+          {/* Modes & Rates */}
           <div className="flex flex-wrap items-center gap-2">
             {/* View Mode Switcher */}
-            <div className="relative inline-flex h-9 items-center rounded-lg border border-border bg-surface-muted/40 p-1 shadow-sm select-none mr-1">
+            <div className="relative inline-flex h-9 items-center rounded-lg border border-border bg-surface-muted/40 p-1 shadow-sm select-none">
               <button
                 type="button"
                 onClick={() => setMode("case-summary")}
@@ -100,7 +103,7 @@ export function PortfolioTableToolbar({
                 {mode === "case-summary" && (
                   <motion.div
                     layoutId="activeTabToolbar"
-                    className="absolute inset-0 rounded-md bg-accent shadow-sm shadow-blue-500/10"
+                    className="absolute inset-0 rounded-md bg-accent shadow-sm shadow-accent/10"
                     transition={{ type: "spring", stiffness: 380, damping: 30 }}
                   />
                 )}
@@ -118,26 +121,13 @@ export function PortfolioTableToolbar({
                 {mode === "transactions" && (
                   <motion.div
                     layoutId="activeTabToolbar"
-                    className="absolute inset-0 rounded-md bg-accent shadow-sm shadow-blue-500/10"
+                    className="absolute inset-0 rounded-md bg-accent shadow-sm shadow-accent/10"
                     transition={{ type: "spring", stiffness: 380, damping: 30 }}
                   />
                 )}
                 <span className="relative z-10">{t("dashboard.viewMode", "Chi tiết")}</span>
               </button>
             </div>
-            {onRefreshPrices && (
-              <Button
-                type="button"
-                onClick={onRefreshPrices}
-                disabled={isRefreshingPrices}
-                className="inline-flex h-9 cursor-pointer items-center justify-center gap-1.5 rounded-md border border-border bg-card px-3 text-xs font-semibold text-foreground shadow-sm transition-all hover:border-stone-700 hover:bg-surface-hover disabled:cursor-wait disabled:opacity-50"
-              >
-                <RefreshCcw
-                  className={`size-3.5 text-blue-400 ${isRefreshingPrices ? "animate-spin" : ""}`}
-                />
-                <span>Refresh giá</span>
-              </Button>
-            )}
             {onUpdateBuffRate && (
               <BuffRateInput
                 value={buffCnyToVndRate}
@@ -146,17 +136,34 @@ export function PortfolioTableToolbar({
             )}
           </div>
 
-          {/* Search bar */}
-          <div className="w-full md:w-80">
-            <label className="flex h-9 w-full items-center gap-2 rounded-md border border-input-border bg-input px-3 text-xs transition-all focus-within:border-ring focus-within:ring-1 focus-within:ring-ring">
-              <Search className="size-3.5 shrink-0 text-muted-foreground" />
-              <input
-                value={globalFilter}
-                onChange={(event) => setGlobalFilter(event.target.value)}
-                placeholder="Tìm vật phẩm, market hash, ghi chú..."
-                className="w-full bg-transparent text-xs font-medium text-foreground outline-none placeholder:text-muted-foreground"
-              />
-            </label>
+          {/* Search bar & Refresh Action */}
+          <div className="flex items-center gap-2 w-full lg:w-auto">
+            <div className="flex-1 lg:w-80">
+              <label className="flex h-9 w-full items-center gap-2 rounded-md border border-input-border bg-input px-3 text-xs transition-all focus-within:border-ring focus-within:ring-1 focus-within:ring-ring">
+                <Search className="size-3.5 shrink-0 text-muted-foreground" />
+                <input
+                  value={globalFilter}
+                  onChange={(event) => setGlobalFilter(event.target.value)}
+                  placeholder={t("portfolio.searchPlaceholder", "Tìm vật phẩm, market hash, ghi chú...")}
+                  className="w-full bg-transparent text-xs font-medium text-foreground outline-none placeholder:text-muted-foreground"
+                />
+              </label>
+            </div>
+            
+            {onRefreshPrices && (
+              <Button
+                type="button"
+                onClick={onRefreshPrices}
+                disabled={isRefreshingPrices}
+                className="inline-flex h-9 shrink-0 cursor-pointer items-center justify-center gap-1.5 rounded-md border border-border bg-card px-3 text-xs font-semibold text-foreground shadow-sm transition-all hover:border-stone-700 hover:bg-surface-hover disabled:cursor-wait disabled:opacity-50"
+                title={t("portfolio.refreshPrices", "Refresh giá")}
+              >
+                <RefreshCcw
+                  className={`size-3.5 text-blue-400 ${isRefreshingPrices ? "animate-spin" : ""}`}
+                />
+                <span className="hidden sm:inline">{t("portfolio.refreshPrices", "Refresh giá")}</span>
+              </Button>
+            )}
           </div>
         </div>
 
@@ -165,79 +172,84 @@ export function PortfolioTableToolbar({
 
         {/* Row 2: Filters */}
         <div className="flex flex-col gap-2.5 lg:flex-row lg:items-center lg:justify-between">
-          <div className="flex flex-wrap items-center gap-2">
-            <span className="mr-1 text-[10px] font-bold tracking-wider text-stone-500 uppercase">
-              Bộ lọc:
+          <div className="flex items-center gap-2 overflow-x-auto pb-1 no-scrollbar -mx-3 px-3">
+            <span className="shrink-0 text-[10px] font-bold tracking-wider text-stone-500 uppercase select-none mr-1">
+              {t("portfolio.filtersLabel", "Bộ lọc:")}
             </span>
-            <FilterPopover
-              label="Nguồn"
-              options={SOURCE_FILTER_OPTIONS}
-              selectedValues={sourceFilters}
-              onChange={(values) => setSourceFilters(values as PortfolioSourceFilter[])}
-            />
-            <FilterPopover
-              label="Loại vật phẩm"
-              options={itemTypeOptions}
-              selectedValues={itemTypeFilters}
-              onChange={(values) => setItemTypeFilters(values)}
-            />
-            <FilterPopover
-              label="Tài khoản"
-              options={accountOptions.map((account) => ({
-                label: account.name,
-                value: account.steamId64,
-              }))}
-              selectedValues={accountFilters}
-              onChange={(values) => setAccountFilters(values)}
-              disabled={accountOptions.length === 0}
-            />
-            <FilterPopover
-              label="Trạng thái"
-              options={[
-                {
-                  label: "Tradeable",
-                  value: "tradeable",
-                  icon: () => <TbCircleFilled className="size-3.5 text-emerald-500" />,
-                },
-                {
-                  label: "On Market",
-                  value: "market",
-                  icon: () => <TbCircleFilled className="size-3.5 text-amber-500" />,
-                },
-                {
-                  label: "Trade Protected",
-                  value: "protected",
-                  icon: () => <TbCircleFilled className="size-3.5 text-blue-500" />,
-                },
-                {
-                  label: "Hold",
-                  value: "hold",
-                  icon: () => <TbCircleFilled className="size-3.5 text-red-500" />,
-                },
-              ]}
-              selectedValues={statusFilters}
-              onChange={(values) => setStatusFilters(values)}
-            />
-            <FilterPopover
-              label="Định giá"
-              options={[
-                {
-                  label: "Giá BUFF",
-                  value: "buff",
-                  icon: () => <FaCoins className="size-4.5 text-amber-500" />,
-                },
-                {
-                  label: "Giá Steam",
-                  value: "steam",
-                  icon: () => <FaSteam className="size-4.5 text-sky-400" />,
-                },
-              ]}
-              selectedValues={priceSourceFilters}
-              onChange={(values) => setPriceSourceFilters(values)}
-            />
+            <div className="flex items-center gap-2 shrink-0">
+              <FilterPopover
+                label={t("portfolio.filterSource", "Nguồn")}
+                options={[
+                  { label: t("portfolio.sourceManual", "Thủ công"), value: "manual" },
+                  { label: t("portfolio.sourceExisting", "Có sẵn"), value: "existing" },
+                ]}
+                selectedValues={sourceFilters}
+                onChange={(values) => setSourceFilters(values as PortfolioSourceFilter[])}
+              />
+              <FilterPopover
+                label={t("portfolio.filterItemType", "Loại vật phẩm")}
+                options={itemTypeOptions}
+                selectedValues={itemTypeFilters}
+                onChange={(values) => setItemTypeFilters(values)}
+              />
+              <FilterPopover
+                label={t("portfolio.filterAccount", "Tài khoản")}
+                options={accountOptions.map((account) => ({
+                  label: account.name,
+                  value: account.steamId64,
+                }))}
+                selectedValues={accountFilters}
+                onChange={(values) => setAccountFilters(values)}
+                disabled={accountOptions.length === 0}
+              />
+              <FilterPopover
+                label={t("portfolio.filterStatus", "Trạng thái")}
+                options={[
+                  {
+                    label: "Tradeable",
+                    value: "tradeable",
+                    icon: () => <TbCircleFilled className="size-3.5 text-emerald-500" />,
+                  },
+                  {
+                    label: "On Market",
+                    value: "market",
+                    icon: () => <TbCircleFilled className="size-3.5 text-amber-500" />,
+                  },
+                  {
+                    label: "Trade Protected",
+                    value: "protected",
+                    icon: () => <TbCircleFilled className="size-3.5 text-blue-500" />,
+                  },
+                  {
+                    label: "Hold",
+                    value: "hold",
+                    icon: () => <TbCircleFilled className="size-3.5 text-red-500" />,
+                  },
+                ]}
+                selectedValues={statusFilters}
+                onChange={(values) => setStatusFilters(values)}
+              />
+              <FilterPopover
+                label={t("portfolio.filterPricing", "Định giá")}
+                options={[
+                  {
+                    label: "Giá BUFF",
+                    value: "buff",
+                    icon: () => <FaCoins className="size-4.5 text-amber-500" />,
+                  },
+                  {
+                    label: "Giá Steam",
+                    value: "steam",
+                    icon: () => <FaSteam className="size-4.5 text-sky-400" />,
+                  },
+                ]}
+                selectedValues={priceSourceFilters}
+                onChange={(values) => setPriceSourceFilters(values)}
+              />
+            </div>
           </div>
 
-          <div className="flex shrink-0 items-center gap-2 self-end lg:self-auto">
+          <div className="flex items-center justify-between mt-1 pt-1.5 border-t border-stone-850/60 lg:mt-0 lg:pt-0 lg:border-none lg:shrink-0 lg:gap-2 lg:self-auto">
             <ResetButton
               isVisible={
                 sourceFilters.length > 0 ||
@@ -261,46 +273,13 @@ export function PortfolioTableToolbar({
 
       {/* Bulk Action Banner */}
       {selectedIds.length > 0 && (
-        <div className="animate-fade-slide-in flex items-center justify-between border-b border-red-500/20 bg-red-950/10 px-4 py-2.5">
-          <div className="flex items-center gap-2">
-            <span className="inline-flex size-5 items-center justify-center rounded-full bg-red-500/10 text-xs font-bold text-red-400">
-              {selectedIds.length}
-            </span>
-            <span className="text-xs font-semibold text-stone-300">
-              vật phẩm được chọn
-            </span>
-          </div>
-          <div className="flex items-center gap-2">
-            <Button
-              type="button"
-              onClick={() => setRowSelection({})}
-              className="border-stone-850 inline-flex h-8 cursor-pointer items-center justify-center rounded-md border bg-stone-900/60 px-3 text-xs font-semibold text-stone-400 transition-all hover:bg-stone-900 hover:text-stone-200"
-            >
-              Hủy chọn
-            </Button>
-            <Button
-              type="button"
-              onClick={() => setSellDialogOpen(true)}
-              className="inline-flex h-8 cursor-pointer items-center justify-center gap-1.5 rounded-md bg-accent px-3.5 text-xs font-bold text-slate-950 shadow-md shadow-blue-950/20 transition-all hover:bg-accent-hover"
-            >
-              <ShoppingBag className="size-3 text-slate-950" />
-              <span>Bán đã chọn</span>
-            </Button>
-            <Button
-              type="button"
-              onClick={handleDeleteSelected}
-              disabled={isDeletingMany}
-              className="bg-red-650 hover:bg-red-750 inline-flex h-8 cursor-pointer items-center justify-center gap-1.5 rounded-md px-3.5 text-xs font-bold text-white shadow-md shadow-red-950/20 transition-all disabled:cursor-wait disabled:opacity-50"
-            >
-              {isDeletingMany ? (
-                <Loader2 className="size-3 animate-spin" />
-              ) : (
-                <Trash2 className="size-3 text-red-200" />
-              )}
-              <span>Xóa đã chọn</span>
-            </Button>
-          </div>
-        </div>
+        <PortfolioBulkActions
+          selectedCount={selectedIds.length}
+          onClearSelection={() => setRowSelection({})}
+          onSellSelected={() => setSellDialogOpen(true)}
+          onDeleteSelected={handleDeleteSelected}
+          isDeletingMany={isDeletingMany}
+        />
       )}
     </>
   );

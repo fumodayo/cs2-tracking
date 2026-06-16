@@ -3,6 +3,7 @@
 import type React from "react";
 import { Calculator, Check, Eye, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import type { PostAnalysisHistoryItemDto } from "@/types/post-analysis";
 
 interface FacebookTabProps {
   htmlSource: string;
@@ -16,15 +17,29 @@ interface FacebookTabProps {
     postUrl?: string;
     steamUrl?: string;
   } | null;
-  setExtractedData: (val: any) => void;
+  setExtractedData: (val: {
+    text: string;
+    author: string;
+    imageUrls: string[];
+    postTime?: string;
+    authorUrl?: string;
+    postUrl?: string;
+    steamUrl?: string;
+  } | null) => void;
   selectedImages: string[];
-  setSelectedImages: (val: any) => void;
+  setSelectedImages: (val: string[] | ((prev: string[]) => string[])) => void;
   isExtracting: boolean;
   isAnalyzingHtml: boolean;
   editableText: string;
   setEditableText: (val: string) => void;
   setError: (val: string | null) => void;
-  setCacheNotification: (val: any) => void;
+  setCacheNotification: (
+    val: {
+      message: string;
+      item?: PostAnalysisHistoryItemDto;
+      isManualMatch?: boolean;
+    } | null,
+  ) => void;
   handleExtractHtml: (event: React.FormEvent<HTMLFormElement>) => void;
   handleAnalyzeHtml: (event: React.FormEvent<HTMLFormElement> | null, force?: boolean) => void;
   toggleImageSelection: (url: string) => void;

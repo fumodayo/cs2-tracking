@@ -38,6 +38,33 @@
 
   --animate-fade-slide-in: fade-slide-in 0.25s cubic-bezier(0.25, 0.25, 0, 1)
     both;
+  --animate-reset-flash: reset-flash 0.4s cubic-bezier(0.16, 1, 0.3, 1) both;
+
+  /* CS2 Theme: Custom stone and blue color tokens mapped to theme variables to fix hovers and borders globally */
+  --color-stone-50: var(--foreground);
+  --color-stone-100: var(--foreground);
+  --color-stone-200: var(--foreground);
+  --color-stone-300: var(--muted-foreground);
+  --color-stone-400: var(--muted-foreground);
+  --color-stone-500: var(--muted-foreground);
+  --color-stone-600: var(--border);
+  --color-stone-700: var(--border);
+  --color-stone-800: var(--surface-muted);
+  --color-stone-850: var(--border);
+  --color-stone-900: var(--card);
+  --color-stone-950: var(--card);
+
+  --color-blue-50: var(--accent);
+  --color-blue-100: var(--accent);
+  --color-blue-200: var(--accent);
+  --color-blue-300: var(--accent);
+  --color-blue-400: var(--accent);
+  --color-blue-500: var(--accent);
+  --color-blue-600: var(--accent);
+  --color-blue-700: var(--accent);
+  --color-blue-800: var(--accent);
+  --color-blue-900: var(--accent);
+  --color-blue-950: var(--accent);
 
   @keyframes fade-slide-in {
     0% {
@@ -47,6 +74,19 @@
     100% {
       opacity: 1;
       transform: translateY(0);
+    }
+  }
+
+  @keyframes reset-flash {
+    0% {
+      opacity: 0.3;
+      transform: scale(0.995);
+      filter: brightness(1.2);
+    }
+    100% {
+      opacity: 1;
+      transform: scale(1);
+      filter: brightness(1);
     }
   }
 }
@@ -74,7 +114,7 @@
   --accent: hsl(221.2, 83.2%, 53.3%);
   --accent-hover: hsl(217, 100%, 60%);
   --accent-foreground: hsl(0, 0%, 100%);
-  --ring: hsl(213.1, 93.9%, 67.8%);
+  --ring: hsl(221.2, 83.2%, 53.3%);
   --danger: hsl(360, 84%, 60%);
   --danger-border: hsla(360, 84%, 60%, 0.35);
   --danger-muted: hsla(360, 84%, 60%, 0.1);

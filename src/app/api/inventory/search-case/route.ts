@@ -25,18 +25,20 @@ export async function GET(request: NextRequest) {
           await import("@/infrastructure/cases/steam-case-image-provider");
         const imageUrl = await getSteamCaseImageUrl(trimmedQuery);
 
-        cases.unshift({
-          id: `ext_${trimmedQuery}`,
-          name: trimmedQuery,
-          marketHashName: trimmedQuery,
-          imageUrl: imageUrl ?? undefined,
-          isActive: true,
-        });
+        if (imageUrl) {
+          cases.unshift({
+            id: `ext_${trimmedQuery}`,
+            name: trimmedQuery,
+            marketHashName: trimmedQuery,
+            imageUrl: imageUrl,
+            isActive: true,
+          });
+        }
       }
     }
 
     const results = await Promise.all(
-      cases.slice(0, 10).map(async (caseItem) => {
+      cases.map(async (caseItem) => {
         let price = 0;
         try {
           const snapshot = await priceService.getCurrentPrice(caseItem);
@@ -58,7 +60,9 @@ export async function GET(request: NextRequest) {
       }),
     );
 
-    return NextResponse.json({ results });
+    const filteredResults = results.filter((r) => r.price > 0).slice(0, 10);
+
+    return NextResponse.json({ results: filteredResults });
   } catch (error) {
     return NextResponse.json(
       { message: error instanceof Error ? error.message : "Lỗi tìm kiếm." },

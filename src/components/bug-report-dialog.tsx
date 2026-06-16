@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useRef, DragEvent, ChangeEvent } from "react";
+import { useState, useRef, DragEvent, ChangeEvent, useEffect } from "react";
 import { useTranslation } from "react-i18next";
 import { Upload, X, Loader2, Eye } from "lucide-react";
 import {
@@ -26,6 +26,7 @@ export function BugReportDialog({ open, onOpenChange }: BugReportDialogProps) {
   const [isDragActive, setIsDragActive] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [lightboxImage, setLightboxImage] = useState<string | null>(null);
+  const [isResetting, setIsResetting] = useState(false);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -35,10 +36,67 @@ export function BugReportDialog({ open, onOpenChange }: BugReportDialogProps) {
     setIsDragActive(false);
   };
 
+  // Load draft or reset state when dialog opens
+  useEffect(() => {
+    if (open) {
+      try {
+        const savedDraft = localStorage.getItem("bug_report_draft");
+        if (savedDraft) {
+          const draft = JSON.parse(savedDraft);
+          if (typeof draft.description === "string") {
+            setDescription(draft.description);
+          }
+          if (Array.isArray(draft.images)) {
+            setImages(draft.images);
+          }
+          return;
+        }
+      } catch (e) {
+        console.error("Failed to load bug report draft from localStorage", e);
+      }
+
+      // Default reset if no draft found
+      resetForm();
+    }
+  }, [open]);
+
+  // Save state to localStorage as draft
+  useEffect(() => {
+    if (open) {
+      const isDefault = !description.trim() && images.length === 0;
+      try {
+        if (isDefault) {
+          localStorage.removeItem("bug_report_draft");
+        } else {
+          const draft = { description, images };
+          try {
+            localStorage.setItem("bug_report_draft", JSON.stringify(draft));
+          } catch {
+            // If quota exceeded (due to large images), fall back to saving only the description
+            const textOnlyDraft = { description, images: [] };
+            localStorage.setItem("bug_report_draft", JSON.stringify(textOnlyDraft));
+          }
+        }
+      } catch (e) {
+        console.error("Failed to update bug report draft in localStorage", e);
+      }
+    }
+  }, [open, description, images]);
+
   const handleClose = () => {
     if (isSubmitting) return;
     onOpenChange(false);
+  };
+
+  const handleCancel = () => {
+    if (isSubmitting) return;
+    try {
+      localStorage.removeItem("bug_report_draft");
+    } catch {
+      // ignore
+    }
     resetForm();
+    onOpenChange(false);
   };
 
   const processFiles = (files: File[]) => {
@@ -150,6 +208,11 @@ export function BugReportDialog({ open, onOpenChange }: BugReportDialogProps) {
         duration: 4000,
       });
 
+      try {
+        localStorage.removeItem("bug_report_draft");
+      } catch {
+        // ignore
+      }
       onOpenChange(false);
       resetForm();
     } catch (err) {
@@ -175,7 +238,8 @@ export function BugReportDialog({ open, onOpenChange }: BugReportDialogProps) {
           </DialogHeader>
 
           <form onSubmit={handleSubmit} className="mt-4 space-y-4">
-            <div className="space-y-1.5">
+            <div className={`space-y-4 transition-all duration-350 ${isResetting ? "animate-reset-flash" : ""}`}>
+              <div className="space-y-1.5">
               <label className="text-xs font-semibold text-stone-450">
                 {t("bugReport.descriptionLabel")} <span className="text-red-500">*</span>
               </label>
@@ -271,12 +335,29 @@ export function BugReportDialog({ open, onOpenChange }: BugReportDialogProps) {
                 </div>
               )}
             </div>
+            </div>
 
             <div className="mt-6 flex items-center justify-end gap-3 border-t border-stone-900/60 pt-4">
               <Button
                 type="button"
+                variant="ghost"
+                onClick={() => {
+                  setIsResetting(true);
+                  try {
+                    localStorage.removeItem("bug_report_draft");
+                  } catch { /* ignore */ }
+                  resetForm();
+                  setTimeout(() => setIsResetting(false), 400);
+                }}
+                disabled={isSubmitting}
+                className="h-9 text-xs text-stone-400 hover:text-stone-200 mr-auto hover:bg-stone-900/20"
+              >
+                {t("bugReport.reset")}
+              </Button>
+              <Button
+                type="button"
                 variant="outline"
-                onClick={handleClose}
+                onClick={handleCancel}
                 disabled={isSubmitting}
                 className="h-9 text-xs border-stone-800 bg-stone-900/40 hover:bg-stone-850 hover:text-stone-200"
               >

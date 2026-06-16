@@ -1,0 +1,29 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="100%" height="100%">
+  <!-- Squircle Background (Vibrant Accent Blue) -->
+  <rect x="0" y="0" width="512" height="512" rx="140" fill="#2563eb" />
+  
+  <!-- Crate Symbol (Solid White with Cutouts) -->
+  <g transform="translate(96, 112)" fill="#ffffff">
+    <!-- Crate Base Body -->
+    <rect x="24" y="80" width="272" height="176" rx="16" />
+    
+    <!-- Crate Lid -->
+    <rect x="16" y="24" width="288" height="48" rx="8" />
+    
+    <!-- Left Handle -->
+    <rect x="-8" y="104" width="24" height="80" rx="12" />
+    <rect x="-8" y="120" width="12" height="48" rx="0" fill="#2563eb" />
+    
+    <!-- Right Handle -->
+    <rect x="304" y="104" width="24" height="80" rx="12" />
+    <rect x="312" y="120" width="12" height="48" rx="0" fill="#2563eb" />
+    
+    <!-- Lock / Latch (Cutout in the middle) -->
+    <rect x="136" y="56" width="48" height="48" rx="8" fill="#2563eb" />
+    <rect x="148" y="68" width="24" height="24" rx="4" fill="#ffffff" />
+    
+    <!-- Vertical Grooves (Cutouts on the body) -->
+    <rect x="72" y="112" width="24" height="112" rx="4" fill="#2563eb" />
+    <rect x="224" y="112" width="24" height="112" rx="4" fill="#2563eb" />
+  </g>
+</svg>

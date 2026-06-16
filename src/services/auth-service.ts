@@ -52,6 +52,17 @@ export async function getPortfolioOwnerId(): Promise<string> {
   return user ? `google:${user.id}` : "guest";
 }
 
+export async function checkAuth(): Promise<{ authorized: boolean; ownerId: string }> {
+  if (isGoogleAuthConfigured()) {
+    const user = await getCurrentUser();
+    if (!user) {
+      return { authorized: false, ownerId: "guest" };
+    }
+    return { authorized: true, ownerId: `google:${user.id}` };
+  }
+  return { authorized: true, ownerId: "guest" };
+}
+
 export async function createGoogleAuthorizationUrl(): Promise<string> {
   if (!isGoogleAuthConfigured()) {
     throw new Error("Chưa cấu hình GOOGLE_CLIENT_ID và GOOGLE_CLIENT_SECRET.");

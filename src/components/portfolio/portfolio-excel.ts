@@ -10,6 +10,23 @@ export type PortfolioImportRow = {
   note?: string;
 };
 
+export type ColumnMapping = {
+  name: number;           // BẮT BUỘC — index cột chứa tên vật phẩm
+  quantity?: number;      // optional — index cột số lượng
+  buyPrice?: number;      // optional — index cột giá mua
+  buyDate?: number;       // optional — index cột ngày mua
+  note?: number;          // optional — index cột ghi chú
+  caseId?: number;        // optional — index cột caseId
+};
+
+export type MappingTemplate = {
+  id: string;                  // unique id (crypto.randomUUID)
+  label: string;               // tên template do user đặt
+  headerFingerprint: string;   // JSON.stringify(sortedHeaders) để so sánh
+  mapping: ColumnMapping;      // mapping đã lưu
+  createdAt: string;           // ISO date
+};
+
 const EXPORT_COLUMNS = {
   caseId: "Case ID",
   caseName: "Case Name",
@@ -248,4 +265,158 @@ function normalizeExcelDate(value: unknown): string {
   }
 
   return new Date().toISOString().slice(0, 10);
+}
+
+export async function readExcelHeaders(
+  source: File | string
+): Promise<{ headers: string[]; headerRowIndex: number; matrix: unknown[][] }> {
+  if (typeof source === "string") {
+    const lines = source.split(/\r?\n/).map(line => line.trim()).filter(line => line.length > 0);
+    if (lines.length === 0) {
+      return { headers: [], headerRowIndex: -1, matrix: [] };
+    }
+    const matrix = lines.map(line => line.split("\t"));
+    const headers = matrix[0].map(h => String(h).trim());
+    return { headers, headerRowIndex: 0, matrix };
+  } else {
+    const buffer = await source.arrayBuffer();
+    const workbook = XLSX.read(buffer, { type: "array", cellDates: true });
+    const sheetName = workbook.SheetNames[0];
+    if (!sheetName) {
+      return { headers: [], headerRowIndex: -1, matrix: [] };
+    }
+    const worksheet = workbook.Sheets[sheetName];
+    const matrix = XLSX.utils.sheet_to_json<unknown[]>(worksheet, {
+      header: 1,
+      defval: "",
+    }) as unknown[][];
+    
+    const headerRowIndex = matrix.findIndex((row) => {
+      if (!Array.isArray(row)) return false;
+      const nonEmptyCells = row.filter((cell) => cell !== undefined && cell !== null && String(cell).trim() !== "");
+      return nonEmptyCells.length >= 2;
+    });
+    
+    if (headerRowIndex === -1) {
+      return { headers: [], headerRowIndex: -1, matrix: [] };
+    }
+    
+    const headers = matrix[headerRowIndex].map((cell) => String(cell).trim());
+    return { headers, headerRowIndex, matrix };
+  }
+}
+
+export async function parseExcelWithMapping(
+  source: File | string,
+  mapping: ColumnMapping,
+  headerRowIndex: number
+): Promise<PortfolioImportRow[]> {
+  let matrix: unknown[][] = [];
+  
+  if (typeof source === "string") {
+    const lines = source.split(/\r?\n/).filter(line => line.trim().length > 0);
+    matrix = lines.map(line => line.split("\t"));
+  } else {
+    const buffer = await source.arrayBuffer();
+    const workbook = XLSX.read(buffer, { type: "array", cellDates: true });
+    const sheetName = workbook.SheetNames[0];
+    if (!sheetName) {
+      return [];
+    }
+    const worksheet = workbook.Sheets[sheetName];
+    matrix = XLSX.utils.sheet_to_json<unknown[]>(worksheet, {
+      header: 1,
+      defval: "",
+    }) as unknown[][];
+  }
+  
+  return parseMatrixWithMapping(matrix, mapping, headerRowIndex);
+}
+
+export function parseMatrixWithMapping(
+  matrix: unknown[][],
+  mapping: ColumnMapping,
+  headerRowIndex: number
+): PortfolioImportRow[] {
+  const dataRows = matrix.slice(headerRowIndex + 1);
+  const rows: PortfolioImportRow[] = [];
+  
+  for (const row of dataRows) {
+    if (!Array.isArray(row) || row.length === 0) continue;
+    
+    const marketHashName = normalizeMarketHashNameCell(row[mapping.name]);
+    if (!marketHashName) continue;
+    
+    let quantity = 1;
+    if (mapping.quantity !== undefined && mapping.quantity < row.length) {
+      const q = parseNumberCell(row[mapping.quantity]);
+      if (Number.isFinite(q) && q > 0) {
+        quantity = q;
+      }
+    }
+    
+    let buyPrice = 0;
+    if (mapping.buyPrice !== undefined && mapping.buyPrice < row.length) {
+      const p = parseNumberCell(row[mapping.buyPrice]);
+      if (Number.isFinite(p) && p >= 0) {
+        buyPrice = p;
+      }
+    }
+    
+    const buyDate = (mapping.buyDate !== undefined && mapping.buyDate < row.length)
+      ? normalizeExcelDate(row[mapping.buyDate])
+      : new Date().toISOString().slice(0, 10);
+      
+    const note = (mapping.note !== undefined && mapping.note < row.length)
+      ? (stringifyCell(row[mapping.note]) || "Import từ Excel")
+      : "Import từ Excel";
+      
+    const caseId = (mapping.caseId !== undefined && mapping.caseId < row.length)
+      ? (stringifyCell(row[mapping.caseId]) || undefined)
+      : undefined;
+      
+    rows.push({
+      caseId,
+      marketHashName,
+      quantity,
+      buyPrice,
+      buyDate,
+      note,
+    });
+  }
+  
+  return rows;
+}
+
+export function autoSuggestMapping(headers: string[]): Partial<ColumnMapping> {
+  const normalizedHeaders = headers.map(h => normalizeHeaderKey(h));
+  const mapping: Partial<ColumnMapping> = {};
+  
+  const findIndex = (aliases: readonly string[]) => {
+    for (const alias of aliases) {
+      const idx = normalizedHeaders.findIndex(h => h === alias);
+      if (idx !== -1) return idx;
+    }
+    return undefined;
+  };
+  
+  const nameIdx = findIndex(HEADER_ALIASES.name);
+  if (nameIdx !== undefined) mapping.name = nameIdx;
+  
+  const qtyIdx = findIndex(HEADER_ALIASES.quantity);
+  if (qtyIdx !== undefined) mapping.quantity = qtyIdx;
+  
+  const priceIdx = findIndex(HEADER_ALIASES.buyPrice);
+  if (priceIdx !== undefined) mapping.buyPrice = priceIdx;
+  
+  const dateIdx = findIndex(HEADER_ALIASES.buyDate);
+  if (dateIdx !== undefined) mapping.buyDate = dateIdx;
+  
+  const noteIdx = findIndex(HEADER_ALIASES.note);
+  if (noteIdx !== undefined) mapping.note = noteIdx;
+  
+  const caseIdIdx = findIndex(HEADER_ALIASES.caseId);
+  if (caseIdIdx !== undefined) mapping.caseId = caseIdIdx;
+  
+  return mapping;
 }

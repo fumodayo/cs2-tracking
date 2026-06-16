@@ -11,6 +11,7 @@ import {
   type ExistingPortfolioItem,
 } from "@/services/portfolio-sync";
 import { createServices } from "@/infrastructure/container";
+import { calculateTradeHoldUntil } from "@/utils/date";
 import { getDatabase } from "@/infrastructure/db/mongo-client";
 import { mapCaseDocument } from "@/infrastructure/db/mappers";
 import { getCurrentUser, getPortfolioOwnerId } from "@/services/auth-service";
@@ -34,6 +35,7 @@ type InventoryImportItem = {
   holdDays?: unknown;
   buyPrice?: unknown;
   buyDate?: unknown;
+  tradeHoldUntil?: unknown;
   storageUnitId?: unknown;
   buffPriceManual?: unknown;
   buffRateManual?: unknown;
@@ -77,6 +79,7 @@ export async function POST(request: NextRequest) {
             note: string;
             sourceAccounts: PortfolioSourceAccount[];
             holdDays: number;
+            tradeHoldUntil?: string;
           }
         >();
         const storageUnitAssignments: Array<{
@@ -227,16 +230,21 @@ export async function POST(request: NextRequest) {
               note: "Thủ công từ inventory scanner",
               tradeHoldUntil:
                 holdDays > 0
-                  ? new Date(
-                      itemBuyDate.getTime() + holdDays * 24 * 60 * 60 * 1000,
-                    )
+                  ? calculateTradeHoldUntil(itemBuyDate, holdDays)
                   : undefined,
               storageUnitId: storageUnitId || undefined,
             });
           } else {
+            const tradeHoldUntilStr = typeof item.tradeHoldUntil === "string" ? item.tradeHoldUntil : undefined;
             const existing = scannedInputs.get(resolvedCaseItem.id);
             if (existing) {
               const nextQuantity = existing.quantity + quantity;
+              let updatedTradeHoldUntil = existing.tradeHoldUntil;
+              if (tradeHoldUntilStr) {
+                if (!updatedTradeHoldUntil || new Date(tradeHoldUntilStr).getTime() > new Date(updatedTradeHoldUntil).getTime()) {
+                  updatedTradeHoldUntil = tradeHoldUntilStr;
+                }
+              }
               scannedInputs.set(resolvedCaseItem.id, {
                 ...existing,
                 quantity: nextQuantity,
@@ -249,6 +257,7 @@ export async function POST(request: NextRequest) {
                   sourceAccounts,
                 ),
                 holdDays: Math.max(existing.holdDays, holdDays),
+                tradeHoldUntil: updatedTradeHoldUntil,
               });
             } else {
               scannedInputs.set(resolvedCaseItem.id, {
@@ -258,6 +267,7 @@ export async function POST(request: NextRequest) {
                 note: "Import từ inventory scanner",
                 sourceAccounts,
                 holdDays,
+                tradeHoldUntil: tradeHoldUntilStr,
               });
             }
           }
@@ -345,6 +355,7 @@ export async function POST(request: NextRequest) {
                 existingPortfolioItems,
                 now,
                 "Import từ inventory scanner",
+                input.tradeHoldUntil ? new Date(input.tradeHoldUntil) : undefined,
               );
             },
           );

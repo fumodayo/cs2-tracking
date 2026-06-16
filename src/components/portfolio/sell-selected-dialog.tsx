@@ -13,19 +13,19 @@ import {
   DialogTitle,
   DialogDescription,
 } from "@/components/ui/dialog";
-import { Button } from "@/components/ui/button";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import type { PortfolioTableRow } from "./portfolio-table-model";
+import type { PortfolioReportRowDto } from "@/types/report";
 import { useCurrency } from "@/components/currency-provider";
 import { SellSelectedDialogItemRow } from "./sell-selected-dialog-item-row";
 import { SellSelectedSearch } from "./components/sell-selected-search";
-import { SellSelectedMetrics } from "./components/sell-selected-metrics";
 
 type SellSelectedDialogProps = {
   open: boolean;
   onClose: () => void;
   selectedItems: PortfolioTableRow[];
   allItems?: PortfolioTableRow[];
+  originalRows?: PortfolioReportRowDto[];
   onDelete: (id: string) => Promise<void> | void;
   onUpdateQuantity: (id: string, quantity: number) => Promise<void> | void;
   onClearSelection: () => void;
@@ -33,6 +33,7 @@ type SellSelectedDialogProps = {
   retailRate: number;
   buffPricesCny?: Record<string, number>;
   buffCnyToVndRate?: number;
+  onDeselectItem?: (id: string) => void;
 };
 
 export function SellSelectedDialog({
@@ -40,6 +41,7 @@ export function SellSelectedDialog({
   onClose,
   selectedItems,
   allItems,
+  originalRows,
   onDelete,
   onUpdateQuantity,
   onClearSelection,
@@ -47,6 +49,7 @@ export function SellSelectedDialog({
   retailRate,
   buffPricesCny,
   buffCnyToVndRate,
+  onDeselectItem,
 }: SellSelectedDialogProps) {
   const { formatCurrency } = useCurrency();
   // Quantities to sell, keyed by item ID
@@ -106,6 +109,9 @@ export function SellSelectedDialog({
       next.add(id);
       return next;
     });
+    if (onDeselectItem) {
+      onDeselectItem(id);
+    }
   };
 
   const combinedItems = useMemo(() => {
@@ -280,9 +286,30 @@ export function SellSelectedDialog({
     }));
   };
 
+  // Helper to distribute a sale of grouped items across database items
+  const sellItems = async (itemIds: string[], totalQtyToSell: number) => {
+    let remainingSellQty = totalQtyToSell;
+
+    const matchingItems = (originalRows || [])
+      .filter((row) => itemIds.includes(row.item.id))
+      .map((row) => row.item)
+      .sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime());
+
+    for (const dbItem of matchingItems) {
+      if (remainingSellQty <= 0) break;
+      if (dbItem.quantity <= remainingSellQty) {
+        await onDelete(dbItem.id);
+        remainingSellQty -= dbItem.quantity;
+      } else {
+        await onUpdateQuantity(dbItem.id, dbItem.quantity - remainingSellQty);
+        remainingSellQty = 0;
+      }
+    }
+  };
+
   // Perform sale for a single item
   const executeSingleSell = async (itemId: string, sellQty: number) => {
-    const item = selectedItems.find((x) => x.id === itemId);
+    const item = combinedItems.find((x) => x.id === itemId);
     if (!item) return;
 
     setLoadingIds((prev) => {
@@ -292,14 +319,7 @@ export function SellSelectedDialog({
     });
 
     try {
-      if (sellQty >= item.quantity) {
-        // Full sell -> Delete completely
-        await onDelete(itemId);
-      } else {
-        // Partial sell -> Deduct quantity
-        const nextQty = item.quantity - sellQty;
-        await onUpdateQuantity(itemId, nextQty);
-      }
+      await sellItems(item.itemIds, sellQty);
     } catch (err) {
       console.error("Sale failed for item:", itemId, err);
     } finally {
@@ -322,12 +342,7 @@ export function SellSelectedDialog({
     try {
       for (const item of activeItems) {
         const sellQty = getSellQuantity(item.id, item.quantity);
-        if (sellQty >= item.quantity) {
-          await onDelete(item.id);
-        } else {
-          const nextQty = item.quantity - sellQty;
-          await onUpdateQuantity(item.id, nextQty);
-        }
+        await sellItems(item.itemIds, sellQty);
       }
       onClearSelection();
       onClose();
@@ -464,17 +479,18 @@ export function SellSelectedDialog({
             </div>
           </DialogHeader>
 
-          {/* Grid Layout: Asymmetric 3/4 Table + 1/4 Sidebar Statistics */}
-          <div className="grid min-h-0 flex-1 grid-cols-1 gap-6 overflow-hidden lg:grid-cols-4">
-            {/* Left Section: Interactive Items Table (takes 3 columns) */}
-            <div className="flex min-h-0 scrollbar-thin scrollbar-thumb-stone-800 flex-col space-y-2.5 overflow-y-auto pr-1 lg:col-span-3">
-              <SellSelectedSearch
-                allItems={allItems}
-                activeItems={activeItems}
-                onAddItem={handleAddItem}
-                formatCurrency={formatCurrency}
-              />
+          {/* Main Content: Interactive Items Table */}
+          <div className="relative flex min-h-0 flex-1 flex-col overflow-hidden">
+            <SellSelectedSearch
+              allItems={allItems}
+              activeItems={activeItems}
+              onAddItem={handleAddItem}
+              formatCurrency={formatCurrency}
+              buffPricesCny={buffPricesCny}
+            />
 
+            {/* Scrollable list items */}
+            <div className="flex-1 overflow-y-auto min-h-0 scrollbar-thin scrollbar-thumb-stone-800 pr-1 space-y-2.5 pb-24">
               {itemsCount === 0 ? (
                 <div className="flex flex-col items-center justify-center rounded-[4px] border border-dashed border-stone-800 bg-stone-950/20 py-20 text-center">
                   <AlertCircle className="mb-2 size-8 text-stone-600" />
@@ -522,13 +538,70 @@ export function SellSelectedDialog({
               )}
             </div>
 
-            <SellSelectedMetrics
-              metrics={metrics}
-              itemsCount={itemsCount}
-              bulkLoading={bulkLoading}
-              onConfirmBulk={() => setConfirmBulk(true)}
-              formatCurrency={formatCurrency}
-            />
+            {/* Absolute overlay at the bottom with floating control dock */}
+            {itemsCount > 0 && (
+              <div className="absolute bottom-3 left-3 right-3 z-10 flex items-center justify-between gap-4 rounded-[6px] border border-stone-800/80 bg-stone-950/90 p-4 shadow-[0_12px_40px_rgba(0,0,0,0.85)] backdrop-blur-md">
+                <div className="flex items-center gap-6">
+                  {/* Total Current Value Metric */}
+                  <div className="flex flex-col">
+                    <span className="font-mono text-[9px] font-bold tracking-wider text-stone-500 uppercase">
+                      Tổng nhận về
+                    </span>
+                    <span className="mt-0.5 font-mono text-base font-extrabold text-stone-100">
+                      {formatCurrency(metrics.totalCurrentValue)}
+                    </span>
+                  </div>
+
+                  {/* Divider vertical */}
+                  <div className="h-8 border-l border-stone-800/80" />
+
+                  {/* Net Profit/Loss Metric */}
+                  <div className="flex flex-col">
+                    <span className="font-mono text-[9px] font-bold tracking-wider text-stone-500 uppercase">
+                      Lãi/Lỗ ước tính
+                    </span>
+                    <div className="mt-0.5 flex items-center gap-2">
+                      <span
+                        className={`font-mono text-base font-black tracking-tight ${
+                          metrics.profitAmount >= 0 ? "text-emerald-400" : "text-red-500"
+                        }`}
+                      >
+                        {metrics.profitAmount >= 0 ? "+" : ""}
+                        {formatCurrency(metrics.profitAmount).replace(/\s*[đ₫]/g, "").trim()}
+                      </span>
+                      <span
+                        className={`rounded-[3px] border px-1.5 py-0.5 font-mono text-[9px] font-black ${
+                          metrics.profitAmount >= 0
+                            ? "border-emerald-500/20 bg-emerald-500/10 text-emerald-400"
+                            : "border-red-500/20 bg-red-500/10 text-red-400"
+                        }`}
+                      >
+                        {metrics.profitPercent >= 0 ? "+" : ""}
+                        {metrics.profitPercent.toFixed(2)}%
+                      </span>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Button Sell All */}
+                <button
+                  onClick={() => setConfirmBulk(true)}
+                  disabled={bulkLoading}
+                  className="pointer-events-auto flex h-11 cursor-pointer items-center justify-center gap-2 rounded-[4px] border border-blue-500/20 bg-gradient-to-r from-blue-600 to-blue-550 px-6 shadow-[0_4px_20px_rgba(37,99,235,0.2)] transition-all duration-300 hover:from-blue-500 hover:to-blue-450 hover:shadow-[0_4px_25px_rgba(37,99,235,0.35)] active:scale-[0.97] disabled:cursor-not-allowed disabled:opacity-40"
+                >
+                  {bulkLoading ? (
+                    <Loader2 className="size-4 animate-spin text-stone-950" />
+                  ) : (
+                    <>
+                      <ShoppingBag className="size-3.5 text-stone-950 fill-stone-950/20" />
+                      <span className="font-sans text-[11px] font-extrabold tracking-wider text-stone-950 uppercase">
+                        Bán tất cả đã chọn
+                      </span>
+                    </>
+                  )}
+                </button>
+              </div>
+            )}
           </div>
         </DialogContent>
       </Dialog>

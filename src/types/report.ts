@@ -40,6 +40,7 @@ export type PortfolioReportRowDto = {
       storageUnitId: string;
       storageUnitName: string;
       quantity: number;
+      steamId64?: string;
     }>;
     createdAt: string;
     updatedAt: string;

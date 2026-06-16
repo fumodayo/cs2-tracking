@@ -8,9 +8,10 @@ import { PortfolioTableRow } from "../portfolio-table-model";
 interface VirtualItemCardProps {
   item: PortfolioTableRow;
   typeColor: string;
+  accounts?: Array<{ id: string; steamId64: string; name: string }>;
 }
 
-export function VirtualItemCard({ item, typeColor }: VirtualItemCardProps) {
+export function VirtualItemCard({ item, typeColor, accounts }: VirtualItemCardProps) {
   const { formatCurrency } = useCurrency();
 
   return (
@@ -52,20 +53,29 @@ export function VirtualItemCard({ item, typeColor }: VirtualItemCardProps) {
               <div className="mb-1 text-[10px] font-bold tracking-wider text-slate-500 uppercase">
                 Lưu trữ trong Storage Unit
               </div>
-              {item.storageUnitDetails.map((su) => (
-                <div
-                  key={su.storageUnitId}
-                  className="flex items-center justify-between text-slate-300"
-                >
-                  <span className="flex items-center gap-1.5">
-                    <span className="size-1.5 rounded-full bg-amber-500" />
-                    <span>{su.storageUnitName}</span>
-                  </span>
-                  <span className="font-bold text-amber-400">
-                    {su.quantity}
-                  </span>
-                </div>
-              ))}
+              {item.storageUnitDetails.map((su) => {
+                const account = accounts?.find((a) => a.steamId64 === su.steamId64);
+                const accountName = account ? account.name : "";
+                return (
+                  <div
+                    key={su.storageUnitId}
+                    className="flex items-center justify-between text-slate-300"
+                  >
+                    <span className="flex items-center gap-1.5 min-w-0 flex-1">
+                      <span className="size-1.5 rounded-full bg-amber-500 shrink-0" />
+                      <span className="truncate">{su.storageUnitName}</span>
+                      {accountName && (
+                        <span className="inline-flex max-w-[7rem] shrink-0 items-center gap-0.5 truncate rounded bg-sky-500/5 border border-sky-500/10 px-1 py-0.5 text-[8.5px] font-bold text-sky-400 tracking-wide ml-1.5">
+                          {accountName}
+                        </span>
+                      )}
+                    </span>
+                    <span className="font-bold text-amber-400 shrink-0">
+                      {su.quantity}
+                    </span>
+                  </div>
+                );
+              })}
             </div>
           )}
 

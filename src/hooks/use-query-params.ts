@@ -8,7 +8,15 @@ export interface ParamConfig<T> {
   debounceMs?: number;
 }
 
-export type QueryParamsConfig = Record<string, ParamConfig<any>>;
+export type QueryParamsConfig = Record<
+  string,
+  {
+    defaultValue: unknown;
+    parse: (value: string | null) => unknown;
+    serialize: (value: never) => string | null;
+    debounceMs?: number;
+  }
+>;
 
 export type QueryParamsState<T extends QueryParamsConfig> = {
   [K in keyof T]: T[K]["defaultValue"];
@@ -22,25 +30,14 @@ export type QueryParamsSetters<T extends QueryParamsConfig> = {
   ) => void;
 };
 
-/**
- * A highly reusable React hook to synchronize multiple states with Next.js URL query parameters.
- * Complies with SOLID principles by remaining decoupled from specific business logic, open to configuration,
- * and single-focused on URL state synchronization.
- *
- * Includes support for:
- * - Parsing custom types (numbers, arrays, strings)
- * - Serializing states back to URL strings (cleaning up defaults)
- * - Debouncing high-frequency updates (e.g. search query typing) to keep browser history clean
- * - Correctly handling browser back/forward navigation.
- */
 // Helper to check array equality (order-sensitive check for filters)
-const isArrayEqual = (a: any[], b: any[]) => {
+const isArrayEqual = (a: unknown[], b: unknown[]) => {
   if (a.length !== b.length) return false;
   return a.every((v, i) => v === b[i]);
 };
 
 // Helper to compare values deeply enough for our primitive/array settings
-const isValueEqual = (a: any, b: any) => {
+const isValueEqual = (a: unknown, b: unknown) => {
   if (Array.isArray(a) && Array.isArray(b)) {
     return isArrayEqual(a, b);
   }
@@ -76,10 +73,10 @@ export function useQueryParamsState<T extends QueryParamsConfig>(
 
   // Initialize local states from URL query parameters or default value
   const [states, setStates] = useState<QueryParamsState<T>>(() => {
-    const initial: any = {};
+    const initial = {} as QueryParamsState<T>;
     for (const key in config) {
       const urlValue = searchParams.get(key);
-      initial[key] = config[key].parse(urlValue);
+      (initial as Record<string, unknown>)[key] = config[key].parse(urlValue);
     }
     return initial;
   });
@@ -95,7 +92,7 @@ export function useQueryParamsState<T extends QueryParamsConfig>(
         const urlValue = searchParams.get(key);
         const parsed = currentConfig[key].parse(urlValue);
         if (!isValueEqual(next[key], parsed)) {
-          next[key] = parsed;
+          (next as Record<string, unknown>)[key] = parsed;
           changed = true;
         }
       }
@@ -110,7 +107,7 @@ export function useQueryParamsState<T extends QueryParamsConfig>(
   useEffect(() => {
     const timers: NodeJS.Timeout[] = [];
     const currentConfig = configRef.current;
-    const updatedImmediate: any = { ...debouncedStates };
+    const updatedImmediate = { ...debouncedStates } as QueryParamsState<T>;
     let hasImmediateChange = false;
 
     for (const key in currentConfig) {
@@ -129,7 +126,7 @@ export function useQueryParamsState<T extends QueryParamsConfig>(
         timers.push(timer);
       } else {
         if (!isValueEqual(updatedImmediate[key], value)) {
-          updatedImmediate[key] = value;
+          (updatedImmediate as Record<string, unknown>)[key] = value;
           hasImmediateChange = true;
         }
       }
@@ -152,7 +149,8 @@ export function useQueryParamsState<T extends QueryParamsConfig>(
 
     for (const key in currentConfig) {
       const value = debouncedStates[key];
-      const serialized = currentConfig[key].serialize(value);
+      const serializeFn = currentConfig[key].serialize as (val: unknown) => string | null;
+      const serialized = serializeFn(value);
       const current = params.get(key);
 
       if (serialized === null) {
@@ -176,19 +174,20 @@ export function useQueryParamsState<T extends QueryParamsConfig>(
 
   // 4. Generate stable memoized setters for callers to update individual states
   const setters = useMemo(() => {
-    const s: any = {};
+    const s = {} as QueryParamsSetters<T>;
     const keys = configKeysStr.split(",");
 
     for (const key of keys) {
-      s[key] = (value: any) => {
+      (s as Record<string, (value: unknown) => void>)[key] = (value: unknown) => {
         setStates((prev) => {
-          const nextVal = value instanceof Function ? value(prev[key]) : value;
-          if (isValueEqual(prev[key], nextVal)) return prev;
+          const prevVal = (prev as Record<string, unknown>)[key];
+          const nextVal = value instanceof Function ? value(prevVal) : value;
+          if (isValueEqual(prevVal, nextVal)) return prev;
           return { ...prev, [key]: nextVal };
         });
       };
     }
-    return s as QueryParamsSetters<T>;
+    return s;
   }, [configKeysStr]);
 
   return [states, setters];

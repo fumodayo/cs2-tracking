@@ -1,5 +1,6 @@
 "use client";
 
+import { useState, useEffect } from "react";
 import {
   Download,
   LogIn,
@@ -10,6 +11,7 @@ import {
 import { useDashboard } from "./use-dashboard";
 import {
   ImportExcelConfirmDialog,
+  ImportExcelMappingDialog,
   EmptyState,
   exportPortfolioToExcel,
   PortfolioTable,
@@ -47,7 +49,16 @@ export function Dashboard() {
       fileName: excelFileName,
       inputRef: importInputRef,
       handleFile: handleImportFile,
+      handleSource: handleExcelSource,
       handleConfirm: handleConfirmExcelImport,
+    },
+    mapping: {
+      data: mappingDialogData,
+      close: closeMappingDialog,
+      confirm: confirmMapping,
+      templates: savedTemplates,
+      deleteTemplate: handleDeleteTemplate,
+      suggestedMapping,
     },
     recentImports: { list: recentImports, remove: removeRecentImport },
     table: {
@@ -67,6 +78,53 @@ export function Dashboard() {
     },
     t,
   } = useDashboard();
+
+  const [isDragOver, setIsDragOver] = useState(false);
+
+  const handleDragOver = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (e.dataTransfer.types.includes("Files")) {
+      setIsDragOver(true);
+    }
+  };
+
+  const handleDragLeave = (e: React.DragEvent) => {
+    e.preventDefault();
+    if (e.currentTarget.contains(e.relatedTarget as Node)) return;
+    setIsDragOver(false);
+  };
+
+  const handleDrop = async (e: React.DragEvent) => {
+    e.preventDefault();
+    setIsDragOver(false);
+    const file = e.dataTransfer.files[0];
+    if (file && /\.(xlsx|xls|csv)$/i.test(file.name)) {
+      await handleExcelSource(file, file.name);
+    }
+  };
+
+  useEffect(() => {
+    const handlePaste = async (e: ClipboardEvent) => {
+      const target = e.target as HTMLElement;
+      if (
+        target.tagName === "INPUT" ||
+        target.tagName === "TEXTAREA" ||
+        target.isContentEditable
+      ) {
+        return;
+      }
+
+      const text = e.clipboardData?.getData("text/plain");
+      if (text && text.includes("\t") && text.includes("\n")) {
+        e.preventDefault();
+        await handleExcelSource(text, "Clipboard");
+      }
+    };
+
+    window.addEventListener("paste", handlePaste);
+    return () => window.removeEventListener("paste", handlePaste);
+  }, [handleExcelSource]);
 
   return (
     <div>
@@ -91,7 +149,23 @@ export function Dashboard() {
         </div>
       </section>
 
-      <section className="mx-auto max-w-7xl px-4 py-6 sm:px-6 lg:px-8">
+      <section
+        onDragOver={handleDragOver}
+        onDragLeave={handleDragLeave}
+        onDrop={handleDrop}
+        className="relative mx-auto max-w-7xl px-4 py-6 sm:px-6 lg:px-8"
+      >
+        {isDragOver && (
+          <div className="pointer-events-none absolute inset-0 z-50 flex flex-col items-center justify-center rounded-lg border-2 border-dashed border-blue-500/80 bg-[#0c0f17]/90 backdrop-blur-sm">
+            <Upload className="mx-auto size-12 text-blue-400 animate-bounce" />
+            <p className="mt-4 text-lg font-bold text-stone-100">
+              {t("excelMapping.dropFileHere", "Thả file Excel vào đây")}
+            </p>
+            <p className="mt-1 text-sm text-stone-400">
+              {t("excelMapping.pasteHint", "Hoặc copy ô từ Excel rồi nhấn Ctrl+V")}
+            </p>
+          </div>
+        )}
         {!user ? (
           <div className="mb-5 flex flex-col gap-3 rounded-lg border border-accent/28 bg-accent/12 px-4 py-4 sm:flex-row sm:items-center sm:justify-between">
             <div>
@@ -277,6 +351,21 @@ export function Dashboard() {
           }
           onClose={() => setExcelImportRows(null)}
           onConfirm={handleConfirmExcelImport}
+        />
+      )}
+
+      {mappingDialogData && (
+        <ImportExcelMappingDialog
+          open={mappingDialogData !== null}
+          fileName={mappingDialogData.fileName}
+          excelHeaders={mappingDialogData.headers}
+          matrix={mappingDialogData.matrix}
+          headerRowIndex={mappingDialogData.headerRowIndex}
+          suggestedMapping={suggestedMapping}
+          savedTemplates={savedTemplates}
+          onClose={closeMappingDialog}
+          onConfirm={confirmMapping}
+          onDeleteTemplate={handleDeleteTemplate}
         />
       )}
     </div>

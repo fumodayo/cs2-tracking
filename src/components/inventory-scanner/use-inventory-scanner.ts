@@ -5,6 +5,7 @@ import {
   useRef,
   useState,
 } from "react";
+import { useLocalStorage } from "@/hooks/use-local-storage";
 import { useSession } from "@/components/auth/use-session";
 import { toast } from "@/stores";
 import {
@@ -20,7 +21,6 @@ import {
   SCAN_REQUEST_TIMEOUT_MS,
   createAccount,
   extractSteamKey,
-  readRate,
   LS_RATE_ALL,
   LS_RATE_LE,
   LS_BUFF_CNY_TO_VND_RATE,
@@ -39,11 +39,12 @@ import { useScannerPortfolioImport } from "./hooks/use-scanner-portfolio-import"
 export function useInventoryScanner() {
   const [state, dispatch] = useReducer(scannerReducer, null, initScannerState);
 
-  // Separate non-reducer rates state to avoid massive reducer configuration
-  const [rateAll, setRateAll] = useState(() => readRate(LS_RATE_ALL, 60));
-  const [rateLe, setRateLe] = useState(() => readRate(LS_RATE_LE, 65));
-  const [buffCnyToVndRate, setBuffCnyToVndRate] = useState(() =>
-    readRate(LS_BUFF_CNY_TO_VND_RATE, DEFAULT_BUFF_CNY_TO_VND_RATE),
+  // Separate non-reducer rates state using useLocalStorage
+  const [rateAll, setRateAll] = useLocalStorage<number>(LS_RATE_ALL, 60);
+  const [rateLe, setRateLe] = useLocalStorage<number>(LS_RATE_LE, 65);
+  const [buffCnyToVndRate, setBuffCnyToVndRate] = useLocalStorage<number>(
+    LS_BUFF_CNY_TO_VND_RATE,
+    DEFAULT_BUFF_CNY_TO_VND_RATE,
   );
 
   const [isLoaded, setIsLoaded] = useState(false);
@@ -107,17 +108,7 @@ export function useInventoryScanner() {
     );
   }, [state.buffPricesCny, isLoaded]);
 
-  useEffect(() => {
-    localStorage.setItem(LS_RATE_ALL, String(rateAll));
-  }, [rateAll]);
 
-  useEffect(() => {
-    localStorage.setItem(LS_RATE_LE, String(rateLe));
-  }, [rateLe]);
-
-  useEffect(() => {
-    localStorage.setItem(LS_BUFF_CNY_TO_VND_RATE, String(buffCnyToVndRate));
-  }, [buffCnyToVndRate]);
 
   // Reducer Dispatch Wrappers
   const updateAccountUrl = useCallback((id: string, url: string) => {
@@ -283,9 +274,13 @@ export function useInventoryScanner() {
         );
 
         const resText = await res.text();
-        let data: any;
+        interface ScanStartResponse {
+          message?: string;
+          jobId?: string | number;
+        }
+        let data: ScanStartResponse;
         try {
-          data = JSON.parse(resText);
+          data = JSON.parse(resText) as ScanStartResponse;
         } catch {
           throw new Error(`Yêu cầu quét thất bại (HTTP ${res.status})`);
         }
@@ -475,9 +470,13 @@ export function useInventoryScanner() {
           }),
         });
         const resText = await response.text();
-        let data: any;
+        interface BuffPriceResponse {
+          message?: string;
+          priceCny?: number | string;
+        }
+        let data: BuffPriceResponse;
         try {
-          data = JSON.parse(resText);
+          data = JSON.parse(resText) as BuffPriceResponse;
         } catch {
           throw new Error(
             `Yêu cầu lấy giá BUFF163 thất bại (HTTP ${response.status}).`,

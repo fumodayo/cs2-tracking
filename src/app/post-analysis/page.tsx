@@ -1,4 +1,5 @@
 import { PostAnalyzer } from "@/components/post-analyzer";
+import { ErrorBoundary } from "@/components/ui/error-boundary";
 
 export default function PostAnalysisPage() {
   return (
@@ -17,7 +18,9 @@ export default function PostAnalysisPage() {
         </p>
       </div>
 
-      <PostAnalyzer />
+      <ErrorBoundary>
+        <PostAnalyzer />
+      </ErrorBoundary>
     </main>
   );
 }

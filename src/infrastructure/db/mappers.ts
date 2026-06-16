@@ -64,7 +64,7 @@ export function mapPortfolioDocument(doc: WithId<Document>): PortfolioItem {
                   tradeProtected: Number(account.breakdown.tradeProtected ?? 0),
                   hold: Number(account.breakdown.hold ?? 0),
                   holdDetails: Array.isArray(account.breakdown.holdDetails)
-                    ? account.breakdown.holdDetails.map((hd: any) => ({
+                    ? account.breakdown.holdDetails.map((hd: { quantity?: unknown; holdDays?: unknown }) => ({
                         quantity: Number(hd?.quantity ?? 0),
                         holdDays: Number(hd?.holdDays ?? 0),
                       }))

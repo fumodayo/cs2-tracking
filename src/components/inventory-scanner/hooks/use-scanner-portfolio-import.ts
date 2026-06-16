@@ -2,11 +2,17 @@
 
 import { useCallback } from "react";
 import type { AccountEntry, ScanResultItem } from "../types";
+import type { ScannerAction } from "../scanner-reducer";
 
 interface UseScannerPortfolioImportProps {
-  dispatch: React.Dispatch<any>;
+  dispatch: React.Dispatch<ScannerAction>;
   accounts: AccountEntry[];
-  mergedRaw: any;
+  mergedRaw: {
+    items: ScanResultItem[];
+    scannedItems: ScanResultItem[];
+    totalInventoryCount: number;
+    accountCount: number;
+  } | null;
   applyBuffPricing: (item: ScanResultItem) => ScanResultItem;
 }
 

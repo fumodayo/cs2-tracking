@@ -1,3 +1,4 @@
+import { useMemo, useState } from "react";
 import { Loader2, Trash2, Minus, Plus } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { CaseThumbnail } from "./case-thumbnail";
@@ -50,6 +51,29 @@ export function SellSelectedDialogItemRow({
   excludeItem,
   formatCurrency,
 }: SellSelectedDialogItemRowProps) {
+  const [now] = useState(() => Date.now());
+
+  const totalTradableQty = useMemo(() => {
+    let total = 0;
+    if (item.sourceAccounts && item.sourceAccounts.length > 0) {
+      let hasAnyBreakdown = false;
+      for (const acc of item.sourceAccounts) {
+        if (acc.breakdown) {
+          hasAnyBreakdown = true;
+          total += acc.breakdown.tradeable ?? 0;
+        }
+      }
+      if (!hasAnyBreakdown) {
+        const hasHold = item.tradeHoldUntil ? new Date(item.tradeHoldUntil).getTime() > now : false;
+        total = hasHold ? 0 : item.quantity;
+      }
+    } else {
+      const hasHold = item.tradeHoldUntil ? new Date(item.tradeHoldUntil).getTime() > now : false;
+      total = hasHold ? 0 : item.quantity;
+    }
+    return total;
+  }, [item, now]);
+
   const unitBuy = item.buyPrice;
   let unitCurrent = item.currentPrice ?? item.buyPrice;
 
@@ -113,25 +137,25 @@ export function SellSelectedDialogItemRow({
 
   return (
     <div
-      className={`relative flex gap-4 overflow-hidden rounded-[5px] border bg-gradient-to-r from-stone-950/45 via-stone-950/20 to-stone-950/45 py-3.5 pr-4 pl-4 transition-all duration-300 ${
+      className={`relative flex gap-4 overflow-hidden rounded-[5px] border bg-[#06080c]/60 py-3.5 pr-4 pl-4 transition-all duration-300 ${
         isLoading
           ? "pointer-events-none border-red-500/20 bg-red-950/5 opacity-50"
-          : isFullSell
-            ? "border-stone-800 shadow-[0_4px_20px_-4px_rgba(0,0,0,0.3)] hover:border-red-500/35 hover:bg-stone-900/10 hover:shadow-[0_0_20px_rgba(239,68,68,0.02)]"
-            : "border-stone-800 shadow-[0_4px_20px_-4px_rgba(0,0,0,0.3)] hover:border-blue-500/35 hover:bg-stone-900/10 hover:shadow-[0_0_20px_rgba(37,99,235,0.02)]"
+          : (hasBuff ? false : isFullSell)
+            ? "border-red-500/20 shadow-[0_4px_20px_-4px_rgba(0,0,0,0.3)] hover:border-red-500/35 hover:bg-stone-900/10 hover:shadow-[0_0_20px_rgba(239,68,68,0.02)]"
+            : "border-blue-500/20 shadow-[0_4px_20px_-4px_rgba(0,0,0,0.3)] hover:border-blue-500/35 hover:bg-stone-900/10 hover:shadow-[0_0_20px_rgba(37,99,235,0.02)]"
       }`}
     >
       {/* Custom decorative technical indicator line */}
       <div
         className={`absolute top-0 bottom-0 left-0 w-[3px] transition-all ${
-          isFullSell
+          (hasBuff ? false : isFullSell)
             ? "bg-gradient-to-b from-red-500/80 to-red-600/20"
             : "bg-gradient-to-b from-blue-500/80 to-blue-600/20"
         }`}
       />
 
       {/* Left Column: Big Thumbnail */}
-      <div className="group relative mt-0.5 flex h-[60px] w-[60px] shrink-0 items-center justify-center self-start rounded-[3px] border border-stone-800 bg-stone-950 p-1.5 shadow-md transition-transform duration-200 hover:scale-105">
+      <div className="group relative mt-0.5 flex h-[72px] w-[72px] shrink-0 items-center justify-center self-start rounded-[3px] border border-stone-800 bg-stone-950 p-1.5 shadow-md transition-transform duration-200 hover:scale-105">
         {hasBuff && (
           <div className="pointer-events-none absolute top-0 left-0 z-10 h-8 w-8 overflow-hidden rounded-tl-[3px] select-none">
             <div className="absolute top-[-3px] left-[-20px] flex h-[15px] w-[50px] rotate-[-45deg] items-center justify-center bg-gradient-to-r from-blue-500 to-blue-600 shadow-sm">
@@ -162,7 +186,7 @@ export function SellSelectedDialogItemRow({
             </p>
 
             <Button
-              variant={isFullSell ? "danger" : "outline"}
+              variant={(hasBuff ? false : isFullSell) ? "danger" : "outline"}
               size="sm"
               disabled={isLoading}
               onClick={() => {
@@ -174,9 +198,9 @@ export function SellSelectedDialogItemRow({
                 });
               }}
               className={`h-7 shrink-0 rounded-[4px] px-2.5 font-mono text-[10px] font-black tracking-wider uppercase transition-all duration-200 ${
-                isFullSell
-                  ? "border-red-500/25 bg-red-950/20 text-red-400 hover:border-red-500 hover:bg-red-500 hover:text-stone-950"
-                  : "border-blue-500/25 bg-blue-950/10 text-blue-400 hover:border-blue-500 hover:bg-blue-500 hover:text-stone-950"
+                (hasBuff ? false : isFullSell)
+                  ? "border-red-500/40 bg-transparent text-red-400 hover:bg-red-500/10 hover:text-red-300"
+                  : "border-blue-500/40 bg-transparent text-blue-400 hover:bg-blue-500/10 hover:text-blue-300"
               }`}
             >
               {isLoading ? (
@@ -190,8 +214,8 @@ export function SellSelectedDialogItemRow({
             <div
               className={`flex h-6 shrink-0 items-center justify-center rounded-[3px] border px-2.5 font-mono text-[10px] font-black shadow-sm transition-all duration-300 select-none ${
                 rowProfitPositive
-                  ? "border-emerald-500/20 bg-emerald-500/10 text-emerald-400 shadow-[0_0_8px_rgba(16,185,129,0.06)]"
-                  : "border-red-500/20 bg-red-500/10 text-red-400 shadow-[0_0_8px_rgba(239,68,68,0.06)]"
+                  ? "border-emerald-500/30 bg-emerald-500/10 text-emerald-400 shadow-[0_0_8px_rgba(16,185,129,0.06)]"
+                  : "border-red-500/30 bg-red-500/10 text-red-400 shadow-[0_0_8px_rgba(239,68,68,0.06)]"
               }`}
             >
               {rowProfitPositive ? "+" : ""}
@@ -201,26 +225,25 @@ export function SellSelectedDialogItemRow({
 
           {/* Right: Actions */}
           <div className="flex shrink-0 items-center gap-2">
-            <Button
+            <button
               type="button"
               onClick={() => excludeItem(item.id)}
               title="Bỏ chọn vật phẩm"
               className="flex h-8 w-8 cursor-pointer items-center justify-center rounded-[4px] border border-stone-800 bg-stone-950 text-stone-500 transition-all hover:border-red-500/30 hover:bg-red-950/15 hover:text-red-400"
             >
               <Trash2 className="size-3.5" />
-            </Button>
+            </button>
           </div>
         </div>
 
-        {/* Row 2: Item Calculations (Quantity, Equation flow, Profit/Loss) */}
-        <div className="flex flex-wrap items-center justify-start gap-4 pt-0.5 xl:gap-6">
-          {/* Column 2: Quantity selector */}
-          <div className="flex w-24 shrink-0 flex-col gap-1">
-            <label className="font-mono text-[9px] font-bold tracking-widest text-stone-500 uppercase">
-              S.Lượng bán
-            </label>
-            <div className="flex h-8 items-center overflow-hidden rounded-[4px] border border-stone-800 bg-stone-950 transition-all duration-200 focus-within:border-stone-700">
-              <Button
+        {/* Row 2: Quantity selector */}
+        <div className="flex flex-col gap-1.5">
+          <label className="font-mono text-[9px] font-bold tracking-widest text-stone-500 uppercase">
+            S.Lượng bán
+          </label>
+          <div className="flex flex-wrap items-center gap-2">
+            <div className="flex h-8 w-24 items-center overflow-hidden rounded-[4px] border border-stone-800 bg-stone-950 transition-all duration-200 focus-within:border-stone-700">
+              <button
                 type="button"
                 onClick={() =>
                   handleQuantityChange(item.id, sellQty - 1, maxQty)
@@ -229,7 +252,7 @@ export function SellSelectedDialogItemRow({
                 className="flex h-full w-8 items-center justify-center text-stone-500 transition-colors hover:bg-stone-900/60 hover:text-stone-300 disabled:cursor-not-allowed disabled:opacity-30"
               >
                 <Minus className="size-3" />
-              </Button>
+              </button>
               <input
                 type="number"
                 value={sellQty}
@@ -243,7 +266,7 @@ export function SellSelectedDialogItemRow({
                 disabled={isLoading}
                 className="w-full flex-1 [appearance:textfield] bg-transparent text-center font-mono text-xs font-bold text-stone-100 outline-none [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
               />
-              <Button
+              <button
                 type="button"
                 onClick={() =>
                   handleQuantityChange(item.id, sellQty + 1, maxQty)
@@ -252,23 +275,85 @@ export function SellSelectedDialogItemRow({
                 className="flex h-full w-8 items-center justify-center text-stone-500 transition-colors hover:bg-stone-900/60 hover:text-stone-300 disabled:cursor-not-allowed disabled:opacity-30"
               >
                 <Plus className="size-3" />
-              </Button>
+              </button>
+            </div>
+
+            {/* ALL button sets to totalTradableQty */}
+            <button
+              type="button"
+              onClick={() => {
+                const targetQty = Math.max(1, Math.min(totalTradableQty, maxQty));
+                handleQuantityChange(item.id, targetQty, maxQty);
+              }}
+              disabled={isLoading || totalTradableQty === 0}
+              className="flex h-8 items-center justify-center rounded-[4px] border border-blue-500/25 bg-blue-500/5 px-3 font-mono text-[10px] font-black tracking-wider text-blue-400 transition-all duration-200 hover:bg-blue-500/10 hover:text-blue-300 active:scale-[0.97] disabled:cursor-not-allowed disabled:border-stone-800 disabled:bg-stone-900/40 disabled:text-stone-600"
+              title={`Đặt số lượng bán bằng toàn bộ vật phẩm có thể trade ngay (${totalTradableQty})`}
+            >
+              ALL ({totalTradableQty})
+            </button>
+          </div>
+        </div>
+
+        {/* Account Ownership breakdown */}
+        {item.sourceAccounts && item.sourceAccounts.length > 0 && (
+          <div className="flex flex-col gap-1 border-t border-stone-900/40 pt-2.5">
+            <span className="font-mono text-[9px] font-bold tracking-widest text-stone-500 uppercase">
+              Tài khoản sở hữu
+            </span>
+            <div className="flex flex-wrap gap-2">
+              {item.sourceAccounts.map((acc) => {
+                const hasBreakdown = !!acc.breakdown;
+                const tradable = hasBreakdown
+                  ? (acc.breakdown?.tradeable ?? 0)
+                  : (item.tradeHoldUntil ? 0 : item.quantity);
+                const onMarket = acc.breakdown?.onMarket ?? 0;
+                const hold = hasBreakdown
+                  ? (acc.breakdown?.hold ?? 0)
+                  : (item.tradeHoldUntil ? item.quantity : 0);
+
+                return (
+                  <div
+                    key={acc.steamId64}
+                    className="flex items-center gap-1.5 rounded-[4px] border border-stone-800/60 bg-stone-950/40 px-2.5 py-1 text-[10px] shadow-sm select-none"
+                  >
+                    <span className="font-sans font-bold text-stone-200">{acc.name}</span>
+                    <span className="text-stone-800">|</span>
+                    <span className="font-mono text-stone-400">
+                      Sẵn sàng: <strong className="text-emerald-400 font-extrabold">{tradable}</strong>
+                    </span>
+                    {onMarket > 0 && (
+                      <>
+                        <span className="text-stone-800">•</span>
+                        <span className="font-mono text-stone-400">
+                          Trên chợ: <strong className="text-blue-400 font-extrabold">{onMarket}</strong>
+                        </span>
+                      </>
+                    )}
+                    {hold > 0 && (
+                      <>
+                        <span className="text-stone-800">•</span>
+                        <span className="font-mono text-stone-400">
+                          Hold: <strong className="text-red-400 font-extrabold">{hold}</strong>
+                        </span>
+                      </>
+                    )}
+                  </div>
+                );
+              })}
             </div>
           </div>
+        )}
 
-          {/* Column 3: The Equation Flow */}
+        {/* Row 3: The Equation Flow */}
+        <div className="flex flex-wrap items-end justify-start gap-1.5 pt-1">
           {hasBuff ? (
-            <div
-              className={`flex shrink-0 flex-wrap items-center gap-1.5 transition-all duration-300 sm:flex-nowrap ${
-                sellQty > 1 ? "xl:w-[35rem]" : "xl:w-[25rem]"
-              }`}
-            >
+            <>
               {/* Input CNY Price */}
               <div className="flex w-[7.5rem] flex-col gap-1">
                 <label className="font-mono text-[9px] font-bold tracking-widest text-stone-500 uppercase">
                   Giá BUFF CNY
                 </label>
-                <div className="flex h-8 items-center rounded-[4px] border border-stone-800 bg-stone-950 px-2.5 transition-all focus-within:border-blue-500/40">
+                <div className="flex h-8 items-center rounded-[4px] border border-blue-500/30 bg-stone-950 px-2.5 transition-all focus-within:border-blue-500/50">
                   <input
                     type="number"
                     step="0.01"
@@ -291,7 +376,7 @@ export function SellSelectedDialogItemRow({
                 </div>
               </div>
 
-              <span className="mb-2 flex h-8 items-center justify-center self-end px-0.5 font-mono text-xs font-black text-stone-500 select-none">
+              <span className="flex h-8 items-center justify-center px-0.5 font-mono text-xs font-black text-stone-500 select-none">
                 ×
               </span>
 
@@ -300,7 +385,7 @@ export function SellSelectedDialogItemRow({
                 <label className="font-mono text-[9px] font-bold tracking-widest text-stone-500 uppercase">
                   Tỷ giá CNY
                 </label>
-                <div className="flex h-8 items-center rounded-[4px] border border-stone-800 bg-stone-950 px-2.5 transition-all focus-within:border-blue-500/40">
+                <div className="flex h-8 items-center rounded-[4px] border border-blue-500/30 bg-stone-950 px-2.5 transition-all focus-within:border-blue-500/50">
                   <input
                     type="number"
                     value={
@@ -320,7 +405,7 @@ export function SellSelectedDialogItemRow({
                 </div>
               </div>
 
-              <span className="mb-2 flex h-8 items-center justify-center self-end px-0.5 font-mono text-xs font-black text-stone-500 select-none">
+              <span className="flex h-8 items-center justify-center px-0.5 font-mono text-xs font-black text-stone-500 select-none">
                 =
               </span>
 
@@ -338,7 +423,7 @@ export function SellSelectedDialogItemRow({
 
               {sellQty > 1 && (
                 <>
-                  <span className="mb-2 flex h-8 items-center justify-center self-end px-0.5 font-mono text-xs font-black text-stone-500 select-none">
+                  <span className="flex h-8 items-center justify-center px-0.5 font-mono text-xs font-black text-stone-500 select-none">
                     →
                   </span>
 
@@ -355,26 +440,28 @@ export function SellSelectedDialogItemRow({
                   </div>
                 </>
               )}
-            </div>
+            </>
           ) : (
-            <div
-              className={`flex shrink-0 flex-wrap items-center gap-1.5 transition-all duration-300 sm:flex-nowrap ${
-                sellQty > 1 ? "xl:w-[35rem]" : "xl:w-[25rem]"
-              }`}
-            >
+            <>
               {/* Price 1 Unit */}
               <div className="flex w-[7.5rem] flex-col gap-1">
                 <label className="font-mono text-[9px] font-bold tracking-widest text-stone-500 uppercase">
                   Giá hiện tại
                 </label>
-                <div className="flex h-8 items-center justify-end rounded-[4px] border border-stone-800 bg-stone-950 px-2.5 text-stone-400 select-none">
+                <div
+                  className={`flex h-8 items-center justify-end rounded-[4px] border px-2.5 text-stone-400 select-none ${
+                    isFullSell
+                      ? "border-red-500/20 bg-stone-950"
+                      : "border-blue-500/20 bg-stone-950"
+                  }`}
+                >
                   <span className="font-mono text-xs font-bold">
                     {formatCurrency(unitCurrent)}
                   </span>
                 </div>
               </div>
 
-              <span className="mb-2 flex h-8 items-center justify-center self-end px-0.5 font-mono text-xs font-black text-stone-500 select-none">
+              <span className="flex h-8 items-center justify-center px-0.5 font-mono text-xs font-black text-stone-500 select-none">
                 ×
               </span>
 
@@ -411,7 +498,7 @@ export function SellSelectedDialogItemRow({
                 </div>
               </div>
 
-              <span className="mb-2 flex h-8 items-center justify-center self-end px-0.5 font-mono text-xs font-black text-stone-500 select-none">
+              <span className="flex h-8 items-center justify-center px-0.5 font-mono text-xs font-black text-stone-500 select-none">
                 =
               </span>
 
@@ -435,7 +522,7 @@ export function SellSelectedDialogItemRow({
 
               {sellQty > 1 && (
                 <>
-                  <span className="mb-2 flex h-8 items-center justify-center self-end px-0.5 font-mono text-xs font-black text-stone-500 select-none">
+                  <span className="flex h-8 items-center justify-center px-0.5 font-mono text-xs font-black text-stone-500 select-none">
                     →
                   </span>
 
@@ -458,7 +545,7 @@ export function SellSelectedDialogItemRow({
                   </div>
                 </>
               )}
-            </div>
+            </>
           )}
         </div>
       </div>

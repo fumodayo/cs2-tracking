@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { MongoPostAnalysisHistoryRepository } from "@/infrastructure/repositories/mongo-post-analysis-history-repository";
 import { getErrorMessage } from "@/utils/error";
+import { checkAuth } from "@/services/auth-service";
 
 export const dynamic = "force-dynamic";
 
@@ -12,6 +13,11 @@ type RouteContext = {
 
 export async function DELETE(_request: NextRequest, context: RouteContext) {
   try {
+    const { authorized } = await checkAuth();
+    if (!authorized) {
+      return NextResponse.json({ message: "Unauthorized" }, { status: 401 });
+    }
+
     const { id } = await context.params;
     const repository = new MongoPostAnalysisHistoryRepository();
     const deleted = await repository.delete(id);

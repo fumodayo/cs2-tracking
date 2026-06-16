@@ -40,12 +40,19 @@ export class HttpError extends Error {
   status: number;
   statusText: string;
   response: Response;
-  data: any;
+  data: unknown;
 
-  constructor(response: Response, data: any) {
+  constructor(response: Response, data: unknown) {
+    const dataObj = data && typeof data === "object" ? (data as Record<string, unknown>) : null;
+    const msg = typeof dataObj?.message === "string"
+      ? dataObj.message
+      : typeof dataObj?.error === "string"
+        ? dataObj.error
+        : typeof data === "string"
+          ? data
+          : "";
     super(
-      data?.message ||
-        data?.error ||
+      msg ||
         response.statusText ||
         `HTTP Error ${response.status}`,
     );
@@ -104,7 +111,7 @@ async function request<T>(
   });
 
   // 4. Parse response body
-  let data: any = null;
+  let data: unknown = null;
   const contentType = response.headers.get("content-type");
   if (contentType && contentType.includes("application/json")) {
     try {
@@ -133,17 +140,17 @@ export const apiClient = {
     return request<T>(url, { ...options, method: "GET" });
   },
 
-  post<T>(url: string, body?: any, options?: Omit<RequestOptions, "body">) {
+  post<T>(url: string, body?: unknown, options?: Omit<RequestOptions, "body">) {
     const requestBody = body instanceof FormData ? body : JSON.stringify(body);
     return request<T>(url, { ...options, method: "POST", body: requestBody });
   },
 
-  put<T>(url: string, body?: any, options?: Omit<RequestOptions, "body">) {
+  put<T>(url: string, body?: unknown, options?: Omit<RequestOptions, "body">) {
     const requestBody = body instanceof FormData ? body : JSON.stringify(body);
     return request<T>(url, { ...options, method: "PUT", body: requestBody });
   },
 
-  patch<T>(url: string, body?: any, options?: Omit<RequestOptions, "body">) {
+  patch<T>(url: string, body?: unknown, options?: Omit<RequestOptions, "body">) {
     const requestBody = body instanceof FormData ? body : JSON.stringify(body);
     return request<T>(url, { ...options, method: "PATCH", body: requestBody });
   },

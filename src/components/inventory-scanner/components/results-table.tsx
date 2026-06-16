@@ -1,7 +1,7 @@
 "use client";
 
 import { flexRender, type Table } from "@tanstack/react-table";
-import { Search, ShoppingBag } from "lucide-react";
+import { Search } from "lucide-react";
 import { FilterPopover, ResetButton, ViewButton } from "@/components/ui/actions";
 import { ManualItemRow } from "./manual-item-row";
 import { TablePagination } from "@/components/shared/table-pagination";
@@ -19,7 +19,7 @@ interface ResultsTableProps {
   selectedAccounts: string[];
   setSelectedAccounts: (val: string[]) => void;
   accountOptions: Array<{ steamId64: string; name: string }>;
-  visibleManualItems: any[];
+  visibleManualItems: ScanResultItem[];
   updateManualItemQty: (id: string, qty: number) => void;
   removeItem: (id: string) => void;
   fetchBuffPrice: (marketHashName: string) => void;
@@ -30,7 +30,7 @@ interface ResultsTableProps {
   buffCnyToVndRate: number;
   rateAll: number;
   rateLe: number;
-  manualItems: any[];
+  manualItems: ScanResultItem[];
 }
 
 export function ResultsTable({

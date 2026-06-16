@@ -240,7 +240,7 @@ export async function POST(request: NextRequest) {
     if (accountId) {
       try {
         const db = await getDatabase();
-        const filter: Record<string, any> = { _id: new ObjectId(accountId) };
+        const filter: Record<string, unknown> = { _id: new ObjectId(accountId) };
         if (ownerId) {
           Object.assign(filter, getOwnerFilter(ownerId));
         }

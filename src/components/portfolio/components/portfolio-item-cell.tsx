@@ -1,8 +1,9 @@
-import React, { useState, useMemo } from "react";
+import React, { useState } from "react";
 import * as HoverCard from "@radix-ui/react-hover-card";
 import { motion } from "framer-motion";
 import { FaSteam } from "react-icons/fa";
 import { Tag } from "lucide-react";
+import { useTranslation } from "react-i18next";
 
 import { CopyButton } from "@/components/ui/actions";
 import { SlidePanel, SlidePanelContent } from "@/components/ui/slide-panel";
@@ -23,6 +24,7 @@ import {
 } from "../portfolio-table-utils";
 
 import { ItemHoverCard } from "./item-hover-card";
+import { TradeHoldBadge } from "./trade-hold-badge";
 
 export function ItemCell({
   item,
@@ -67,22 +69,13 @@ export function ItemCell({
   onDelete: (id: string) => void;
   deletingId: string | null;
 }) {
+  const { t } = useTranslation();
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const steamMarketUrl = getSteamMarketListingUrl(item.case.marketHashName);
   const typeColor =
     item.itemType === "capsule" || item.itemType === "case"
       ? "#b0c3d9"
       : (item.case.rarity?.color ?? getItemTypeColor(item.itemType));
-
-  const holdDays = useMemo(() => {
-    if (item.sourceType === "manual") return 0;
-    if (!item.tradeHoldUntil) return 0;
-    const parsedHoldUntil = new Date(item.tradeHoldUntil);
-    if (isNaN(parsedHoldUntil.getTime())) return 0;
-    const diffMs = parsedHoldUntil.getTime() - new Date().getTime();
-    const diffDays = Math.ceil(diffMs / (1000 * 60 * 60 * 24));
-    return Math.max(0, diffDays);
-  }, [item.tradeHoldUntil, item.sourceType]);
 
   const [hoverCardOpen, setHoverCardOpen] = useState(false);
   const [isSelectOpen, setIsSelectOpen] = useState(false);
@@ -149,14 +142,10 @@ export function ItemCell({
                 </span>
                 {item.storageUnitQuantity && item.storageUnitQuantity > 0 ? (
                   <span className="inline-flex items-center rounded border border-amber-500/20 bg-amber-500/10 px-1.5 py-0.5 text-[10px] font-bold text-amber-400">
-                    🔒 {item.storageUnitQuantity} trong Storage Unit
+                    🔒 {item.storageUnitQuantity} {t("portfolio.inStorageUnit", "trong Storage Unit")}
                   </span>
                 ) : null}
-                {holdDays > 0 ? (
-                  <span className="inline-flex items-center rounded border border-red-500/20 bg-red-500/10 px-1.5 py-0.5 text-[10px] font-bold tracking-wider text-red-400 uppercase">
-                    Hold {holdDays} ngày
-                  </span>
-                ) : null}
+                <TradeHoldBadge tradeHoldUntil={item.tradeHoldUntil} />
                 {(() => {
                   const breakdown = getItemStatusBreakdown(item);
                   return (
@@ -188,24 +177,32 @@ export function ItemCell({
                 })()}
                 {item.sourceType === "manual" ? (
                   <span className="inline-flex rounded border border-accent/30 bg-accent/10 px-1.5 py-0.5 text-[10px] font-semibold tracking-wider text-accent uppercase">
-                    Thủ công
+                    {t("common.manual", "Thủ công")}
                   </span>
                 ) : null}
                 {relatedRows.length > 1 ? (
                   <span className="inline-flex rounded border border-sky-500/25 bg-sky-500/10 px-1.5 py-0.5 text-[10px] font-semibold tracking-wider text-sky-300 uppercase">
-                    {relatedRows.length} lot
+                    {t("common.lot_other", `${relatedRows.length} lot`, { count: relatedRows.length })}
                   </span>
                 ) : null}
                 {item.note &&
                   !item.note.toLowerCase().includes("inventory scanner") &&
+                  !item.note.toLowerCase().includes("import từ inventory scanner") &&
                   !item.note.toLowerCase().includes("đồng bộ từ") &&
-                  !item.note.toLowerCase().includes("trade history") ? (
+                  !item.note.toLowerCase().includes("trade history") &&
+                  item.note !== "Thủ công" ? (
                   <span
                     className="inline-flex max-w-[12rem] items-center gap-1 truncate rounded border border-emerald-500/25 bg-emerald-500/10 px-1.5 py-0.5 text-[10px] font-semibold tracking-wider text-emerald-300 uppercase shadow-[0_0_8px_rgba(16,185,129,0.08)]"
-                    title={item.note}
+                    title={item.note === "Thủ công" ? t("common.manual") : item.note}
                   >
                     <Tag className="size-2.5 shrink-0 text-emerald-400" />
-                    <span className="truncate">{item.note}</span>
+                    <span className="truncate">
+                      {item.note === "Thủ công"
+                        ? t("common.manual")
+                        : item.note === "Import từ inventory scanner"
+                        ? t("portfolio.noteInventoryScan")
+                        : item.note}
+                    </span>
                   </span>
                 ) : null}
               </div>
@@ -231,7 +228,7 @@ export function ItemCell({
               ) : null}
               {mode === "case-summary" ? (
                 <div className="mt-1 text-xs text-muted-foreground">
-                  {item.lotCount} lần mua
+                  {t("common.purchasesWithCount", `${item.lotCount} lần mua`, { count: item.lotCount })}
                 </div>
               ) : null}
             </div>

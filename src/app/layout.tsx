@@ -50,7 +50,7 @@ export const metadata: Metadata = {
       "Theo dõi lời lỗ, số lượng, giá trị đầu tư các hòm, capsule, sticker và skin CS2 theo thời gian thực (giá Steam & Buff163).",
   },
   icons: {
-    icon: "/favicon.ico",
+    icon: "/favicon.svg",
   },
 };
 

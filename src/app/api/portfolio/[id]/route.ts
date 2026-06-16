@@ -87,7 +87,7 @@ export async function PATCH(request: NextRequest, context: RouteContext) {
       const existingItems = Array.isArray(suDoc.items) ? suDoc.items : [];
       const updatedItems = [...existingItems];
       const existingIdx = updatedItems.findIndex(
-        (ei: any) => String(ei.caseId) === caseId,
+        (ei: { caseId: unknown }) => String(ei.caseId) === caseId,
       );
 
       if (existingIdx >= 0) {
@@ -178,7 +178,7 @@ export async function DELETE(_request: NextRequest, context: RouteContext) {
         const existingItems = Array.isArray(suDoc.items) ? suDoc.items : [];
         const updatedItems = [...existingItems];
         const existingIdx = updatedItems.findIndex(
-          (ei: any) => String(ei.caseId) === caseId,
+          (ei: { caseId: unknown }) => String(ei.caseId) === caseId,
         );
 
         if (existingIdx >= 0) {

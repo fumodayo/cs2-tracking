@@ -37,7 +37,7 @@ export function HistoryRow({
     <div
       className={`group relative rounded-xl border p-4 transition-all duration-205 ${
         selected
-          ? "border-blue-500/50 bg-blue-500/[0.03] shadow-md shadow-blue-500/5"
+          ? "border-accent/50 bg-accent/3 shadow-md shadow-accent/5"
           : "border-stone-800 bg-stone-900/20 hover:border-stone-700 hover:bg-stone-900/30"
       }`}
     >
@@ -52,7 +52,7 @@ export function HistoryRow({
             <span>{formatHistoryDate(item.updatedAt)}</span>
           </div>
           {selected && (
-            <span className="rounded bg-blue-500/10 px-1.5 py-0.5 text-[10px] font-bold text-blue-400">
+            <span className="rounded bg-accent/10 px-1.5 py-0.5 text-[10px] font-bold text-accent">
               Đang xem
             </span>
           )}

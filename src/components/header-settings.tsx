@@ -140,10 +140,10 @@ export function LanguageSelector() {
           type="button"
           variant="outline"
           size="sm"
-          className="flex h-9 cursor-pointer items-center gap-2 rounded-lg border border-border bg-surface px-3 text-xs font-semibold text-foreground transition-all duration-300 outline-none hover:border-accent hover:shadow-[0_0_12px_rgba(59,130,246,0.15)] active:scale-95"
+          className="flex h-9 cursor-pointer items-center gap-0 sm:gap-2 rounded-lg border border-border bg-surface px-2.5 sm:px-3 text-xs font-semibold text-foreground transition-all duration-300 outline-none hover:border-accent hover:shadow-[0_0_12px_rgba(59,130,246,0.15)] active:scale-95"
         >
           {activeFlag}
-          <span>{langLabel}</span>
+          <span className="hidden sm:inline">{langLabel}</span>
         </Button>
       </Popover.Trigger>
 

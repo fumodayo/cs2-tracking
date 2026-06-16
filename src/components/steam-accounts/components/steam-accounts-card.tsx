@@ -293,45 +293,35 @@ export function SteamAccountsCard({
                     key={account.id}
                     className="group flex flex-col gap-3 rounded-md border border-stone-800 bg-stone-950/40 p-3.5 transition-all duration-200 hover:border-stone-700"
                   >
-                    <div className="flex min-w-0 items-center justify-between">
-                      <div className="flex min-w-0 items-center gap-2.5">
+                    <div className="flex items-center justify-between gap-3 min-w-0">
+                      <div className="flex items-center gap-3 min-w-0">
                         {account.avatarUrl ? (
                           <img
                             src={account.avatarUrl}
                             alt={account.name}
-                            className="size-9 rounded-full border border-stone-800 object-cover"
+                            className="size-10 rounded-full border border-stone-850 object-cover shrink-0"
                           />
                         ) : (
-                          <div className="bg-stone-850 flex size-9 items-center justify-center rounded-full border border-stone-800">
-                            <Users className="size-4 text-stone-500" />
+                          <div className="flex size-10 items-center justify-center rounded-full border border-stone-850 bg-stone-900 shrink-0">
+                            <Users className="size-4.5 text-stone-500" />
                           </div>
                         )}
-                        <div className="flex min-w-0 flex-col items-start">
-                          <div className="w-full truncate text-sm font-semibold text-stone-200">
+                        <div className="flex min-w-0 flex-col">
+                          <div className="truncate text-sm font-semibold text-stone-200">
                             {account.name}
                           </div>
                           <a
                             href={account.steamUrl}
                             target="_blank"
                             rel="noreferrer"
-                            className="mt-0.5 block truncate text-[11px] text-stone-500 transition-colors hover:text-blue-400"
+                            className="mt-0.5 block truncate text-[11px] text-stone-500 transition-colors hover:text-blue-400 font-mono"
                           >
                             {account.steamId64}
                           </a>
-                          {account.cookieError && (
-                            <div
-                              className="mt-1 flex items-center gap-1.5 rounded border border-red-500/20 bg-red-500/10 px-2 py-0.5 text-[9px] font-bold text-red-400 shadow-sm"
-                              title={account.cookieError}
-                            >
-                              <AlertCircle className="size-3 shrink-0" />
-                              <span className="whitespace-normal">
-                                {account.cookieError}
-                              </span>
-                            </div>
-                          )}
                         </div>
                       </div>
-                      <div className="flex shrink-0 items-center gap-1">
+                      
+                      <div className="flex shrink-0 items-center gap-1.5">
                         <Button
                           type="button"
                           variant="outline"
@@ -339,13 +329,13 @@ export function SteamAccountsCard({
                             startSingleSync(account.id, account.name)
                           }
                           disabled={isSyncing || !!singleScanId}
-                          className="h-7 px-2 text-[10px] font-semibold hover:border-accent/40 hover:bg-accent/10 hover:text-accent disabled:cursor-wait disabled:opacity-40"
+                          className="h-8 px-2.5 text-[11px] font-semibold hover:border-accent/40 hover:bg-accent/10 hover:text-accent disabled:cursor-wait disabled:opacity-40"
                           title={t("dashboard.scanSingle")}
                         >
                           {singleScanId === account.id ? (
-                            <Loader2 className="size-3 animate-spin" />
+                            <Loader2 className="size-3.5 animate-spin mr-1" />
                           ) : (
-                            <Search className="size-3" />
+                            <Search className="size-3.5 mr-1" />
                           )}
                           {singleScanId === account.id
                             ? t("dashboard.scanningSingle")
@@ -361,13 +351,27 @@ export function SteamAccountsCard({
                             })
                           }
                           disabled={deleteAccountMutation.isPending}
-                          className="size-7 p-0 text-stone-500 transition-all hover:text-red-450 hover:bg-red-500/10 disabled:opacity-50"
+                          className="size-8 p-0 text-stone-500 transition-all hover:text-red-400 hover:bg-red-500/10 disabled:opacity-50"
                           title={t("dashboard.unlink")}
                         >
                           <Trash2 className="size-3.5" />
                         </Button>
                       </div>
                     </div>
+
+                    {account.cookieError && (
+                      <div className="mt-1 flex items-start gap-2 rounded-md border border-red-500/20 bg-red-950/20 p-2.5 text-[11px] text-red-300 shadow-sm leading-relaxed">
+                        <AlertCircle className="size-4 shrink-0 text-red-400 mt-0.5" />
+                        <div className="flex-1 min-w-0">
+                          <p className="font-semibold text-red-200">
+                            {t("dashboard.cookieErrorTitle") || "Yêu cầu cấu hình Cookie"}
+                          </p>
+                          <p className="mt-0.5 text-red-300/95 font-medium whitespace-normal break-words">
+                            {account.cookieError}
+                          </p>
+                        </div>
+                      </div>
+                    )}
 
                     <div className="rounded border border-stone-800 bg-stone-950/20">
                       <Button

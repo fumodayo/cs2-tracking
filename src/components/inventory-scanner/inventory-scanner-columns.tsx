@@ -411,40 +411,38 @@ export function buildInventoryColumns({
         const buffError = buffPriceErrors[marketHashName];
 
         return (
-          <div className="flex min-h-[3rem] w-full flex-col items-end justify-center">
-            <div className="flex items-center justify-end gap-3">
-              {/* Steam Price */}
-              <Tooltip content="Giá Steam">
+          <div className="flex min-h-[3rem] w-full flex-col items-end justify-center py-1 gap-1">
+            {/* Steam Price */}
+            <Tooltip content="Giá Steam">
+              <div className="group relative flex cursor-help items-center gap-1.5">
+                <span className="text-[13px] font-medium text-stone-300 font-mono">
+                  {formatVND(steamPrice)}
+                </span>
+                <FaSteam className="size-3.5 text-slate-400 transition-colors group-hover:text-sky-400" />
+              </div>
+            </Tooltip>
+
+            {/* Buff Price */}
+            {hasBuffPrice && (
+              <Tooltip
+                content={
+                  <>
+                    Giá Buff (¥{formatPlainNumber(buffPriceCny)} ×{" "}
+                    {formatPlainNumber(buffCnyToVndRate)})
+                  </>
+                }
+              >
                 <div className="group relative flex cursor-help items-center gap-1.5">
-                  <span className="text-[13px] font-medium text-stone-300 font-mono">
-                    {formatVND(steamPrice)}
+                  <span className="text-[13px] font-medium text-blue-400 font-mono">
+                    {formatVND(Math.round(buffPriceCny * buffCnyToVndRate))}{" "}
+                    <span className="text-[10px] text-stone-500 font-normal font-sans">
+                      ({formatPlainNumber(buffPriceCny)} x {formatPlainNumber(buffCnyToVndRate)})
+                    </span>
                   </span>
-                  <FaSteam className="size-3.5 text-slate-400 transition-colors group-hover:text-sky-400" />
+                  <FaCoins className="size-3.5 text-blue-400" />
                 </div>
               </Tooltip>
-
-              {hasBuffPrice && (
-                <span className="text-stone-700 select-none">|</span>
-              )}
-
-              {hasBuffPrice && (
-                <Tooltip
-                  content={
-                    <>
-                      Giá Buff (¥{formatPlainNumber(buffPriceCny)} ×{" "}
-                      {formatPlainNumber(buffCnyToVndRate)})
-                    </>
-                  }
-                >
-                  <div className="group relative flex cursor-help items-center gap-1.5">
-                    <span className="text-xs font-semibold text-blue-400 font-mono">
-                      {formatVND(Math.round(buffPriceCny * buffCnyToVndRate))}
-                    </span>
-                    <FaCoins className="size-3.5 text-blue-400 opacity-80 transition-opacity group-hover:opacity-100" />
-                  </div>
-                </Tooltip>
-              )}
-            </div>
+            )}
             {buffError ? (
               <span className="mt-1 max-w-44 text-right text-[11px] text-red-350">
                 {buffError}

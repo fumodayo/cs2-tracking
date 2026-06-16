@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { fetchWithRetry } from "@/infrastructure/gemini-retry";
 import { extractPostImagesFromHtml } from "@/services/parser/facebook-image-extractor";
+import { checkAuth } from "@/services/auth-service";
+import { geminiRateLimiter } from "@/infrastructure/rate-limiter";
 
 export const dynamic = "force-dynamic";
 
@@ -19,6 +21,20 @@ type GeminiGenerateContentResponse = {
 
 export async function POST(request: NextRequest) {
   try {
+    const { authorized } = await checkAuth();
+    if (!authorized) {
+      return NextResponse.json({ message: "Unauthorized" }, { status: 401 });
+    }
+
+    const ip = request.headers.get("x-forwarded-for") || (request as NextRequest & { ip?: string }).ip || "unknown-ip";
+    const { allowed, retryAfter } = geminiRateLimiter.check(ip);
+    if (!allowed) {
+      return NextResponse.json(
+        { message: `Quá nhiều yêu cầu. Vui lòng thử lại sau ${retryAfter} giây.` },
+        { status: 429, headers: { "Retry-After": String(retryAfter) } }
+      );
+    }
+
     const body = await request.json();
     const rawHtml = String(body.html ?? "");
 

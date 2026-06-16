@@ -24,6 +24,7 @@ type PortfolioSourceAccount = {
     holdDetails?: Array<{
       quantity: number;
       holdDays: number;
+      tradeHoldUntil?: string;
     }>;
   };
 };
@@ -43,8 +44,42 @@ type SyncScannedItem = {
   price: number;
   sourceAccounts: PortfolioSourceAccount[];
   holdDays?: number;
+  tradeHoldUntil?: string;
   onMarket?: boolean;
   tradeProtected?: boolean;
+};
+
+type ScanResult = {
+  items?: Array<{
+    quantity?: number | string;
+    holdDays?: number;
+    tradeHoldUntil?: string;
+    onMarket?: boolean;
+    tradeProtected?: boolean;
+    price?: number | string;
+    rarity?: unknown;
+    caseItem?: {
+      id?: string;
+      name?: string;
+      marketHashName?: string;
+      imageUrl?: string | null;
+    };
+  }>;
+  storageUnits?: Array<{
+    assetId?: string;
+    name?: string;
+    iconUrl?: string | null;
+  }>;
+};
+
+type PortfolioAccountDb = {
+  _id: ObjectId;
+  name?: string;
+  steamId64: string | number;
+  avatarUrl?: string | null;
+  steamUrl?: string;
+  steamCookie?: string;
+  lastSyncedAt?: Date | string;
 };
 
 type GroupedInput = {
@@ -54,6 +89,7 @@ type GroupedInput = {
   note: string;
   sourceAccounts: PortfolioSourceAccount[];
   holdDays: number;
+  tradeHoldUntil?: string;
 };
 
 type SyncProgressEvent = {
@@ -142,12 +178,12 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const targetAccount = await db
+    const targetAccount = (await db
       .collection("portfolio_accounts")
       .findOne({
         _id: new ObjectId(accountId),
         ...getOwnerFilter(ownerId),
-      });
+      })) as unknown as PortfolioAccountDb | null;
 
     if (!targetAccount) {
       return NextResponse.json(
@@ -170,10 +206,10 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const allAccounts = await db
+    const allAccounts = (await db
       .collection("portfolio_accounts")
       .find(getOwnerFilter(ownerId))
-      .toArray();
+      .toArray()) as unknown as PortfolioAccountDb[];
 
     const origin = request.nextUrl.origin;
     const encoder = new TextEncoder();
@@ -211,7 +247,7 @@ export async function POST(request: NextRequest) {
             percent: 0,
           });
 
-          let targetScanResult: any = null;
+          let targetScanResult: ScanResult | null = null;
           try {
             const rawCookie = targetAccount.steamCookie
               ? decrypt(targetAccount.steamCookie)
@@ -305,9 +341,9 @@ export async function POST(request: NextRequest) {
             if (currentSteamId === targetSteamId64) continue;
 
             try {
-              const cached = await db
+              const cached = (await db
                 .collection("inventory_scan_cache")
-                .findOne({ steamId64: currentSteamId });
+                .findOne({ steamId64: currentSteamId })) as unknown as ScanResult | null;
 
               if (cached) {
                 processScanResult(
@@ -443,7 +479,7 @@ export async function POST(request: NextRequest) {
                   imageUrl: fallbackItem.imageUrl || null,
                   rarity:
                     "rarity" in fallbackItem
-                      ? (fallbackItem.rarity as any)
+                      ? (fallbackItem.rarity as SyncScannedItem["rarity"])
                       : undefined,
                 };
                 casesMap.set(resolvedCaseItem.marketHashName, resolvedCaseItem);
@@ -484,6 +520,12 @@ export async function POST(request: NextRequest) {
             const existing = groupedInputs.get(resolvedCaseItem.id);
             if (existing) {
               const nextQuantity = existing.quantity + quantity;
+              let updatedTradeHoldUntil = existing.tradeHoldUntil;
+              if (item.tradeHoldUntil) {
+                if (!updatedTradeHoldUntil || new Date(item.tradeHoldUntil).getTime() > new Date(updatedTradeHoldUntil).getTime()) {
+                  updatedTradeHoldUntil = item.tradeHoldUntil;
+                }
+              }
               groupedInputs.set(resolvedCaseItem.id, {
                 ...existing,
                 quantity: nextQuantity,
@@ -496,6 +538,7 @@ export async function POST(request: NextRequest) {
                   sourceAccounts,
                 ),
                 holdDays: Math.max(existing.holdDays, item.holdDays ?? 0),
+                tradeHoldUntil: updatedTradeHoldUntil,
               });
             } else {
               groupedInputs.set(resolvedCaseItem.id, {
@@ -505,6 +548,7 @@ export async function POST(request: NextRequest) {
                 note: "Import từ inventory scanner",
                 sourceAccounts,
                 holdDays: item.holdDays ?? 0,
+                tradeHoldUntil: item.tradeHoldUntil,
               });
             }
           }
@@ -523,6 +567,7 @@ export async function POST(request: NextRequest) {
                   existingPortfolioItems,
                   buyDate,
                   input.note || "Import từ inventory scanner",
+                  input.tradeHoldUntil ? new Date(input.tradeHoldUntil) : undefined,
                 );
               },
             );
@@ -780,10 +825,15 @@ export async function POST(request: NextRequest) {
 }
 
 function processScanResult(
-  scanResult: any,
-  account: any,
+  scanResult: ScanResult,
+  account: { name?: string; steamId64: string | number },
   allScannedItems: SyncScannedItem[],
-  allScannedStorageUnits: any[]
+  allScannedStorageUnits: Array<{
+    steamId64: string;
+    assetId: string;
+    name: string;
+    iconUrl: string | null;
+  }>,
 ) {
   const accountName = String(account.name || "Unknown");
   const steamId64 = String(account.steamId64);
@@ -806,7 +856,7 @@ function processScanResult(
           onMarket: onMarket ? quantity : 0,
           tradeProtected: tradeProtected ? quantity : 0,
           hold: holdDays > 0 ? quantity : 0,
-          holdDetails: holdDays > 0 ? [{ quantity, holdDays }] : [],
+          holdDetails: holdDays > 0 ? [{ quantity, holdDays, tradeHoldUntil: item.tradeHoldUntil }] : [],
         },
       };
 
@@ -824,6 +874,7 @@ function processScanResult(
         price: Number(item.price),
         sourceAccounts: [itemSourceAccount],
         holdDays: holdDays > 0 ? holdDays : undefined,
+        tradeHoldUntil: holdDays > 0 ? item.tradeHoldUntil : undefined,
         onMarket: onMarket || undefined,
         tradeProtected: tradeProtected || undefined,
       });

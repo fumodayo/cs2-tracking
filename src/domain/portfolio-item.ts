@@ -15,6 +15,7 @@ export type PortfolioItem = {
     storageUnitId: string;
     storageUnitName: string;
     quantity: number;
+    steamId64?: string;
   }>;
   createdAt: Date;
   updatedAt: Date;

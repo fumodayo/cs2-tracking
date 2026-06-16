@@ -46,6 +46,9 @@ export class PortfolioReportService {
     const suNames = new Map(
       storageUnits.map((su) => [su.id, su.name]),
     );
+    const suSteamIds = new Map(
+      storageUnits.map((su) => [su.id, su.steamId64]),
+    );
     const suItemsByCaseAndSu = new Map<string, number>();
     for (const su of storageUnits) {
       if (!Array.isArray(su.items)) continue;
@@ -75,6 +78,7 @@ export class PortfolioReportService {
                   storageUnitName:
                     suNames.get(cloned.storageUnitId) ?? "Storage Unit",
                   quantity: matchQty,
+                  steamId64: suSteamIds.get(cloned.storageUnitId) ?? "",
                 },
               ]
             : [];
@@ -88,13 +92,13 @@ export class PortfolioReportService {
       finalItems.push(cloned);
     }
 
-    // Any remaining items in suItemsByCaseAndSu are virtual items (only exist in storage units)
     const remainingByCase = new Map<
       string,
       Array<{
         storageUnitId: string;
         storageUnitName: string;
         quantity: number;
+        steamId64?: string;
       }>
     >();
     for (const [key, qty] of suItemsByCaseAndSu.entries()) {
@@ -109,6 +113,7 @@ export class PortfolioReportService {
         storageUnitId: suId,
         storageUnitName: suNames.get(suId) ?? "Storage Unit",
         quantity: qty,
+        steamId64: suSteamIds.get(suId) ?? "",
       });
     }
 

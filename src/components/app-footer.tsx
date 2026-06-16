@@ -32,9 +32,10 @@ export function AppFooter() {
           <div className="space-y-4">
             <Link
               href="/portfolio"
-              className="text-base font-semibold tracking-[0.16em] text-foreground uppercase hover:text-accent transition-colors"
+              className="flex items-center gap-2 text-base font-semibold tracking-[0.16em] text-foreground uppercase hover:text-accent transition-colors"
             >
-              CS2 Tracker
+              <img src="/favicon.svg" alt="CS2 Tracker Logo" className="size-6 object-contain" />
+              <span>CS2 Tracker</span>
             </Link>
             <p className="max-w-xs text-sm leading-relaxed text-muted-foreground">
               {t("footer.about")}

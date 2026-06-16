@@ -2,7 +2,8 @@ import { NextResponse } from "next/server";
 import { createServices } from "@/infrastructure/container";
 import { getDatabase } from "@/infrastructure/db/mongo-client";
 import { getSteamCaseImageUrl } from "@/infrastructure/cases/steam-case-image-provider";
-import { getPortfolioOwnerId } from "@/services/auth-service";
+import { checkAuth } from "@/services/auth-service";
+import { steamScanRateLimiter } from "@/infrastructure/rate-limiter";
 import type { StorageUnitInfo } from "@/domain/storage-unit";
 import { parseSteamCookies, resolveSteamId } from "@/infrastructure/steam";
 import { USER_AGENTS } from "@/utils/api-client";
@@ -96,6 +97,7 @@ type ScanItem = {
   price: number;
   total: number;
   holdDays?: number;
+  tradeHoldUntil?: string;
   onMarket?: boolean;
   tradeProtected?: boolean;
 };
@@ -107,13 +109,14 @@ function cleanDateString(str: string): string {
 function analyzeItemStatus(desc: {
   descriptions?: Array<{ value: string }>;
   owner_descriptions?: Array<{ value: string }>;
-}): { holdDays: number; tradeProtected: boolean } {
+}): { holdDays: number; tradeProtected: boolean; tradeHoldUntil?: string } {
   const allDescs = [
     ...(desc.descriptions || []),
     ...(desc.owner_descriptions || []),
   ];
   let holdDays = 0;
   let tradeProtected = false;
+  let tradeHoldUntil: string | undefined = undefined;
 
   for (const d of allDescs) {
     const val = d.value || "";
@@ -149,6 +152,9 @@ function analyzeItemStatus(desc: {
               holdDays,
               Math.ceil(diffMs / (24 * 60 * 60 * 1000)),
             );
+            if (!tradeHoldUntil || holdDate.getTime() > new Date(tradeHoldUntil).getTime()) {
+              tradeHoldUntil = holdDate.toISOString();
+            }
           }
         }
       } else if (isProtectedKeyword) {
@@ -158,7 +164,7 @@ function analyzeItemStatus(desc: {
     }
   }
 
-  return { holdDays, tradeProtected };
+  return { holdDays, tradeProtected, tradeHoldUntil };
 }
 
 async function getCachedScan(
@@ -431,6 +437,7 @@ async function runScanJob(
       instanceid: string;
       amount: string;
       assetid: string;
+      onMarket?: boolean;
     }> = [];
     const allDescriptions: Array<{
       classid: string;
@@ -581,7 +588,7 @@ async function runScanJob(
 
         while (hasMoreListings) {
           const marketScanCount = allAssets.filter(
-            (a) => (a as any).onMarket,
+            (a) => a.onMarket,
           ).length;
           updateScanJob(jobId, {
             percent: 52,
@@ -622,7 +629,7 @@ async function runScanJob(
                   amount: asset.amount || "1",
                   assetid: assetId,
                   onMarket: true,
-                } as any);
+                });
 
                 const key = `${assetDetail.classid}_${assetDetail.instanceid}`;
                 if (
@@ -678,12 +685,12 @@ async function runScanJob(
 
     const itemCounts: Record<string, { count: number; onMarket: boolean }> = {};
     for (const asset of allAssets) {
-      const statusSuffix = (asset as any).onMarket ? "_onMarket" : "_normal";
+      const statusSuffix = asset.onMarket ? "_onMarket" : "_normal";
       const key = `${asset.classid}_${asset.instanceid}${statusSuffix}`;
       const amount = parseInt(asset.amount, 10) || 1;
 
       if (!itemCounts[key]) {
-        itemCounts[key] = { count: 0, onMarket: !!(asset as any).onMarket };
+        itemCounts[key] = { count: 0, onMarket: !!asset.onMarket };
       }
       itemCounts[key].count += amount;
     }
@@ -703,6 +710,7 @@ async function runScanJob(
         iconUrl: string | null;
         rarity?: { name: string; color: string };
         holdDays: number;
+        tradeHoldUntil?: string;
         tradeProtected: boolean;
         onMarket: boolean;
       }
@@ -731,19 +739,19 @@ async function runScanJob(
         const isTool =
           desc.type?.toLowerCase().includes("tool") ||
           desc.tags?.some(
-            (t: any) =>
+            (t) =>
               t.category === "Type" &&
               t.internal_name?.toLowerCase().includes("tool"),
           );
 
         const hasStorageText =
           desc.descriptions?.some(
-            (d: any) =>
+            (d) =>
               d.value?.toLowerCase().includes("storage unit") &&
               d.value?.toLowerCase().includes("1,000"),
           ) ||
           desc.owner_descriptions?.some(
-            (d: any) =>
+            (d) =>
               d.value?.toLowerCase().includes("storage unit") &&
               d.value?.toLowerCase().includes("1,000"),
           );
@@ -767,7 +775,7 @@ async function runScanJob(
         continue;
       }
 
-      const { holdDays, tradeProtected } = analyzeItemStatus(desc);
+      const { holdDays, tradeProtected, tradeHoldUntil } = analyzeItemStatus(desc);
       const isTradeLocked = holdDays > 0;
       const isSpecialState = isTradeLocked || tradeProtected || info.onMarket;
 
@@ -815,6 +823,7 @@ async function runScanJob(
           iconUrl: desc.icon_url ?? null,
           rarity,
           holdDays,
+          tradeHoldUntil,
           tradeProtected,
           onMarket: info.onMarket,
         };
@@ -823,6 +832,12 @@ async function runScanJob(
           cs2Items[cs2Key].holdDays,
           holdDays,
         );
+        if (tradeHoldUntil) {
+          const curVal = cs2Items[cs2Key].tradeHoldUntil;
+          if (!curVal || new Date(tradeHoldUntil).getTime() > new Date(curVal).getTime()) {
+            cs2Items[cs2Key].tradeHoldUntil = tradeHoldUntil;
+          }
+        }
       }
       cs2Items[cs2Key].count += info.count;
     }
@@ -845,6 +860,7 @@ async function runScanJob(
         iconUrl,
         rarity,
         holdDays,
+        tradeHoldUntil,
         tradeProtected,
         onMarket,
       } = cs2Items[cs2Key];
@@ -916,6 +932,7 @@ async function runScanJob(
         price,
         total: price * count,
         holdDays: holdDays > 0 ? holdDays : undefined,
+        tradeHoldUntil: holdDays > 0 ? tradeHoldUntil : undefined,
         tradeProtected: tradeProtected || undefined,
         onMarket: onMarket || undefined,
       });
@@ -1065,7 +1082,20 @@ export async function GET(request: Request) {
 
 export async function POST(request: Request) {
   try {
-    const ownerId = await getPortfolioOwnerId().catch(() => "guest");
+    const { authorized, ownerId } = await checkAuth();
+    if (!authorized) {
+      return NextResponse.json({ message: "Unauthorized" }, { status: 401 });
+    }
+
+    const ip = request.headers.get("x-forwarded-for") || "unknown-ip";
+    const { allowed, retryAfter } = steamScanRateLimiter.check(ip);
+    if (!allowed) {
+      return NextResponse.json(
+        { message: `Quá nhiều yêu cầu quét. Vui lòng thử lại sau ${retryAfter} giây.` },
+        { status: 429, headers: { "Retry-After": String(retryAfter) } }
+      );
+    }
+
     const body = await request.json();
     const { steamUrl, steamCookie, forceRefresh, progress } = body;
 

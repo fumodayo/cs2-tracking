@@ -9,19 +9,16 @@ import {
   TbTag,
   TbCalendar,
   TbShield,
-  TbClock,
   TbCircleCheck,
-  TbCoins,
-  TbHash,
-  TbFileText,
 } from "react-icons/tb";
 import { ChevronDown, ChevronUp, Trash2, Pencil } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Select } from "@/components/ui/select";
 import { useCurrency } from "@/components/currency-provider";
-import { formatDateVi, getHoldDaysRemaining } from "@/utils/date";
+import { formatDateVi, calculateTradeHoldUntil } from "@/utils/date";
 import { PortfolioTableRow } from "../portfolio-table-model";
+import { TradeHoldBadge } from "./trade-hold-badge";
 
 interface ItemLotsListProps {
   relatedRows: PortfolioTableRow[];
@@ -186,8 +183,9 @@ export function ItemLotsList({
         ) {
           const days = Number(editHoldDays) || 0;
           if (days > 0) {
-            const holdDate = new Date();
-            holdDate.setDate(holdDate.getDate() + days);
+            const targetLot = relatedRows.find((r) => r.id === lotId);
+            const baseDate = (targetLot && targetLot.buyDate) ? new Date(targetLot.buyDate) : new Date();
+            const holdDate = calculateTradeHoldUntil(baseDate, days);
             tradeHoldUntil = holdDate.toISOString();
           }
         }
@@ -251,9 +249,6 @@ export function ItemLotsList({
                   ? formatDateVi(lot.buyDate)
                   : "Chưa rõ ngày";
                 const accountName = lot.sourceAccounts?.[0]?.name;
-                const lotHoldDays = lot.tradeHoldUntil
-                  ? getHoldDaysRemaining(lot.tradeHoldUntil)
-                  : 0;
 
                 const isProtected = Boolean(
                   lot.sourceAccounts?.[0]?.breakdown?.tradeProtected &&
@@ -269,41 +264,64 @@ export function ItemLotsList({
                 return (
                   <div
                     key={lot.id}
-                    className="group relative space-y-2.5 rounded-xl border border-slate-800/40 bg-slate-950/20 p-3 hover:border-slate-800 hover:bg-slate-900/10 transition duration-200"
+                    className={`group relative space-y-2.5 rounded-xl border transition duration-200 ${
+                      isEditing
+                        ? "border-slate-750 bg-slate-900/20 p-4 shadow-lg shadow-black/35"
+                        : "border-slate-800/40 bg-slate-950/20 p-3 hover:border-slate-800 hover:bg-slate-900/10"
+                    }`}
                   >
                     {isEditing ? (
-                      <div className="space-y-2.5">
-                        <div className="grid grid-cols-2 gap-2">
-                          <div className="flex flex-col gap-1">
-                            <label className="flex items-center gap-1 text-[9px] font-bold text-slate-500 uppercase">
-                              <TbHash className="size-2.5" />
+                      <div className="space-y-4">
+                        {lot.sourceType === "existing" && (
+                          <div className="flex items-center justify-between rounded-lg border border-cyan-500/30 bg-cyan-950/30 px-3 py-2 text-[10px] font-bold text-cyan-400 select-none">
+                            <span className="flex items-center gap-1.5">
+                              <TbShield className="size-3.5" />
+                              ĐÃ SCAN TỪ INVENTORY
+                            </span>
+                            <span className="text-[9px] font-medium text-cyan-400/80">
+                              Chỉ cho phép sửa đơn giá & ghi chú
+                            </span>
+                          </div>
+                        )}
+                        <div className="grid grid-cols-2 gap-3.5">
+                          <div className="flex flex-col gap-1.5">
+                            <label className="text-[10px] font-bold tracking-wider text-slate-400 uppercase">
                               Số lượng
                             </label>
-                            <input
-                              type="number"
-                              value={editQty}
-                              onChange={(e) => setEditQty(e.target.value)}
-                              className="h-8 w-full rounded border border-slate-800 bg-slate-950/60 px-2 text-right text-xs font-bold text-slate-100 placeholder-slate-600 transition duration-200 outline-none focus:border-sky-500/60 focus:ring-1 focus:ring-sky-500/20"
-                            />
+                            <div className="relative flex items-center">
+                              <input
+                                type="number"
+                                value={editQty}
+                                onChange={(e) => setEditQty(e.target.value)}
+                                disabled={lot.sourceType === "existing"}
+                                className="h-10 w-full [appearance:textfield] rounded-lg border border-slate-800 bg-slate-950/40 pr-3 pl-12 text-right text-sm font-semibold text-slate-100 placeholder-slate-600 transition duration-200 hover:border-slate-750/80 focus:border-sky-500/60 focus:ring-1 focus:ring-sky-500/20 focus:outline-none disabled:opacity-50 disabled:bg-slate-950/20 disabled:border-slate-900 disabled:text-slate-500 disabled:cursor-not-allowed [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
+                              />
+                              <span className="pointer-events-none absolute left-2.5 text-[8px] font-extrabold tracking-wider text-slate-400 bg-slate-900 border border-slate-800/60 px-1.5 py-0.5 rounded select-none">
+                                QTY
+                              </span>
+                            </div>
                           </div>
-                          <div className="flex flex-col gap-1">
-                            <label className="flex items-center gap-1 text-[9px] font-bold text-slate-500 uppercase">
-                              <TbCoins className="size-2.5" />
+                          <div className="flex flex-col gap-1.5">
+                            <label className="text-[10px] font-bold tracking-wider text-slate-400 uppercase">
                               Giá mua VND
                             </label>
-                            <input
-                              type="number"
-                              value={editPriceVnd}
-                              onChange={(e) => setEditPriceVnd(e.target.value)}
-                              className="h-8 w-full rounded border border-slate-800 bg-slate-950/60 px-2 text-right text-xs font-bold text-slate-100 placeholder-slate-600 transition duration-200 outline-none focus:border-sky-500/60 focus:ring-1 focus:ring-sky-500/20"
-                            />
+                            <div className="relative flex items-center">
+                              <input
+                                type="number"
+                                value={editPriceVnd}
+                                onChange={(e) => setEditPriceVnd(e.target.value)}
+                                className="h-10 w-full [appearance:textfield] rounded-lg border border-slate-800 bg-slate-950/40 pr-3 pl-12 text-right text-sm font-semibold text-slate-100 placeholder-slate-600 transition duration-200 hover:border-slate-750/80 focus:border-sky-500/60 focus:ring-1 focus:ring-sky-500/20 focus:outline-none [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
+                              />
+                              <span className="pointer-events-none absolute left-2.5 text-[8px] font-extrabold tracking-wider text-slate-400 bg-slate-900 border border-slate-800/60 px-1.5 py-0.5 rounded select-none">
+                                VND
+                              </span>
+                            </div>
                           </div>
                         </div>
 
-                        <div className="grid grid-cols-2 gap-2">
-                          <div className="flex flex-col gap-1">
-                            <label className="flex items-center gap-1 text-[9px] font-bold text-slate-500 uppercase">
-                              <TbUser className="size-2.5" />
+                        <div className="grid grid-cols-2 gap-3.5">
+                          <div className="flex flex-col gap-1.5">
+                            <label className="text-[10px] font-bold tracking-wider text-slate-400 uppercase">
                               Tài khoản sở hữu
                             </label>
                             <Select
@@ -312,12 +330,13 @@ export function ItemLotsList({
                                 setEditAccountId(val === "__manual__" ? "" : val);
                                 setEditStorageUnitId("");
                               }}
+                              disabled={lot.sourceType === "existing"}
                               onOpenChange={onSelectOpenChange}
                             >
-                              <Select.Trigger className="h-8 border-slate-800 bg-slate-950/60 focus:border-sky-500/60">
+                              <Select.Trigger className="h-10 rounded-lg border-slate-800 bg-slate-950/40 text-sm text-slate-200 hover:border-slate-750/80 focus:border-sky-500/60 transition disabled:opacity-50 disabled:bg-slate-950/20 disabled:border-slate-900 disabled:text-slate-500">
                                 <Select.Value placeholder="Thủ công (Không liên kết)" />
                               </Select.Trigger>
-                              <Select.Content className="border-slate-800 bg-slate-950">
+                              <Select.Content className="border-slate-850 bg-[#0e121a]">
                                 <Select.Item value="__manual__">
                                   Thủ công (Không liên kết)
                                 </Select.Item>
@@ -329,9 +348,8 @@ export function ItemLotsList({
                               </Select.Content>
                             </Select>
                           </div>
-                          <div className="flex flex-col gap-1">
-                            <label className="flex items-center gap-1 text-[9px] font-bold text-slate-500 uppercase">
-                              <TbPackage className="size-2.5" />
+                          <div className="flex flex-col gap-1.5">
+                            <label className="text-[10px] font-bold tracking-wider text-slate-400 uppercase">
                               Lưu trữ ở
                             </label>
                             <Select
@@ -339,10 +357,10 @@ export function ItemLotsList({
                               onValueChange={(val) =>
                                 setEditStorageUnitId(val === "__inventory__" ? "" : val)
                               }
-                              disabled={!editAccountId}
+                              disabled={lot.sourceType === "existing" || !editAccountId}
                               onOpenChange={onSelectOpenChange}
                             >
-                              <Select.Trigger className="h-8 border-slate-800 bg-slate-950/60 focus:border-sky-500/60">
+                              <Select.Trigger className="h-10 rounded-lg border-slate-800 bg-slate-950/40 text-sm text-slate-200 hover:border-slate-750/80 focus:border-sky-500/60 transition disabled:opacity-50 disabled:bg-slate-950/20 disabled:border-slate-900 disabled:text-slate-500">
                                 <Select.Value
                                   placeholder={
                                     !editAccountId
@@ -351,7 +369,7 @@ export function ItemLotsList({
                                   }
                                 />
                               </Select.Trigger>
-                              <Select.Content className="border-slate-800 bg-slate-950">
+                              <Select.Content className="border-slate-850 bg-[#0e121a]">
                                 <Select.Item value="__inventory__">
                                   Hòm đồ cá nhân (Inventory)
                                 </Select.Item>
@@ -365,10 +383,9 @@ export function ItemLotsList({
                           </div>
                         </div>
 
-                        <div className="grid grid-cols-2 gap-2">
-                          <div className="flex flex-col gap-1">
-                            <label className="flex items-center gap-1 text-[9px] font-bold text-slate-500 uppercase">
-                              <TbShield className="size-2.5" />
+                        <div className="grid grid-cols-2 gap-3.5">
+                          <div className={editState === "hold" || editState === "protected" ? "flex flex-col gap-1.5" : "col-span-2 flex flex-col gap-1.5"}>
+                            <label className="text-[10px] font-bold tracking-wider text-slate-400 uppercase">
                               Trạng thái
                             </label>
                             <Select
@@ -376,12 +393,13 @@ export function ItemLotsList({
                               onValueChange={(val) =>
                                 setEditState(val as "tradeable" | "hold" | "protected")
                               }
+                              disabled={lot.sourceType === "existing"}
                               onOpenChange={onSelectOpenChange}
                             >
-                              <Select.Trigger className="h-8 border-slate-800 bg-slate-950/60 focus:border-sky-500/60">
+                              <Select.Trigger className="h-10 rounded-lg border-slate-800 bg-slate-950/40 text-sm text-slate-200 hover:border-slate-750/80 focus:border-sky-500/60 transition disabled:opacity-50 disabled:bg-slate-950/20 disabled:border-slate-900 disabled:text-slate-500">
                                 <Select.Value />
                               </Select.Trigger>
-                              <Select.Content className="border-slate-800 bg-slate-950">
+                              <Select.Content className="border-slate-850 bg-[#0e121a]">
                                 <Select.Item value="tradeable">Trade được ngay</Select.Item>
                                 <Select.Item value="hold">Hold trade</Select.Item>
                                 <Select.Item value="protected">Trade Protected</Select.Item>
@@ -389,39 +407,48 @@ export function ItemLotsList({
                             </Select>
                           </div>
                           {(editState === "hold" || editState === "protected") && (
-                            <div className="flex flex-col gap-1">
-                              <label className="flex items-center gap-1 text-[9px] font-bold text-slate-500 uppercase">
-                                <TbClock className="size-2.5" />
-                                Số ngày hold còn lại
+                            <div className="flex flex-col gap-1.5">
+                              <label className="text-[10px] font-bold tracking-wider text-slate-400 uppercase">
+                                Số ngày hold
                               </label>
-                              <input
-                                type="number"
-                                value={editHoldDays}
-                                onChange={(e) => setEditHoldDays(e.target.value)}
-                                placeholder="Ví dụ: 7"
-                                className="h-8 w-full rounded border border-slate-800 bg-slate-950/60 px-2 text-xs font-bold text-slate-100 transition duration-200 outline-none focus:border-sky-500/60 focus:ring-1 focus:ring-sky-500/20"
-                              />
+                              <div className="relative flex items-center">
+                                <input
+                                  type="number"
+                                  value={editHoldDays}
+                                  onChange={(e) => setEditHoldDays(e.target.value)}
+                                  placeholder="Ví dụ: 7"
+                                  disabled={lot.sourceType === "existing"}
+                                  className="h-10 w-full rounded-lg border border-slate-800 bg-slate-950/40 pr-3 pl-14 text-sm font-semibold text-slate-100 placeholder-slate-600 transition duration-200 hover:border-slate-750/80 focus:border-sky-500/60 focus:ring-1 focus:ring-sky-500/20 focus:outline-none disabled:opacity-50 disabled:bg-slate-950/20 disabled:border-slate-900 disabled:text-slate-500 disabled:cursor-not-allowed"
+                                />
+                                <span className="pointer-events-none absolute left-2.5 text-[8px] font-extrabold tracking-wider text-slate-400 bg-slate-900 border border-slate-800/60 px-1.5 py-0.5 rounded select-none">
+                                  HOLD
+                                </span>
+                              </div>
                             </div>
                           )}
                         </div>
 
-                        <div className="flex flex-col gap-1">
-                          <label className="flex items-center gap-1 text-[9px] font-bold text-slate-500 uppercase">
-                            <TbFileText className="size-2.5" />
+                        <div className="flex flex-col gap-1.5">
+                          <label className="text-[10px] font-bold tracking-wider text-slate-400 uppercase">
                             Ghi chú
                           </label>
-                          <input
-                            type="text"
-                            value={editNote}
-                            onChange={(e) => setEditNote(e.target.value)}
-                            className="h-8 w-full rounded border border-slate-800 bg-slate-950/60 px-2 text-xs font-semibold text-slate-100 placeholder-slate-600 transition duration-200 outline-none focus:border-sky-500/60 focus:ring-1 focus:ring-sky-500/20"
-                          />
+                          <div className="relative flex items-center">
+                            <input
+                              type="text"
+                              value={editNote}
+                              onChange={(e) => setEditNote(e.target.value)}
+                              className="h-10 w-full rounded-lg border border-slate-800 bg-slate-950/40 pr-3 pl-14 text-sm font-medium text-slate-100 placeholder-slate-650 transition duration-200 hover:border-slate-750/80 focus:border-sky-500/60 focus:ring-1 focus:ring-sky-500/20 focus:outline-none"
+                            />
+                            <span className="pointer-events-none absolute left-2.5 text-[8px] font-extrabold tracking-wider text-slate-400 bg-slate-900 border border-slate-800/60 px-1.5 py-0.5 rounded select-none">
+                              NOTE
+                            </span>
+                          </div>
                         </div>
-                        <div className="flex justify-end gap-1.5 pt-1">
+                        <div className="flex justify-end gap-2.5 pt-2">
                           <Button
                             type="button"
                             onClick={() => setEditingLotId(null)}
-                            className="hover:bg-slate-850 cursor-pointer rounded border border-slate-800 bg-slate-900 px-2 py-1 text-[10px] font-semibold text-stone-300 transition hover:text-stone-100"
+                            className="h-10 cursor-pointer rounded-lg border border-slate-800 bg-slate-900/10 px-4 text-sm font-bold text-slate-300 shadow-sm transition hover:border-slate-750 hover:bg-slate-900/35 hover:text-slate-100 active:scale-[0.98]"
                           >
                             Hủy
                           </Button>
@@ -429,7 +456,7 @@ export function ItemLotsList({
                             type="button"
                             disabled={savingLot}
                             onClick={() => saveLot(lot.id)}
-                            className="cursor-pointer rounded bg-rose-600 px-2.5 py-1 text-[10px] font-bold text-slate-950 transition hover:bg-rose-500 disabled:cursor-not-allowed disabled:bg-stone-900/50 disabled:text-stone-600 disabled:border disabled:border-stone-850/50 disabled:shadow-none"
+                            className="h-10 cursor-pointer rounded-lg bg-rose-600 px-5 text-sm font-bold text-white shadow-[0_0_12px_rgba(225,29,72,0.2)] transition hover:bg-rose-500 active:scale-[0.98] disabled:cursor-not-allowed disabled:bg-stone-900/50 disabled:text-stone-600 disabled:border disabled:border-stone-850/50 disabled:shadow-none"
                           >
                             {savingLot ? "Đang lưu..." : "Lưu"}
                           </Button>
@@ -455,11 +482,8 @@ export function ItemLotsList({
                                 <TbShield className="size-2.5" />
                                 Protected
                               </span>
-                            ) : lotHoldDays > 0 ? (
-                              <span className="inline-flex items-center gap-1 rounded-md border border-rose-500/20 bg-rose-500/10 px-1.5 py-0.5 text-[9px] font-bold text-rose-400">
-                                <TbClock className="size-2.5" />
-                                Hold {lotHoldDays} ngày
-                              </span>
+                            ) : lot.tradeHoldUntil ? (
+                              <TradeHoldBadge tradeHoldUntil={lot.tradeHoldUntil} size="sm" />
                             ) : (
                               <span className="inline-flex items-center gap-1 rounded-md border border-emerald-500/20 bg-emerald-500/10 px-1.5 py-0.5 text-[9px] font-bold text-emerald-400">
                                 <TbCircleCheck className="size-2.5" />

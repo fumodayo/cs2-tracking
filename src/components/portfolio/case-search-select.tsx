@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect, useRef, useCallback } from "react";
+import React, { useState, useEffect } from "react";
 import { Search, Loader2 } from "lucide-react";
 import { CaseThumbnail } from "./case-thumbnail";
 import { formatCurrency } from "@/utils/format";
@@ -37,7 +37,6 @@ export const CaseSearchSelect: React.FC<CaseSearchSelectProps> = ({
   const [query, setQuery] = useState("");
   const [results, setResults] = useState<CaseSearchResult[]>([]);
   const [loading, setLoading] = useState(false);
-  const debounceRef = useRef<ReturnType<typeof setTimeout>>(undefined);
 
   // Clear query and results when selectedCase is set
   useEffect(() => {
@@ -47,41 +46,46 @@ export const CaseSearchSelect: React.FC<CaseSearchSelectProps> = ({
     }
   }, [selectedCase]);
 
-  // Clean up debounce on unmount
+  // Search cases with debounce and race condition prevention
   useEffect(() => {
-    return () => {
-      if (debounceRef.current) {
-        clearTimeout(debounceRef.current);
-      }
-    };
-  }, []);
-
-  const searchCases = useCallback(async (q: string) => {
-    if (!q.trim()) {
+    const trimmed = query.trim();
+    if (!trimmed) {
       setResults([]);
       return;
     }
-    setLoading(true);
-    try {
-      const res = await fetch(
-        `/api/inventory/search-case?q=${encodeURIComponent(q.trim())}`,
-      );
-      if (!res.ok) throw new Error("Search failed");
-      const data = await res.json();
-      setResults(data.results || []);
-    } catch {
-      setResults([]);
-    } finally {
-      setLoading(false);
-    }
-  }, []);
+
+    let active = true;
+
+    const delayDebounceFn = setTimeout(async () => {
+      setLoading(true);
+      try {
+        const res = await fetch(
+          `/api/inventory/search-case?q=${encodeURIComponent(trimmed)}`,
+        );
+        if (!res.ok) throw new Error("Search failed");
+        const data = await res.json();
+        if (active) {
+          setResults(data.results || []);
+        }
+      } catch {
+        if (active) {
+          setResults([]);
+        }
+      } finally {
+        if (active) {
+          setLoading(false);
+        }
+      }
+    }, 350);
+
+    return () => {
+      active = false;
+      clearTimeout(delayDebounceFn);
+    };
+  }, [query]);
 
   const handleInputChange = (value: string) => {
     setQuery(value);
-    if (debounceRef.current) {
-      clearTimeout(debounceRef.current);
-    }
-    debounceRef.current = setTimeout(() => searchCases(value), 350);
   };
 
   if (selectedCase) {

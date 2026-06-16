@@ -3,6 +3,7 @@ import type {
   CreatePortfolioItemInput,
 } from "@/domain/portfolio-item";
 import { isRecord } from "@/utils/type-guards";
+import { calculateTradeHoldUntil } from "@/utils/date";
 export { isRecord } from "@/utils/type-guards";
 
 export interface ExistingPortfolioItem {
@@ -104,6 +105,7 @@ export function resolveSyncTransactions(
   existingItems: ExistingPortfolioItem[],
   buyDate: Date,
   note: string,
+  tradeHoldUntilParam?: Date,
 ): CreatePortfolioItemInput[] {
   const existingForCase = existingItems
     .filter((item) => String(item.caseId) === caseId)
@@ -116,9 +118,11 @@ export function resolveSyncTransactions(
     0,
   );
   const tradeHoldUntil =
-    holdDays > 0
-      ? new Date(buyDate.getTime() + holdDays * 24 * 60 * 60 * 1000)
-      : undefined;
+    tradeHoldUntilParam ?? (
+      holdDays > 0
+        ? calculateTradeHoldUntil(buyDate, holdDays)
+        : undefined
+    );
 
   if (totalExistingQty === 0) {
     return [

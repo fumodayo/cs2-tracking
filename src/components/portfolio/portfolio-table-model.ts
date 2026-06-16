@@ -61,6 +61,7 @@ export type PortfolioTableRow = {
     storageUnitId?: string;
     storageUnitName?: string;
     quantity: number;
+    steamId64?: string;
   }>;
   storageUnitId?: string;
   isVirtual?: boolean;
@@ -242,11 +243,12 @@ function mergeStorageUnitDetails(
     storageUnitId: string;
     storageUnitName: string;
     quantity: number;
+    steamId64?: string;
   }>,
 ) {
   const map = new Map<
     string,
-    { storageUnitId: string; storageUnitName: string; quantity: number }
+    { storageUnitId: string; storageUnitName: string; quantity: number; steamId64?: string }
   >();
   for (const d of details) {
     const existing = map.get(d.storageUnitId);

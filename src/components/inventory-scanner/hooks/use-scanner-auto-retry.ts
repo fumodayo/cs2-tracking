@@ -2,9 +2,10 @@
 
 import { useEffect, useRef } from "react";
 import type { ScanResultItem } from "../types";
+import type { ScannerAction } from "../scanner-reducer";
 
 interface UseScannerAutoRetryProps {
-  dispatch: React.Dispatch<any>;
+  dispatch: React.Dispatch<ScannerAction>;
   zeroPricedItems: ScanResultItem[];
   retryingPrices: boolean;
   buffPricesCny: Record<string, number>;
@@ -90,9 +91,16 @@ export function useScannerAutoRetry({
           }),
         });
         const resText = await res.text();
-        let data: any;
+        interface PriceRetryResponse {
+          results?: Array<{
+            marketHashName: string;
+            price: number;
+            priceSource?: string;
+          }>;
+        }
+        let data: PriceRetryResponse | null = null;
         try {
-          data = JSON.parse(resText);
+          data = JSON.parse(resText) as PriceRetryResponse;
         } catch {
           // ignore
         }
