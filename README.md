@@ -7,11 +7,20 @@
 ## 🚀 Tính Năng Chính
 
 - **Quản lý Portfolio:** Theo dõi số lượng hòm, giá mua (VND), tính toán lợi nhuận/thua lỗ (Profit/Loss) thời gian thực.
-- **Tích hợp Giá Thị Trường:** Cập nhật giá tự động từ Steam Market API, tự động quy đổi tỷ giá USD/VND và có cơ chế fallback giá từ cơ sở dữ liệu CSGOTrader khi bị rate limit.
-- **Quét Kho Đồ (Inventory Scanner):** Quét trực tiếp kho đồ Steam qua SteamID64, hỗ trợ import thông tin các Storage Units.
-- **Trình Phân Tích Bài Đăng (Post Analyzer):** Phân tích danh sách hòm từ bài đăng Facebook (văn bản) hoặc ảnh chụp màn hình kho đồ sử dụng mô hình Gemini AI để trích xuất số lượng và định giá nhanh.
+- **Định Giá Đa Nguồn (Steam & BUFF163):** 
+  - Tự động lấy giá trực tiếp từ Steam Market (VND).
+  - Tích hợp cổng API CS2Cap để lấy giá BUFF163 (CNY), tự động chuyển đổi sang VND theo tỷ giá tùy chỉnh.
+  - Cơ chế fallback thông minh sử dụng cơ sở dữ liệu giá của CSGOTrader khi bị rate limit (lỗi 429) kèm cache giá local 6 giờ.
+- **Quét Kho Đồ Chuyên Sâu (Inventory Scanner):**
+  - Quét trực tiếp kho đồ Steam qua SteamID64 (hỗ trợ cả kho đồ public và private/Family View qua cookie bảo mật `steamLoginSecure` và `steamparental`).
+  - Hỗ trợ nhập và tự động gộp số lượng hòm nằm bên trong các **Storage Units**.
+  - Phân tích chi tiết trạng thái hòm: tradeable (giao dịch được), hold (bị giữ giao dịch với chi tiết số ngày hold), trade-protected (được bảo vệ) và item đang treo trên Steam Market.
+  - Cơ chế lưu cache quét kho đồ thông minh, tự động hết hạn vào lúc 14:00 hàng ngày (giờ UTC+7) để giảm thiểu số lượt gọi Steam API.
+- **Trình Phân Tích Bài Đăng & Hình Ảnh (Post Analyzer):** 
+  - Sử dụng Google Gemini AI (`gemini-2.5-flash`) để phân tích danh sách hòm từ bài đăng Facebook (văn bản) hoặc ảnh chụp màn hình kho đồ để trích xuất số lượng và định giá nhanh.
+  - Cơ chế chống quá tải rate limit cho Gemini AI và cache kết quả phân tích theo MD5 fingerprint để tiết kiệm chi phí gọi API.
 - **Import/Export Excel:** Nhập hoặc xuất danh sách hòm theo dõi thông qua file Excel nhanh chóng.
-- **Hỗ trợ Đa ngôn ngữ (i18n):** Giao diện song ngữ Việt - Anh.
+- **Hỗ trợ Đa ngôn ngữ (i18n) & Bảo mật:** Giao diện song ngữ Việt - Anh, hỗ trợ đăng nhập qua Google OAuth và mã hóa AES các thông tin cookie nhạy cảm của người dùng.
 
 ---
 
@@ -62,11 +71,14 @@ Dự án sử dụng cơ sở dữ liệu MongoDB để lưu trữ dữ liệu. 
 👉 [Tài liệu Kiến trúc & Database (docs/ARCHITECTURE.md)](./docs/ARCHITECTURE.md)
 
 Các Collection chính:
-1. `cases`: Danh mục hòm CS2 (ID, tên hòm, market_hash_name, ảnh, độ hiếm...).
-2. `portfolio_items`: Danh sách hòm người dùng đang theo dõi (số lượng, giá mua, tài khoản nguồn, storage unit...).
-3. `price_snapshots`: Lịch sử biến động giá của hòm theo thời gian.
-4. `storage_units`: Thông tin các hòm lưu trữ được import từ Steam.
-5. `post_analysis_history`: Nhật ký phân tích hình ảnh/bài đăng qua Gemini AI.
+1. `cases`: Danh mục các loại hòm CS2 được hỗ trợ (ID, tên hiển thị, tên market_hash_name, ảnh, độ hiếm...).
+2. `portfolio_items`: Danh sách các hòm người dùng đang theo dõi (số lượng, giá mua, tài khoản nguồn, storage unit, ngày hết hold, trạng thái...).
+3. `price_snapshots`: Lịch sử biến động giá của hòm theo thời gian để vẽ biểu đồ (VND, nguồn: steam-market hoặc csgotrader-fallback).
+4. `storage_units`: Thông tin các hòm lưu trữ (Storage Units) được import từ Steam (ID, tên, tổng số lượng, danh sách item bên trong).
+5. `post_analysis_history`: Nhật ký và cache kết quả phân tích bài đăng/hình ảnh kho đồ qua Gemini AI, sử dụng fingerprint MD5 để tránh trùng lặp.
+6. `portfolio_accounts`: Danh sách tài khoản Steam được người dùng liên kết (SteamID64, profile name, avatar, steamCookie mã hóa...).
+7. `inventory_scan_cache`: Cache lưu trữ dữ liệu quét kho đồ của từng tài khoản Steam, tự động hết hạn hàng ngày.
+8. `users`: Thông tin tài khoản người dùng đăng nhập bằng Google OAuth.
 
 ---
 
@@ -85,6 +97,9 @@ MONGODB_DB=cs2_case_tracker
 # API Key của Gemini cho tính năng Post Analyzer
 GEMINI_API_KEY=your_gemini_api_key
 GEMINI_MODEL=gemini-2.5-flash
+
+# API Key của CS2Cap cho tính năng lấy giá BUFF163
+CS2CAP_API_KEY=your_cs2cap_api_key
 
 # Cấu hình Google OAuth (Xác thực)
 GOOGLE_CLIENT_ID=your_google_client_id
