@@ -1,10 +1,12 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { useTranslation } from "react-i18next";
 import { History, Loader2, RotateCcw } from "lucide-react";
 import * as Popover from "@radix-ui/react-popover";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { formatRelative } from "@/utils/date";
+import { PORTFOLIO_QUERY_KEY } from "@/lib/api-client/portfolio-api";
 
 import { Button } from "@/components/ui/button";
 export type RecentImport = {
@@ -61,6 +63,7 @@ export function RecentImportsPopover({
   recentImports: RecentImport[];
   onRemove: (id: string) => void;
 }) {
+  const { t } = useTranslation();
   const queryClient = useQueryClient();
   const [undoingId, setUndoingId] = useState<string | null>(null);
 
@@ -78,7 +81,7 @@ export function RecentImportsPopover({
       setUndoingId(item.id);
     },
     onSuccess: (id) => {
-      queryClient.invalidateQueries({ queryKey: ["portfolio-report"] });
+      queryClient.invalidateQueries({ queryKey: PORTFOLIO_QUERY_KEY });
       onRemove(id);
     },
     onSettled: () => {
@@ -93,7 +96,7 @@ export function RecentImportsPopover({
           variant="outline"
           disabled={recentImports.length === 0}
           className="h-10 w-10 p-0"
-          title="Lịch sử Import"
+          title={t("dashboard.importHistory")}
         >
           <History className="size-4" />
         </Button>
@@ -106,12 +109,12 @@ export function RecentImportsPopover({
         >
           <div className="mb-3 flex items-center justify-between">
             <h4 className="text-sm font-semibold text-foreground">
-              Lịch sử Import gần đây
+              {t("dashboard.recentImportHistory")}
             </h4>
           </div>
           {recentImports.length === 0 ? (
             <div className="py-4 text-center text-sm text-stone-500">
-              Chưa có file nào được import.
+              {t("dashboard.noImportsYet")}
             </div>
           ) : (
             <div className="max-h-[300px] space-y-2 overflow-y-auto pr-1">
@@ -150,7 +153,7 @@ export function RecentImportsPopover({
                       ) : (
                         <RotateCcw className="size-3" />
                       )}
-                      {undoingId === item.id ? "Đang xóa..." : "Hoàn tác (Xóa)"}
+                      {undoingId === item.id ? t("dashboard.undoing") : t("dashboard.undo")}
                     </Button>
                   </div>
                 </div>

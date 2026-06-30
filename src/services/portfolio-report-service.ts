@@ -127,7 +127,7 @@ export class PortfolioReportService {
         buyPrice: 0, // Will be resolved to currentPrice in buildRow
         buyCurrency: "VND",
         buyDate: now,
-        note: "Chỉ có trong Storage Unit",
+        note: "onlyInStorageUnit",
         storageUnitQuantity: total,
         storageUnitDetails: entry,
         createdAt: now,
@@ -198,6 +198,11 @@ export class PortfolioReportService {
     baselinesByRange: BaselinesByRange,
   ): Promise<PortfolioReportRow> {
     const currentPrice = await currentPricePromise;
+    const stickerAddPrice = await this.getStickerAddPrice(item);
+    const stickerBuyPriceAdd = getStickerBuyPriceAdd(item);
+    const adjustedCurrentUnitPrice = currentPrice
+      ? currentPrice.price + stickerAddPrice
+      : null;
     const totalQuantity =
       (item.storageUnitId ? 0 : item.quantity) +
       (item.storageUnitQuantity ?? 0);
@@ -206,7 +211,7 @@ export class PortfolioReportService {
     let resolvedBuyPrice = item.buyPrice;
     let isTemp = item.isTemporaryPrice;
     if (item.id.startsWith("virtual_") && item.buyPrice === 0) {
-      resolvedBuyPrice = currentPrice ? currentPrice.price : 1000;
+      resolvedBuyPrice = adjustedCurrentUnitPrice ?? 1000;
       isTemp = true;
     }
 
@@ -214,11 +219,13 @@ export class PortfolioReportService {
       ...item,
       buyPrice: resolvedBuyPrice,
       isTemporaryPrice: isTemp,
+      stickerPriceAdd: stickerAddPrice,
+      stickerBuyPriceAdd,
     };
 
     const investedValue = resolvedBuyPrice * totalQuantity;
-    const currentValue = currentPrice
-      ? currentPrice.price * totalQuantity
+    const currentValue = adjustedCurrentUnitPrice
+      ? adjustedCurrentUnitPrice * totalQuantity
       : null;
     const profitAmount =
       currentValue === null ? null : currentValue - investedValue;
@@ -235,7 +242,8 @@ export class PortfolioReportService {
     return {
       item: updatedItem,
       case: caseItem,
-      currentPrice: currentPrice?.price ?? null,
+      currentPrice: adjustedCurrentUnitPrice,
+      skinCurrentPrice: currentPrice?.price ?? null,
       currentPriceCapturedAt: currentPrice?.capturedAt.toISOString() ?? null,
       investedValue,
       currentValue,
@@ -243,6 +251,46 @@ export class PortfolioReportService {
       profitPercent,
       marketChanges,
     };
+  }
+
+  private async getStickerAddPrice(item: PortfolioItem): Promise<number> {
+    const rate = item.stickerPriceRate ?? 0;
+    if (rate <= 0) return 0;
+
+    const accessories = [
+      ...(item.patternInfo?.stickers ?? []),
+      ...(item.patternInfo?.charms ?? []),
+    ];
+    const marketHashNames = accessories
+      .map((accessory) => accessory.marketHashName)
+      .filter((value): value is string => Boolean(value));
+    const uniqueMarketHashNames = Array.from(new Set(marketHashNames));
+    if (uniqueMarketHashNames.length === 0) return 0;
+
+    const priceEntries = await Promise.all(
+      uniqueMarketHashNames.map(async (marketHashName) => {
+        const virtualItem = {
+          id: `ext_${marketHashName}`,
+          name: marketHashName,
+          marketHashName,
+          isActive: false,
+        };
+        try {
+          const snapshot = await this.priceService.getCurrentPrice(virtualItem, {
+            preferFallback: true,
+          });
+          return [marketHashName, snapshot?.price ?? 0] as const;
+        } catch {
+          return [marketHashName, 0] as const;
+        }
+      }),
+    );
+    const priceMap = new Map(priceEntries);
+    const total = marketHashNames.reduce(
+      (sum, marketHashName) => sum + (priceMap.get(marketHashName) ?? 0),
+      0,
+    );
+    return Math.round((total * rate) / 100);
   }
 
   private async loadBaselineSnapshots(
@@ -294,6 +342,13 @@ export class PortfolioReportService {
 
     return Object.fromEntries(entries) as Record<PriceRange, PriceChange>;
   }
+}
+
+function getStickerBuyPriceAdd(item: PortfolioItem): number {
+  const total = item.stickerScanTotalPrice ?? 0;
+  const rate = item.stickerBuyPriceRate ?? 0;
+  if (total <= 0 || rate <= 0) return 0;
+  return Math.round((total * rate) / 100);
 }
 
 function buildSummary(rows: PortfolioReportRow[]) {

@@ -1,10 +1,15 @@
 "use client";
 
 import { useState, useMemo } from "react";
+import { useTranslation } from "react-i18next";
 import { TbSearch, TbInfoCircle } from "react-icons/tb";
+import { Loader2, Trash2 } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { formatVND } from "@/utils/format";
+import { proxySteamUrl } from "@/utils/url";
 import type { PortfolioReportDto } from "@/types/report";
-interface StorageUnitItem {
+export interface StorageUnitItem {
   caseId: string;
   marketHashName: string;
   name: string;
@@ -14,10 +19,15 @@ interface StorageUnitItem {
     color: string;
   } | null;
   quantity: number;
+  storageUnitItems?: Array<{
+    storageUnitId: string;
+    quantity: number;
+  }>;
 }
 
-interface StorageUnit {
+export interface StorageUnit {
   id: string;
+  steamId64?: string;
   name: string;
   currentCount: number;
   maxCapacity: number;
@@ -29,6 +39,9 @@ interface StorageUnitInspectPanelProps {
   report: PortfolioReportDto | null;
   buffPricesCny: Record<string, number>;
   buffCnyToVndRate: number;
+  onSelectItem?: (item: StorageUnitItem) => void;
+  onDeleteItem?: (item: StorageUnitItem) => Promise<void> | void;
+  deletingItemKey?: string | null;
 }
 
 export function StorageUnitInspectPanel({
@@ -36,8 +49,13 @@ export function StorageUnitInspectPanel({
   report,
   buffPricesCny,
   buffCnyToVndRate,
+  onSelectItem,
+  onDeleteItem,
+  deletingItemKey,
 }: StorageUnitInspectPanelProps) {
+  const { t } = useTranslation();
   const [searchQuery, setSearchQuery] = useState("");
+  const [deleteTarget, setDeleteTarget] = useState<StorageUnitItem | null>(null);
 
   // Helper to get Steam Price in VND
   const getSteamPrice = (marketHashName: string): number => {
@@ -104,7 +122,7 @@ export function StorageUnitInspectPanel({
       <div className="grid shrink-0 grid-cols-2 gap-3 rounded-sm border border-border bg-surface/10 p-4">
         <div>
           <span className="block font-mono text-[10px] tracking-wider text-muted-foreground uppercase">
-            Sức chứa
+            {t("portfolio.capacity", "Capacity")}
           </span>
           <span className="mt-0.5 block text-sm font-semibold text-foreground">
             {storageUnit.currentCount}{" "}
@@ -125,13 +143,13 @@ export function StorageUnitInspectPanel({
 
         <div>
           <span className="block font-mono text-[10px] tracking-wider text-muted-foreground uppercase">
-            Tổng Giá trị
+            {t("portfolio.totalValue", "Total Value")}
           </span>
           <span className="mt-0.5 block text-sm font-bold text-emerald-400">
             {formatVND(totals.buff)}
           </span>
           <span className="mt-0.5 block font-mono text-[9px] text-muted-foreground">
-            Theo giá Buff163 / Steam Market
+            {t("portfolio.byBuffSteam", "Based on Buff163 / Steam Market prices")}
           </span>
         </div>
       </div>
@@ -142,7 +160,7 @@ export function StorageUnitInspectPanel({
           <TbSearch className="absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted-foreground" />
           <input
             type="text"
-            placeholder="Tìm kiếm hòm/item..."
+            placeholder={t("portfolio.searchCaseItem", "Search item...")}
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             className="w-full rounded-sm border border-border bg-surface py-2 pr-4 pl-9 font-sans text-xs text-foreground transition-all placeholder:text-muted-foreground focus:border-amber-500/50 focus:ring-1 focus:ring-amber-500/20 focus:outline-none"
@@ -157,11 +175,23 @@ export function StorageUnitInspectPanel({
             const unitPrice = getItemPrice(item.marketHashName);
             const totalPrice = unitPrice * item.quantity;
             const itemRarityColor = item.rarity?.color;
+            const itemKey = getStorageUnitItemKey(item);
+            const isDeleting = deletingItemKey === itemKey;
 
             return (
               <div
-                key={index}
-                className="group relative flex items-center justify-between rounded-sm border border-border bg-stone-900/30 p-2.5 transition-all duration-150 hover:bg-stone-900/60"
+                key={`${item.caseId}-${item.marketHashName}-${index}`}
+                role={onSelectItem ? "button" : undefined}
+                tabIndex={onSelectItem ? 0 : undefined}
+                onClick={() => onSelectItem?.(item)}
+                onKeyDown={(event) => {
+                  if (!onSelectItem) return;
+                  if (event.key === "Enter" || event.key === " ") {
+                    event.preventDefault();
+                    onSelectItem(item);
+                  }
+                }}
+                className="group relative flex cursor-pointer items-center justify-between rounded-sm border border-border bg-stone-900/30 p-2.5 transition-all duration-150 hover:border-amber-500/25 hover:bg-stone-900/60 focus:border-amber-500/40 focus:outline-none"
                 style={{
                   borderLeft: itemRarityColor
                     ? `3px solid ${itemRarityColor}`
@@ -173,9 +203,9 @@ export function StorageUnitInspectPanel({
                   <div className="border-stone-850 relative flex size-12 shrink-0 items-center justify-center overflow-hidden rounded-sm border bg-stone-950 transition-colors group-hover:border-stone-800">
                     {item.imageUrl ? (
                       <img
-                        src={item.imageUrl}
+                        src={proxySteamUrl(item.imageUrl)}
                         alt={item.name}
-                        className="size-10 object-contain transition-transform group-hover:scale-105"
+                        className="size-10 object-contain"
                       />
                     ) : (
                       <div className="size-8 rounded-sm bg-stone-900" />
@@ -206,14 +236,35 @@ export function StorageUnitInspectPanel({
                   </span>
                   {unitPrice > 0 ? (
                     <span className="mt-0.5 font-mono text-[9px] text-muted-foreground">
-                      {formatVND(unitPrice)} / đơn vị
+                      {formatVND(unitPrice)} / {t("portfolio.perUnit", "unit")}
                     </span>
                   ) : (
                     <span className="mt-0.5 flex items-center gap-1 font-mono text-[9px] text-stone-600">
-                      Chưa có giá <TbInfoCircle className="size-2.5" />
+                      {t("portfolio.noPrice", "No price")} <TbInfoCircle className="size-2.5" />
                     </span>
                   )}
                 </div>
+                {onDeleteItem && (
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon"
+                    disabled={isDeleting}
+                    title={t("portfolio.removeFromStorageUnit", "Remove from Storage Unit")}
+                    aria-label={t("portfolio.removeFromStorageUnit", "Remove from Storage Unit")}
+                    onClick={(event) => {
+                      event.stopPropagation();
+                      setDeleteTarget(item);
+                    }}
+                    className="ml-2 size-8 shrink-0 rounded-sm border border-stone-800/70 bg-stone-950/50 text-stone-500 transition-all hover:border-red-500/30 hover:bg-red-500/10 hover:text-red-400 focus:border-red-500/30 focus:text-red-400 disabled:cursor-wait disabled:opacity-70"
+                  >
+                    {isDeleting ? (
+                      <Loader2 className="size-3.5 animate-spin" />
+                    ) : (
+                      <Trash2 className="size-3.5" />
+                    )}
+                  </Button>
+                )}
               </div>
             );
           })
@@ -221,11 +272,38 @@ export function StorageUnitInspectPanel({
           <div className="flex flex-col items-center justify-center rounded-sm border border-dashed border-stone-800 py-12 text-center">
             <span className="mb-2 text-2xl">🔍</span>
             <p className="text-xs font-medium text-muted-foreground">
-              Không tìm thấy vật phẩm nào.
+              {t("portfolio.noItemsFound", "No items found.")}
             </p>
           </div>
         )}
       </div>
+      <ConfirmDialog
+        open={deleteTarget !== null}
+        onClose={() => setDeleteTarget(null)}
+        title={t("portfolio.confirmRemoveStorageUnitItemTitle", "Remove item from Storage Unit")}
+        description={t(
+          "portfolio.confirmRemoveStorageUnitItemDesc",
+          "Remove all {{count}} unit(s) of \"{{name}}\" from this Storage Unit?",
+          {
+            count: deleteTarget?.quantity ?? 0,
+            name: deleteTarget?.name ?? "",
+          },
+        )}
+        confirmText={t("portfolio.removeFromStorageUnit", "Remove from Storage Unit")}
+        cancelText={t("common.cancel", "Cancel")}
+        variant="danger"
+        onConfirm={async () => {
+          if (!deleteTarget || !onDeleteItem) return;
+          await onDeleteItem(deleteTarget);
+          setDeleteTarget(null);
+        }}
+      />
     </div>
   );
+}
+
+export function getStorageUnitItemKey(
+  item: Pick<StorageUnitItem, "caseId" | "marketHashName">,
+) {
+  return item.caseId || item.marketHashName;
 }

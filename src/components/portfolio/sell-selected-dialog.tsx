@@ -1,9 +1,10 @@
 "use client";
 
-import { useState, useMemo, useEffect } from "react";
+import { useState, useMemo, useEffect, useCallback } from "react";
+import { useTranslation } from "react-i18next";
+import { useQuery } from "@tanstack/react-query";
 import {
   Loader2,
-  AlertCircle,
   ShoppingBag,
 } from "lucide-react";
 import {
@@ -17,8 +18,10 @@ import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import type { PortfolioTableRow } from "./portfolio-table-model";
 import type { PortfolioReportRowDto } from "@/types/report";
 import { useCurrency } from "@/components/currency-provider";
-import { SellSelectedDialogItemRow } from "./sell-selected-dialog-item-row";
 import { SellSelectedSearch } from "./components/sell-selected-search";
+
+import { SellSelectedList } from "./components/sell-selected-dialog/sell-selected-list";
+import { SellSelectedFooter } from "./components/sell-selected-dialog/sell-selected-footer";
 
 type SellSelectedDialogProps = {
   open: boolean;
@@ -34,6 +37,36 @@ type SellSelectedDialogProps = {
   buffPricesCny?: Record<string, number>;
   buffCnyToVndRate?: number;
   onDeselectItem?: (id: string) => void;
+  lastSelectedId?: string | null;
+};
+
+const splitItem = (item: PortfolioTableRow, originalRows?: PortfolioReportRowDto[]): PortfolioTableRow[] => {
+  if (item.itemType === "skin") {
+    const count = item.quantity;
+    const result: PortfolioTableRow[] = [];
+    for (let i = 0; i < count; i++) {
+      const dbId = item.itemIds.length > i ? item.itemIds[i] : item.id;
+      const dbRow = originalRows?.find((r) => r.item.id === dbId);
+      result.push({
+        ...item,
+        id: count > 1 ? `${item.id}_split_${i}` : item.id,
+        quantity: 1,
+        itemIds: [dbId],
+        buyPrice: dbRow?.item.buyPrice ?? item.buyPrice,
+        buyDate: dbRow?.item.buyDate ?? item.buyDate,
+        note: dbRow?.item.note ?? item.note,
+        tradeHoldUntil: dbRow?.item.tradeHoldUntil ?? item.tradeHoldUntil,
+        sourceAccounts: dbRow?.item.sourceAccounts ?? item.sourceAccounts,
+        patternInfo: dbRow?.item.patternInfo ?? item.patternInfo,
+        stickerPriceRate: dbRow?.item.stickerPriceRate ?? item.stickerPriceRate,
+        stickerBuyPriceRate: dbRow?.item.stickerBuyPriceRate ?? item.stickerBuyPriceRate,
+        stickerScanTotalPrice: dbRow?.item.stickerScanTotalPrice ?? item.stickerScanTotalPrice,
+        stickerScanPriceCapturedAt: dbRow?.item.stickerScanPriceCapturedAt ?? item.stickerScanPriceCapturedAt,
+      });
+    }
+    return result;
+  }
+  return [item];
 };
 
 export function SellSelectedDialog({
@@ -50,7 +83,12 @@ export function SellSelectedDialog({
   buffPricesCny,
   buffCnyToVndRate,
   onDeselectItem,
+  lastSelectedId,
 }: SellSelectedDialogProps) {
+  const splitSelectedItems = useMemo(() => {
+    return selectedItems.flatMap((item) => splitItem(item, originalRows));
+  }, [selectedItems, originalRows]);
+  const { t } = useTranslation();
   const { formatCurrency } = useCurrency();
   // Quantities to sell, keyed by item ID
   const [sellQuantities, setSellQuantities] = useState<Record<string, number>>(
@@ -67,6 +105,10 @@ export function SellSelectedDialog({
     Record<string, string>
   >({});
   const [itemWholesaleRates, setItemWholesaleRates] = useState<
+    Record<string, string>
+  >({});
+  // Per-item sticker rate overrides, keyed by item ID
+  const [itemStickerRates, setItemStickerRates] = useState<
     Record<string, string>
   >({});
 
@@ -93,133 +135,264 @@ export function SellSelectedDialog({
   } | null>(null);
 
   const [confirmBulk, setConfirmBulk] = useState(false);
+  const [isBulkSellListExpanded, setIsBulkSellListExpanded] = useState(false);
 
-  // Clear exclusions when dialog state changes
+  useEffect(() => {
+    if (!confirmBulk) {
+      setIsBulkSellListExpanded(false);
+    }
+  }, [confirmBulk]);
+
+  // Pricing category filter state
+  const [priceFilter, setPriceFilter] = useState<"all" | "buff" | "steam">("all");
+
+  // Track order in which items are added or re-activated
+  const [addedOrder, setAddedOrder] = useState<string[]>([]);
+
+  // Clear exclusions and initialize ordered items when dialog state changes
   useEffect(() => {
     if (open) {
       setExcludedIds(new Set());
       setManuallyAddedItems([]);
+      
+      const ids = splitSelectedItems.map((item) => item.id);
+      if (lastSelectedId) {
+        const matchingSplitIds = ids.filter((id) => id === lastSelectedId || id.startsWith(`${lastSelectedId}_split_`));
+        const otherIds = ids.filter((id) => !matchingSplitIds.includes(id));
+        setAddedOrder([...matchingSplitIds, ...otherIds]);
+      } else {
+        setAddedOrder(ids);
+      }
+      
+      setPriceFilter("all");
     }
-  }, [open]);
+  }, [open, splitSelectedItems, lastSelectedId]);
+
+  const combinedItems = useMemo(() => {
+    const itemMap = new Map<string, PortfolioTableRow>();
+    splitSelectedItems.forEach((item) => itemMap.set(item.id, item));
+    manuallyAddedItems.forEach((item) => itemMap.set(item.id, item));
+
+    // Order items by when they were added/re-activated
+    const ordered = addedOrder
+      .map((id) => itemMap.get(id))
+      .filter((item): item is PortfolioTableRow => !!item);
+
+    // Fallback for items that are not yet in addedOrder
+    const seen = new Set(ordered.map((item) => item.id));
+    const remaining = [...manuallyAddedItems, ...splitSelectedItems].filter(
+      (item) => !seen.has(item.id),
+    );
+
+    return [...ordered, ...remaining];
+  }, [splitSelectedItems, manuallyAddedItems, addedOrder]);
 
   // Exclude single item from active selection list
-  const excludeItem = (id: string) => {
+  const excludeItem = useCallback((id: string) => {
     setExcludedIds((prev) => {
       const next = new Set(prev);
       next.add(id);
+
+      const originalId = id.includes("_split_") ? id.split("_split_")[0] : id;
+      if (onDeselectItem) {
+        const allSplitsForOriginal = combinedItems.filter((item) => 
+          item.id === originalId || item.id.startsWith(`${originalId}_split_`)
+        );
+        const allExcluded = allSplitsForOriginal.every((item) => 
+          item.id === id || next.has(item.id)
+        );
+        if (allExcluded) {
+          onDeselectItem(originalId);
+        }
+      }
+
       return next;
     });
-    if (onDeselectItem) {
-      onDeselectItem(id);
-    }
-  };
-
-  const combinedItems = useMemo(() => {
-    // Merge selectedItems and manuallyAddedItems, avoiding duplicates by id
-    const seen = new Set(selectedItems.map((item) => item.id));
-    const uniqueManual = manuallyAddedItems.filter(
-      (item) => !seen.has(item.id),
-    );
-    return [...selectedItems, ...uniqueManual];
-  }, [selectedItems, manuallyAddedItems]);
+  }, [combinedItems, onDeselectItem]);
 
   const activeItems = useMemo(() => {
-    return combinedItems.filter((item) => !excludedIds.has(item.id));
-  }, [combinedItems, excludedIds]);
+    const filtered = combinedItems.filter((item) => !excludedIds.has(item.id));
+    if (priceFilter === "all") return filtered;
 
-  const handleAddItem = (item: PortfolioTableRow) => {
-    // If it's already in activeItems (not excluded)
-    const existingActive = activeItems.find((x) => x.id === item.id);
-    if (existingActive) {
-      // Increment quantity by 1, up to the maximum inventory quantity
-      const currentQty =
-        sellQuantities[item.id] !== undefined
-          ? sellQuantities[item.id]
-          : existingActive.quantity;
-      const nextQty = Math.min(existingActive.quantity, currentQty + 1);
-      setSellQuantities((prev) => ({
-        ...prev,
-        [item.id]: nextQty,
-      }));
-      return;
-    }
+    return filtered.filter((item) => {
+      const hasBuffPrice =
+        (item.itemType === "skin" &&
+          item.currentPrice !== null &&
+          item.steamPrice !== null &&
+          item.steamPrice !== undefined &&
+          item.currentPrice !== item.steamPrice) ||
+        (!!buffPricesCny &&
+          buffPricesCny[item.case.marketHashName] !== undefined &&
+          buffPricesCny[item.case.marketHashName] > 0);
 
-    // If it was excluded before, remove from excludedIds and reset its quantity
-    if (excludedIds.has(item.id)) {
-      setExcludedIds((prev) => {
-        const next = new Set(prev);
-        next.delete(item.id);
-        return next;
+      return priceFilter === "buff" ? hasBuffPrice : !hasBuffPrice;
+    });
+  }, [combinedItems, excludedIds, priceFilter, buffPricesCny]);
+
+  // Extract all accessory marketHashNames for batch query
+  const allStickersAndCharms = useMemo(() => {
+    const list: string[] = [];
+    activeItems.forEach((item) => {
+      const stickers = item.patternInfo?.stickers ?? [];
+      const charms = item.patternInfo?.charms ?? [];
+      [...stickers, ...charms].forEach((acc) => {
+        if (acc.marketHashName) {
+          list.push(acc.marketHashName);
+        }
       });
-      // Increment its sell quantity if it was already initialized, or initialize it
+    });
+    return Array.from(new Set(list));
+  }, [activeItems]);
+
+  const accessoryPricesQuery = useQuery({
+    queryKey: ["sticker-charm-prices", allStickersAndCharms],
+    queryFn: async () => {
+      const res = await fetch("/api/inventory/sticker-prices", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ marketHashNames: allStickersAndCharms }),
+      });
+      if (!res.ok) throw new Error("failedToFetchStickerPrices");
+      const data = (await res.json()) as { results?: { marketHashName: string; price: number }[] };
+      return new Map(
+        (data.results ?? []).map((x) => [x.marketHashName, x.price]),
+      );
+    },
+    enabled: allStickersAndCharms.length > 0,
+    staleTime: 15 * 60 * 1000,
+  });
+
+  const accessoryPriceMap = useMemo(() => {
+    return accessoryPricesQuery.data ?? new Map<string, number>();
+  }, [accessoryPricesQuery.data]);
+
+  const getItemStickerScanTotal = useCallback((item: PortfolioTableRow) => {
+    if (item.stickerScanTotalPrice !== undefined) {
+      return item.stickerScanTotalPrice;
+    }
+    const stickers = item.patternInfo?.stickers ?? [];
+    const charms = item.patternInfo?.charms ?? [];
+    if (stickers.length === 0 && charms.length === 0) return 0;
+    return [...stickers, ...charms].reduce((sum, acc) => {
+      if (!acc.marketHashName) return sum;
+      return sum + (accessoryPriceMap.get(acc.marketHashName) ?? 0);
+    }, 0);
+  }, [accessoryPriceMap]);
+
+  const handleAddItem = useCallback((item: PortfolioTableRow) => {
+    const splitItems = splitItem(item);
+    
+    splitItems.forEach((split) => {
+      // If it's already in activeItems (not excluded)
+      const existingActive = activeItems.find((x) => x.id === split.id);
+      if (existingActive) {
+        // Bring to top of the order list
+        setAddedOrder((prev) => {
+          const next = prev.filter((id) => id !== split.id);
+          return [split.id, ...next];
+        });
+
+        // Increment quantity by 1, up to the maximum inventory quantity
+        const currentQty =
+          sellQuantities[split.id] !== undefined
+            ? sellQuantities[split.id]
+            : existingActive.quantity;
+        const nextQty = Math.min(existingActive.quantity, currentQty + 1);
+        setSellQuantities((prev) => ({
+          ...prev,
+          [split.id]: nextQty,
+        }));
+        return;
+      }
+
+      // If it was excluded before, remove from excludedIds, reset its quantity, and bring to top
+      if (excludedIds.has(split.id)) {
+        setExcludedIds((prev) => {
+          const next = new Set(prev);
+          next.delete(split.id);
+          return next;
+        });
+        setAddedOrder((prev) => {
+          const next = prev.filter((id) => id !== split.id);
+          return [split.id, ...next];
+        });
+        // Increment its sell quantity if it was already initialized, or initialize it
+        setSellQuantities((prev) => ({
+          ...prev,
+          [split.id]: Math.min(split.quantity, (prev[split.id] || 0) + 1),
+        }));
+        return;
+      }
+
+      // Add to manuallyAddedItems
+      setManuallyAddedItems((prev) => [...prev, split]);
+      // Prepend to addedOrder
+      setAddedOrder((prev) => [split.id, ...prev]);
+
+      // Initialize state for the new item
       setSellQuantities((prev) => ({
         ...prev,
-        [item.id]: Math.min(item.quantity, (prev[item.id] || 0) + 1),
+        [split.id]: 1, // Start at 1 for manually added items
       }));
-      return;
-    }
 
-    // Add to manuallyAddedItems
-    setManuallyAddedItems((prev) => [...prev, item]);
-
-    // Initialize state for the new item
-    setSellQuantities((prev) => ({
-      ...prev,
-      [item.id]: 1, // Start at 1 for manually added items
-    }));
-
-    setItemRetailRates((prev) => ({
-      ...prev,
-      [item.id]: String(retailRate),
-    }));
-
-    setItemWholesaleRates((prev) => ({
-      ...prev,
-      [item.id]: String(wholesaleRate),
-    }));
-
-    const hasBuff =
-      item.itemType === "skin" &&
-      item.currentPrice !== null &&
-      item.steamPrice !== null &&
-      item.steamPrice !== undefined &&
-      item.currentPrice !== item.steamPrice;
-
-    if (hasBuff) {
-      const defaultCny =
-        buffPricesCny?.[item.case.marketHashName] ??
-        (item.currentPrice
-          ? item.currentPrice / (buffCnyToVndRate ?? 3600)
-          : 0);
-      setBuffCnyPrices((prev) => ({
+      setItemRetailRates((prev) => ({
         ...prev,
-        [item.id]: String(Number(defaultCny.toFixed(2))),
+        [split.id]: String(retailRate),
       }));
-      setBuffRates((prev) => ({
-        ...prev,
-        [item.id]: String(buffCnyToVndRate ?? 3600),
-      }));
-    }
-  };
 
+      setItemWholesaleRates((prev) => ({
+        ...prev,
+        [split.id]: String(wholesaleRate),
+      }));
+
+      setItemStickerRates((prev) => ({
+        ...prev,
+        [split.id]: "0",
+      }));
+
+      const hasBuff =
+        split.itemType === "skin" &&
+        split.currentPrice !== null &&
+        split.steamPrice !== null &&
+        split.steamPrice !== undefined &&
+        split.currentPrice !== split.steamPrice;
+
+      if (hasBuff) {
+        const defaultCny =
+          buffPricesCny?.[split.case.marketHashName] ??
+          (split.currentPrice
+            ? split.currentPrice / (buffCnyToVndRate ?? 3600)
+            : 0);
+        setBuffCnyPrices((prev) => ({
+          ...prev,
+          [split.id]: String(Number(defaultCny.toFixed(2))),
+        }));
+        setBuffRates((prev) => ({
+          ...prev,
+          [split.id]: String(buffCnyToVndRate ?? 3600),
+        }));
+      }
+    });
+  }, [activeItems, sellQuantities, excludedIds, retailRate, wholesaleRate, buffPricesCny, buffCnyToVndRate]);
 
   // Initialize sell quantities when list opens
   useEffect(() => {
     const initialQuantities: Record<string, number> = {};
-    selectedItems.forEach((item) => {
+    splitSelectedItems.forEach((item) => {
       initialQuantities[item.id] = item.quantity;
     });
     setSellQuantities(initialQuantities);
-  }, [selectedItems]);
+  }, [splitSelectedItems]);
 
   // Initialize item rates when list opens
   useEffect(() => {
     const initialRetailRates: Record<string, string> = {};
     const initialWholesaleRates: Record<string, string> = {};
+    const initialStickerRates: Record<string, string> = {};
     const initialCnyPrices: Record<string, string> = {};
     const initialRatesCny: Record<string, string> = {};
 
-    selectedItems.forEach((item) => {
+    splitSelectedItems.forEach((item) => {
       const hasBuff =
         item.itemType === "skin" &&
         item.currentPrice !== null &&
@@ -229,6 +402,7 @@ export function SellSelectedDialog({
 
       initialRetailRates[item.id] = String(retailRate);
       initialWholesaleRates[item.id] = String(wholesaleRate);
+      initialStickerRates[item.id] = "0";
 
       if (hasBuff) {
         // Find default CNY price
@@ -244,10 +418,11 @@ export function SellSelectedDialog({
 
     setItemRetailRates(initialRetailRates);
     setItemWholesaleRates(initialWholesaleRates);
+    setItemStickerRates(initialStickerRates);
     setBuffCnyPrices(initialCnyPrices);
     setBuffRates(initialRatesCny);
   }, [
-    selectedItems,
+    splitSelectedItems,
     wholesaleRate,
     retailRate,
     buffPricesCny,
@@ -260,7 +435,7 @@ export function SellSelectedDialog({
     return val;
   };
 
-  const handleQuantityChange = (
+  const handleQuantityChange = useCallback((
     id: string,
     value: number,
     maxQuantity: number,
@@ -270,21 +445,28 @@ export function SellSelectedDialog({
       ...prev,
       [id]: nextVal,
     }));
-  };
+  }, []);
 
-  const handleRetailRateChange = (id: string, value: string) => {
+  const handleRetailRateChange = useCallback((id: string, value: string) => {
     setItemRetailRates((prev) => ({
       ...prev,
       [id]: value,
     }));
-  };
+  }, []);
 
-  const handleWholesaleRateChange = (id: string, value: string) => {
+  const handleWholesaleRateChange = useCallback((id: string, value: string) => {
     setItemWholesaleRates((prev) => ({
       ...prev,
       [id]: value,
     }));
-  };
+  }, []);
+
+  const handleStickerRateChange = useCallback((id: string, value: string) => {
+    setItemStickerRates((prev) => ({
+      ...prev,
+      [id]: value,
+    }));
+  }, []);
 
   // Helper to distribute a sale of grouped items across database items
   const sellItems = async (itemIds: string[], totalQtyToSell: number) => {
@@ -320,6 +502,7 @@ export function SellSelectedDialog({
 
     try {
       await sellItems(item.itemIds, sellQty);
+      excludeItem(itemId);
     } catch (err) {
       console.error("Sale failed for item:", itemId, err);
     } finally {
@@ -410,6 +593,20 @@ export function SellSelectedDialog({
         unitSellDynamic = Math.round(unitCurrent * (rateDynamic / 100));
       }
 
+      // Add sticker price addition
+      const stickerScanTotalPrice = getItemStickerScanTotal(item);
+      if (stickerScanTotalPrice > 0) {
+        const itemStickerRateVal = Number(
+          itemStickerRates[item.id] !== undefined
+            ? itemStickerRates[item.id]
+            : 0,
+        );
+        const stickerAddVnd = Math.round(
+          (stickerScanTotalPrice * itemStickerRateVal) / 100,
+        );
+        unitSellDynamic += stickerAddVnd;
+      }
+
       totalInvested += unitBuy * qty;
       totalCurrentValue += unitSellDynamic * qty;
     });
@@ -435,6 +632,8 @@ export function SellSelectedDialog({
     buffRates,
     buffPricesCny,
     buffCnyToVndRate,
+    itemStickerRates,
+    getItemStickerScanTotal,
   ]);
 
   const itemsCount = activeItems.length;
@@ -445,35 +644,35 @@ export function SellSelectedDialog({
         open={open}
         onOpenChange={(val) => !bulkLoading && !val && onClose()}
       >
-        <DialogContent className="flex max-h-[92vh] max-w-7xl flex-col overflow-hidden rounded-[6px] border-stone-800/80 bg-[#06080c]/98 p-6 text-stone-100 shadow-[0_30px_90px_rgba(0,0,0,0.85)] backdrop-blur-3xl">
+        <DialogContent className="flex max-h-[92vh] max-w-7xl flex-col overflow-hidden rounded-[2px] border border-stone-800 bg-card p-6 text-foreground shadow-soft dark:shadow-[0_20px_50px_rgba(0,0,0,0.95)] backdrop-blur-3xl">
           {/* Main Modal Spinner overlay when bulk loading */}
           {bulkLoading && (
-            <div className="absolute inset-0 z-50 flex flex-col items-center justify-center bg-[#06080c]/90 backdrop-blur-md transition-all duration-300">
+            <div className="absolute inset-0 z-50 flex flex-col items-center justify-center bg-card/90 backdrop-blur-md transition-all duration-300">
               <Loader2 className="mb-3 size-10 animate-spin text-blue-400" />
               <p className="font-mono text-sm font-black tracking-widest text-stone-200 uppercase">
-                Đang cập nhật Portfolio...
+                {t("portfolio.updatingPortfolio", "Updating Portfolio...")}
               </p>
               <p className="mt-1 font-mono text-xs text-stone-500">
-                Dữ liệu đang được đồng bộ lên hệ thống
+                {t("portfolio.syncingData", "Synchronizing data with the server...")}
               </p>
             </div>
           )}
 
-          <DialogHeader className="mb-4 border-b border-stone-800/80 pb-4">
+          <DialogHeader className="mb-4 border-b border-stone-800 pb-4">
             <div className="flex items-center gap-3">
-              <div className="flex size-10 items-center justify-center rounded-[4px] border border-blue-500/25 bg-blue-500/10 text-blue-400 shadow-inner">
+              <div className="flex size-10 items-center justify-center rounded-[2px] border border-blue-500/25 bg-blue-955/20 text-blue-400 shadow-inner">
                 <ShoppingBag className="size-5" />
               </div>
               <div>
-                <DialogTitle className="flex items-center gap-2 text-lg font-bold tracking-wider text-stone-100 uppercase">
-                  Xác nhận bán{" "}
+                <DialogTitle className="flex items-center gap-2 text-lg font-bold tracking-wider text-stone-100">
+                  {t("portfolio.confirmSell", "Confirm Sale")}{" "}
                   <span className="font-mono font-black text-blue-400">
                     {itemsCount}
                   </span>{" "}
-                  loại vật phẩm
+                  {t("portfolio.itemTypesCount", "item type(s)")}
                 </DialogTitle>
                 <DialogDescription className="mt-0.5 font-mono text-xs text-stone-500">
-                  Vui lòng kiểm tra kỹ đơn hàng trước khi bán
+                  {t("portfolio.doubleCheckOrder", "Please review your sell list before proceeding")}
                 </DialogDescription>
               </div>
             </div>
@@ -487,121 +686,43 @@ export function SellSelectedDialog({
               onAddItem={handleAddItem}
               formatCurrency={formatCurrency}
               buffPricesCny={buffPricesCny}
+              priceFilter={priceFilter}
+              setPriceFilter={setPriceFilter}
             />
 
-            {/* Scrollable list items */}
-            <div className="flex-1 overflow-y-auto min-h-0 scrollbar-thin scrollbar-thumb-stone-800 pr-1 space-y-2.5 pb-24">
-              {itemsCount === 0 ? (
-                <div className="flex flex-col items-center justify-center rounded-[4px] border border-dashed border-stone-800 bg-stone-950/20 py-20 text-center">
-                  <AlertCircle className="mb-2 size-8 text-stone-600" />
-                  <p className="text-sm font-semibold text-stone-400">
-                    Không có vật phẩm nào được chọn
-                  </p>
-                  <p className="mt-1 font-mono text-xs text-stone-600">
-                    Đóng modal và tích chọn vật phẩm trên bảng chính để bắt đầu
-                  </p>
-                </div>
-              ) : (
-                <div className="space-y-2.5 pb-4">
-                  {activeItems.map((item) => {
-                    const maxQty = item.quantity;
-                    const sellQty = getSellQuantity(item.id, maxQty);
-                    const isLoading = loadingIds.has(item.id);
+            <SellSelectedList
+              activeItems={activeItems}
+              sellQuantities={sellQuantities}
+              loadingIds={loadingIds}
+              wholesaleRate={wholesaleRate}
+              retailRate={retailRate}
+              buffPricesCny={buffPricesCny}
+              buffCnyToVndRate={buffCnyToVndRate}
+              buffCnyPrices={buffCnyPrices}
+              setBuffCnyPrices={setBuffCnyPrices}
+              buffRates={buffRates}
+              setBuffRates={setBuffRates}
+              itemRetailRates={itemRetailRates}
+              itemWholesaleRates={itemWholesaleRates}
+              itemStickerRates={itemStickerRates}
+              getItemStickerScanTotal={getItemStickerScanTotal}
+              accessoryPriceMap={accessoryPriceMap}
+              handleQuantityChange={handleQuantityChange}
+              handleWholesaleRateChange={handleWholesaleRateChange}
+              handleRetailRateChange={handleRetailRateChange}
+              handleStickerRateChange={handleStickerRateChange}
+              setConfirmSingle={setConfirmSingle}
+              excludeItem={excludeItem}
+              formatCurrency={formatCurrency}
+            />
 
-                    return (
-                      <SellSelectedDialogItemRow
-                        key={item.id}
-                        item={item}
-                        isLoading={isLoading}
-                        sellQty={sellQty}
-                        maxQty={maxQty}
-                        wholesaleRate={wholesaleRate}
-                        retailRate={retailRate}
-                        buffPricesCny={buffPricesCny}
-                        buffCnyToVndRate={buffCnyToVndRate}
-                        buffCnyPrices={buffCnyPrices}
-                        setBuffCnyPrices={setBuffCnyPrices}
-                        buffRates={buffRates}
-                        setBuffRates={setBuffRates}
-                        itemRetailRates={itemRetailRates}
-                        itemWholesaleRates={itemWholesaleRates}
-                        handleQuantityChange={handleQuantityChange}
-                        handleWholesaleRateChange={handleWholesaleRateChange}
-                        handleRetailRateChange={handleRetailRateChange}
-                        setConfirmSingle={setConfirmSingle}
-                        excludeItem={excludeItem}
-                        formatCurrency={formatCurrency}
-                      />
-                    );
-                  })}
-                </div>
-              )}
-            </div>
-
-            {/* Absolute overlay at the bottom with floating control dock */}
-            {itemsCount > 0 && (
-              <div className="absolute bottom-3 left-3 right-3 z-10 flex items-center justify-between gap-4 rounded-[6px] border border-stone-800/80 bg-stone-950/90 p-4 shadow-[0_12px_40px_rgba(0,0,0,0.85)] backdrop-blur-md">
-                <div className="flex items-center gap-6">
-                  {/* Total Current Value Metric */}
-                  <div className="flex flex-col">
-                    <span className="font-mono text-[9px] font-bold tracking-wider text-stone-500 uppercase">
-                      Tổng nhận về
-                    </span>
-                    <span className="mt-0.5 font-mono text-base font-extrabold text-stone-100">
-                      {formatCurrency(metrics.totalCurrentValue)}
-                    </span>
-                  </div>
-
-                  {/* Divider vertical */}
-                  <div className="h-8 border-l border-stone-800/80" />
-
-                  {/* Net Profit/Loss Metric */}
-                  <div className="flex flex-col">
-                    <span className="font-mono text-[9px] font-bold tracking-wider text-stone-500 uppercase">
-                      Lãi/Lỗ ước tính
-                    </span>
-                    <div className="mt-0.5 flex items-center gap-2">
-                      <span
-                        className={`font-mono text-base font-black tracking-tight ${
-                          metrics.profitAmount >= 0 ? "text-emerald-400" : "text-red-500"
-                        }`}
-                      >
-                        {metrics.profitAmount >= 0 ? "+" : ""}
-                        {formatCurrency(metrics.profitAmount).replace(/\s*[đ₫]/g, "").trim()}
-                      </span>
-                      <span
-                        className={`rounded-[3px] border px-1.5 py-0.5 font-mono text-[9px] font-black ${
-                          metrics.profitAmount >= 0
-                            ? "border-emerald-500/20 bg-emerald-500/10 text-emerald-400"
-                            : "border-red-500/20 bg-red-500/10 text-red-400"
-                        }`}
-                      >
-                        {metrics.profitPercent >= 0 ? "+" : ""}
-                        {metrics.profitPercent.toFixed(2)}%
-                      </span>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Button Sell All */}
-                <button
-                  onClick={() => setConfirmBulk(true)}
-                  disabled={bulkLoading}
-                  className="pointer-events-auto flex h-11 cursor-pointer items-center justify-center gap-2 rounded-[4px] border border-blue-500/20 bg-gradient-to-r from-blue-600 to-blue-550 px-6 shadow-[0_4px_20px_rgba(37,99,235,0.2)] transition-all duration-300 hover:from-blue-500 hover:to-blue-450 hover:shadow-[0_4px_25px_rgba(37,99,235,0.35)] active:scale-[0.97] disabled:cursor-not-allowed disabled:opacity-40"
-                >
-                  {bulkLoading ? (
-                    <Loader2 className="size-4 animate-spin text-stone-950" />
-                  ) : (
-                    <>
-                      <ShoppingBag className="size-3.5 text-stone-950 fill-stone-950/20" />
-                      <span className="font-sans text-[11px] font-extrabold tracking-wider text-stone-950 uppercase">
-                        Bán tất cả đã chọn
-                      </span>
-                    </>
-                  )}
-                </button>
-              </div>
-            )}
+            <SellSelectedFooter
+              bulkLoading={bulkLoading}
+              itemsCount={itemsCount}
+              metrics={metrics}
+              formatCurrency={formatCurrency}
+              onConfirmBulk={() => setConfirmBulk(true)}
+            />
           </div>
         </DialogContent>
       </Dialog>
@@ -611,10 +732,10 @@ export function SellSelectedDialog({
         <ConfirmDialog
           open={confirmSingle.open}
           onClose={() => setConfirmSingle(null)}
-          title="Xác nhận giao dịch bán"
-          description={`Bạn có chắc chắn muốn bán ${confirmSingle.quantity} vật phẩm "${confirmSingle.itemName}"? Thao tác này sẽ cập nhật số lượng hoặc xóa vĩnh viễn khỏi danh mục portfolio của bạn.`}
-          confirmText="Xác nhận Bán"
-          cancelText="Hủy"
+          title={t("portfolio.confirmSellTransaction", "Confirm Sell Transaction")}
+          description={t("portfolio.confirmSellSingleDesc", "Are you sure you want to sell {{quantity}} unit(s) of \"{{name}}\"? This will update the quantity or permanently remove the item from your portfolio.", { quantity: confirmSingle.quantity, name: confirmSingle.itemName })}
+          confirmText={t("portfolio.confirmSellButton", "Confirm Sell")}
+          cancelText={t("common.cancel", "Cancel")}
           variant="primary"
           onConfirm={() =>
             executeSingleSell(confirmSingle.itemId, confirmSingle.quantity)
@@ -627,13 +748,66 @@ export function SellSelectedDialog({
         <ConfirmDialog
           open={confirmBulk}
           onClose={() => setConfirmBulk(false)}
-          title="Xác nhận Bán Tất Cả Vật Phẩm Đã Chọn"
-          description={`Bạn có chắc chắn muốn thực hiện bán toàn bộ ${itemsCount} loại vật phẩm đã cấu hình ở trên không? Số lượng tương ứng sẽ bị trừ hoặc xóa hoàn toàn khỏi portfolio của bạn.`}
-          confirmText="Đồng ý, Bán tất cả"
-          cancelText="Hủy"
+          title={t("portfolio.confirmSellAllTitle", "Confirm Sale of All Selected Items")}
+          description={t("portfolio.confirmSellAllDesc", "Are you sure you want to sell all configured units for these {{count}} item(s)? The corresponding quantities will be deducted or permanently removed from your portfolio.", { count: itemsCount })}
+          confirmText={t("portfolio.confirmSellAllButton", "Yes, Sell All")}
+          cancelText={t("common.cancel", "Cancel")}
           variant="danger"
           onConfirm={executeBulkSell}
-        />
+        >
+          {activeItems.length > 0 && (
+            <div className="mt-4 rounded-xl border border-red-500/10 bg-red-950/5 p-4 text-xs">
+              <p className="mb-2.5 font-bold text-red-400/90 uppercase tracking-wider text-[10px]">
+                {t("portfolio.sellSelectedConfirmListHeader", "Items to be sold:")}
+              </p>
+              {(() => {
+                const summaryMap = new Map<string, number>();
+                activeItems.forEach((item) => {
+                  const name = item.case.name;
+                  const qty = getSellQuantity(item.id, item.quantity);
+                  const currentQty = summaryMap.get(name) || 0;
+                  summaryMap.set(name, currentQty + qty);
+                });
+                const summaryList = Array.from(summaryMap.entries()).map(([name, qty]) => ({ name, qty }));
+                const visibleList = isBulkSellListExpanded ? summaryList : summaryList.slice(0, 5);
+                const remainingCount = summaryList.length - 5;
+
+                return (
+                  <div className="space-y-2">
+                    <ul className={`space-y-2 text-stone-300 ${isBulkSellListExpanded ? "max-h-[200px] overflow-y-auto pr-1.5 scrollbar-thin scrollbar-thumb-stone-800 scrollbar-track-transparent" : ""}`}>
+                      {visibleList.map((item, idx) => (
+                        <li key={idx} className="flex items-center justify-between border-b border-stone-900 pb-1.5 last:border-b-0 last:pb-0">
+                          <span className="truncate font-semibold text-stone-200">{item.name}</span>
+                          <span className="ml-2 size-5 shrink-0 inline-flex items-center justify-center rounded-full bg-red-500/10 text-[10.5px] font-extrabold text-red-400">
+                            {item.qty}
+                          </span>
+                        </li>
+                      ))}
+                    </ul>
+                    {summaryList.length > 5 && (
+                      <button
+                        type="button"
+                        onClick={() => setIsBulkSellListExpanded(!isBulkSellListExpanded)}
+                        className="w-full text-left text-stone-400 hover:text-stone-200 transition-colors font-semibold italic mt-2.5 pt-2 border-t border-stone-900 flex items-center justify-between"
+                      >
+                        <span>
+                          {isBulkSellListExpanded
+                            ? t("portfolio.deleteSelectedConfirmListCollapse", "Collapse list")
+                            : t("portfolio.deleteSelectedConfirmListRemaining", "... and {{count}} other items", { count: remainingCount })}
+                        </span>
+                        <span className="text-[10px] uppercase not-italic tracking-wider text-red-400/80 bg-red-500/5 px-2 py-0.5 rounded border border-red-500/10 hover:bg-red-500/10">
+                          {isBulkSellListExpanded
+                            ? t("common.collapse")
+                            : t("common.expand")}
+                        </span>
+                      </button>
+                    )}
+                  </div>
+                );
+              })()}
+            </div>
+          )}
+        </ConfirmDialog>
       )}
     </>
   );

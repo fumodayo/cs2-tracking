@@ -11,22 +11,106 @@ export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
     const rows = normalizeRows(body.rows);
-    const { portfolioImportService, portfolioReportService } = createServices({
-      ownerId: await getPortfolioOwnerId(),
+    const ownerId = await getPortfolioOwnerId();
+    const { portfolioService, caseRepository, portfolioReportService } = createServices({
+      ownerId,
     });
 
-    const result = await portfolioImportService.importRows(rows);
-    const report = await portfolioReportService.buildReport({
-      refreshStalePrices: false,
+    const encoder = new TextEncoder();
+    const stream = new ReadableStream({
+      async start(controller) {
+        const send = (event: unknown) => {
+          controller.enqueue(encoder.encode(JSON.stringify(event) + "\n"));
+        };
+
+        try {
+          const inputs = [];
+          const total = rows.length;
+
+          for (const [index, row] of rows.entries()) {
+            const name = row.marketHashName || row.caseId || "item";
+            send({
+              type: "progress",
+              stage: "resolving",
+              index,
+              total,
+              name,
+              message: `importProgressProcessingItem:current=${index + 1},total=${total},name=${name}`,
+            });
+
+            let caseId: string;
+            if (row.caseId) {
+              const caseItem = await caseRepository.findById(row.caseId);
+              if (caseItem) {
+                caseId = caseItem.id;
+              } else {
+                throw new Error(`importErrorRowCaseIdNotFound:row=${index + 2}`);
+              }
+            } else if (row.marketHashName) {
+              const resolvedCase = await caseRepository.findOrCreateByMarketHashName(
+                row.marketHashName
+              );
+              caseId = resolvedCase.id;
+            } else {
+              throw new Error(`importErrorRowMissingCaseIdOrName:row=${index + 2}`);
+            }
+
+            inputs.push({
+              caseId,
+              quantity: row.quantity,
+              buyPrice: row.buyPrice,
+              buyDate: row.buyDate,
+              note: row.note,
+            });
+          }
+
+          send({
+            type: "progress",
+            stage: "saving",
+            message: `importProgressSavingItems:count=${total}`,
+          });
+
+          const createdItems = await portfolioService.createMany(inputs);
+          const importResult = {
+            importedCount: createdItems.length,
+            importedIds: createdItems.map((item) => item.id),
+          };
+
+          send({
+            type: "progress",
+            stage: "building_report",
+            message: "importProgressBuildingReport",
+          });
+
+          const report = await portfolioReportService.buildReport({
+            refreshStalePrices: false,
+          });
+
+          send({
+            type: "complete",
+            result: { ...serializeReport(report), importResult },
+          });
+        } catch (err) {
+          send({
+            type: "error",
+            message: err instanceof Error ? err.message : "importErrorGenericWithReason",
+          });
+        } finally {
+          controller.close();
+        }
+      },
     });
 
-    return NextResponse.json(
-      { ...serializeReport(report), importResult: result },
-      { status: 201 },
-    );
+    return new Response(stream, {
+      headers: {
+        "Content-Type": "application/x-ndjson",
+        "Cache-Control": "no-cache",
+        Connection: "keep-alive",
+      },
+    });
   } catch (error) {
     return NextResponse.json(
-      { message: getErrorMessage(error, "Không thể import portfolio.") },
+      { message: getErrorMessage(error, "importErrorGeneric") },
       { status: 400 },
     );
   }
@@ -34,7 +118,7 @@ export async function POST(request: NextRequest) {
 
 function normalizeRows(value: unknown): PortfolioImportRowInput[] {
   if (!Array.isArray(value)) {
-    throw new Error("Payload import không hợp lệ.");
+    throw new Error("importErrorInvalidPayload");
   }
 
   return value.map((row, index) => normalizeRow(row, index));
@@ -42,7 +126,7 @@ function normalizeRows(value: unknown): PortfolioImportRowInput[] {
 
 function normalizeRow(value: unknown, index: number): PortfolioImportRowInput {
   if (!isRecord(value)) {
-    throw new Error(`Dòng ${index + 2}: dữ liệu không hợp lệ.`);
+    throw new Error(`importErrorRowInvalidData:row=${index + 2}`);
   }
 
   const quantity = Number(value.quantity);
@@ -50,15 +134,15 @@ function normalizeRow(value: unknown, index: number): PortfolioImportRowInput {
   const buyDate = new Date(String(value.buyDate ?? ""));
 
   if (!Number.isFinite(quantity) || quantity <= 0) {
-    throw new Error(`Dòng ${index + 2}: số lượng không hợp lệ.`);
+    throw new Error(`importErrorRowInvalidQuantity:row=${index + 2}`);
   }
 
   if (!Number.isFinite(buyPrice) || buyPrice <= 0) {
-    throw new Error(`Dòng ${index + 2}: giá mua không hợp lệ.`);
+    throw new Error(`importErrorRowInvalidPrice:row=${index + 2}`);
   }
 
   if (Number.isNaN(buyDate.getTime())) {
-    throw new Error(`Dòng ${index + 2}: ngày mua không hợp lệ.`);
+    throw new Error(`importErrorRowInvalidDate:row=${index + 2}`);
   }
 
   return {

@@ -15,6 +15,7 @@ import { useLocalStorage } from "@/hooks/use-local-storage";
 
 import {
   buildPortfolioTableRows,
+  remapPortfolioRowSelection,
   type PortfolioTableRow,
   type PortfolioTableMode,
 } from "./portfolio-table-model";
@@ -90,6 +91,7 @@ export function PortfolioTable({
 
   const [deleteSelectedConfirmOpen, setDeleteSelectedConfirmOpen] = useState(false);
   const [sellDialogOpen, setSellDialogOpen] = useState(false);
+  const [lastSelectedId, setLastSelectedId] = useState<string | null>(null);
 
   const fetchBuffPrice = useCallback(
     async (marketHashName: string) => {
@@ -106,7 +108,7 @@ export function PortfolioTable({
         });
 
         if (!response.ok) {
-          throw new Error("Lấy giá BUFF163 thất bại.");
+          throw new Error("Failed to fetch BUFF163 price.");
         }
 
         const data = await response.json();
@@ -147,15 +149,33 @@ export function PortfolioTable({
 
   const handleModeChange = useCallback(
     (newMode: PortfolioTableMode) => {
+      if (newMode === mode) return;
+
+      const nextRows = buildPortfolioTableRows(report, newMode, buffPricesCny, buffCnyToVndRate);
+      setRowSelection((prevSelection) =>
+        remapPortfolioRowSelection(prevSelection, rows, nextRows)
+      );
       setMode(newMode);
-      setRowSelection({});
     },
-    [setMode, setRowSelection]
+    [mode, report, buffPricesCny, buffCnyToVndRate, rows, setMode, setRowSelection]
+  );
+
+  const handleSellItem = useCallback(
+    (id: string) => {
+      setLastSelectedId(id);
+      setRowSelection((prev) => ({
+        ...prev,
+        [id]: true,
+      }));
+      setSellDialogOpen(true);
+    },
+    [setRowSelection, setSellDialogOpen],
   );
 
   const columns = useMemo(
     () =>
       buildColumns({
+        t,
         mode,
         deletingId,
         onDelete,
@@ -175,6 +195,7 @@ export function PortfolioTable({
         retailRatePercent: Number(retailRate) || 0,
         onUpdateBuffRate,
         formatCurrency,
+        onSellItem: handleSellItem,
         ItemCellComponent: ItemCell,
       }),
     [
@@ -196,6 +217,8 @@ export function PortfolioTable({
       wholesaleRate,
       retailRate,
       formatCurrency,
+      handleSellItem,
+      t,
     ],
   );
 
@@ -310,13 +333,19 @@ export function PortfolioTable({
 
       <SellSelectedDialog
         open={sellDialogOpen}
-        onClose={() => setSellDialogOpen(false)}
+        onClose={() => {
+          setSellDialogOpen(false);
+          setLastSelectedId(null);
+        }}
         selectedItems={selectedRows}
         allItems={rows}
         originalRows={report.rows}
         onDelete={onDelete}
         onUpdateQuantity={onUpdateQuantity || (() => {})}
-        onClearSelection={() => setRowSelection({})}
+        onClearSelection={() => {
+          setRowSelection({});
+          setLastSelectedId(null);
+        }}
         onDeselectItem={(id) => {
           setRowSelection((prev) => {
             const next = { ...prev };
@@ -328,14 +357,15 @@ export function PortfolioTable({
         retailRate={Number(retailRate) || 65}
         buffPricesCny={buffPricesCny}
         buffCnyToVndRate={buffCnyToVndRate}
+        lastSelectedId={lastSelectedId}
       />
 
       <ConfirmDialog
         open={deleteSelectedConfirmOpen}
         onClose={() => setDeleteSelectedConfirmOpen(false)}
-        title={t("portfolio.deleteSelectedConfirmTitle", "Xác nhận xóa các vật phẩm đã chọn")}
-        description={t("portfolio.deleteSelectedConfirmDesc", `Bạn có chắc chắn muốn xóa ${selectedDbIds.length} vật phẩm đã chọn khỏi danh mục portfolio? Thao tác này không thể hoàn tác.`, { count: selectedDbIds.length })}
-        confirmText={t("portfolio.deleteSelectedConfirmButton", "Đồng ý xóa")}
+        title={t("portfolio.deleteSelectedConfirmTitle", "Confirm deletion of selected items")}
+        description={t("portfolio.deleteSelectedConfirmDesc", "Are you sure you want to delete {{count}} selected items from your portfolio? This action cannot be undone.", { count: selectedDbIds.length })}
+        confirmText={t("portfolio.deleteSelectedConfirmButton", "Confirm Delete")}
         cancelText={t("common.cancel")}
         variant="danger"
         onConfirm={async () => {

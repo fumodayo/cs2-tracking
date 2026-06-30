@@ -23,7 +23,7 @@ export class PortfolioService {
 
     const caseItem = await this.caseRepository.findById(input.caseId);
     if (!caseItem) {
-      throw new Error("Case không tồn tại.");
+      throw new Error("caseNotFound");
     }
 
     return this.portfolioRepository.create(input);
@@ -46,7 +46,7 @@ export class PortfolioService {
 
     for (const input of inputs) {
       if (!existingCaseIds.has(input.caseId)) {
-        throw new Error(`Case không tồn tại (ID: ${input.caseId}).`);
+        throw new Error(`caseNotFoundWithId:id=${input.caseId}`);
       }
     }
 
@@ -75,24 +75,24 @@ function validatePortfolioInput(
   partial = false,
 ) {
   if (!partial && !input.caseId) {
-    throw new Error("Vui lòng chọn case.");
+    throw new Error("caseIdRequired");
   }
 
   if (
     input.quantity !== undefined &&
     (!Number.isFinite(input.quantity) || input.quantity <= 0)
   ) {
-    throw new Error("Số lượng phải lớn hơn 0.");
+    throw new Error("quantityMustBePositive");
   }
 
   if (
     input.buyPrice !== undefined &&
     (!Number.isFinite(input.buyPrice) || input.buyPrice <= 0)
   ) {
-    throw new Error("Giá mua phải lớn hơn 0.");
+    throw new Error("buyPriceMustBePositive");
   }
 
   if (input.buyDate !== undefined && Number.isNaN(input.buyDate.getTime())) {
-    throw new Error("Ngày mua không hợp lệ.");
+    throw new Error("buyDateInvalid");
   }
 }

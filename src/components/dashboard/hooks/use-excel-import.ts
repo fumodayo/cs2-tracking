@@ -14,11 +14,9 @@ import type {
   ColumnMapping,
   MappingTemplate,
 } from "@/components/portfolio";
-import {
-  PORTFOLIO_QUERY_KEY,
-  importPortfolioRows,
-} from "@/services/portfolio-api";
+import { PORTFOLIO_QUERY_KEY, importPortfolioRows } from "@/lib/api-client/portfolio-api";
 import type { RecentImport } from "../recent-imports-popover";
+import { translateAccountError } from "@/components/inventory-scanner/utils";
 
 interface UseExcelImportProps {
   addRecentImport: (item: RecentImport) => void;
@@ -52,7 +50,18 @@ export function useExcelImport({ addRecentImport, setError }: UseExcelImportProp
   );
 
   const importMutation = useMutation({
-    mutationFn: importPortfolioRows,
+    mutationFn: (rows: PortfolioImportRow[]) =>
+      importPortfolioRows(rows, {
+        onProgress: (event) => {
+          importStore.setState({
+            phase: "uploading",
+            fileName: importStore.getState().fileName,
+            rowsCount: event.total,
+            importedCount: event.index + 1,
+            message: event.message,
+          });
+        },
+      }),
     onSuccess: (report, rows) => {
       queryClient.setQueryData(PORTFOLIO_QUERY_KEY, report);
       const current = importStore.getState();
@@ -91,10 +100,11 @@ export function useExcelImport({ addRecentImport, setError }: UseExcelImportProp
       setError(null);
     },
     onError: (err) => {
+      const msg = translateAccountError(getErrorMessage(err), t);
       toast.error(t("dashboard.importError"), {
-        description: getErrorMessage(err),
+        description: msg,
       });
-      setError(getErrorMessage(err));
+      setError(msg);
     },
   });
 
@@ -106,13 +116,14 @@ export function useExcelImport({ addRecentImport, setError }: UseExcelImportProp
       importStore.setState({ phase: "idle" });
 
       if (headers.length === 0) {
-        throw new Error(t("excelMapping.emptyFile", "Không tìm thấy cột nào trong file."));
+        throw new Error(t("excelMapping.emptyFile", "No columns found in the file."));
       }
 
       setMappingDialogData({ headers, headerRowIndex, matrix, fileName });
     } catch (err) {
-      importStore.setState({ phase: "error", message: getErrorMessage(err) });
-      setError(getErrorMessage(err));
+      const msg = translateAccountError(getErrorMessage(err), t);
+      importStore.setState({ phase: "error", message: msg });
+      setError(msg);
     }
   }, [t, setError]);
 
@@ -146,7 +157,7 @@ export function useExcelImport({ addRecentImport, setError }: UseExcelImportProp
       setExcelFileName(mappingDialogData.fileName);
       setMappingDialogData(null);
     } catch (err) {
-      setError(getErrorMessage(err));
+      setError(translateAccountError(getErrorMessage(err), t));
     }
   }, [mappingDialogData, setSavedTemplates, setError]);
 

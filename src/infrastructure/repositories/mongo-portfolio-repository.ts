@@ -34,6 +34,21 @@ export class MongoPortfolioRepository implements PortfolioRepository {
       tradeHoldUntil: input.tradeHoldUntil,
       isTemporaryPrice: input.isTemporaryPrice,
       storageUnitId: input.storageUnitId,
+      dopplerPhase: input.dopplerPhase,
+      inspectLink: input.inspectLink,
+      patternInfo: input.patternInfo,
+      stickerPriceRate: input.stickerPriceRate,
+      stickerBuyPriceRate: input.stickerBuyPriceRate,
+      stickerBuyPriceAdd:
+        input.stickerBuyPriceAdd ??
+        (input.stickerScanTotalPrice !== undefined &&
+        input.stickerBuyPriceRate !== undefined
+          ? Math.round(
+              (input.stickerScanTotalPrice * input.stickerBuyPriceRate) / 100,
+            )
+          : undefined),
+      stickerScanTotalPrice: input.stickerScanTotalPrice,
+      stickerScanPriceCapturedAt: input.stickerScanPriceCapturedAt,
       ownerId: this.ownerId,
       createdAt: now,
       updatedAt: now,
@@ -66,6 +81,21 @@ export class MongoPortfolioRepository implements PortfolioRepository {
       tradeHoldUntil: input.tradeHoldUntil,
       isTemporaryPrice: input.isTemporaryPrice,
       storageUnitId: input.storageUnitId,
+      dopplerPhase: input.dopplerPhase,
+      inspectLink: input.inspectLink,
+      patternInfo: input.patternInfo,
+      stickerPriceRate: input.stickerPriceRate,
+      stickerBuyPriceRate: input.stickerBuyPriceRate,
+      stickerBuyPriceAdd:
+        input.stickerBuyPriceAdd ??
+        (input.stickerScanTotalPrice !== undefined &&
+        input.stickerBuyPriceRate !== undefined
+          ? Math.round(
+              (input.stickerScanTotalPrice * input.stickerBuyPriceRate) / 100,
+            )
+          : undefined),
+      stickerScanTotalPrice: input.stickerScanTotalPrice,
+      stickerScanPriceCapturedAt: input.stickerScanPriceCapturedAt,
       ownerId: this.ownerId,
       createdAt: now,
       updatedAt: now,

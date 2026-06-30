@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
+import { useTranslation } from "react-i18next";
 import { Search, Loader2 } from "lucide-react";
 import { CaseThumbnail } from "./case-thumbnail";
 import { formatCurrency } from "@/utils/format";
@@ -34,6 +35,7 @@ export const CaseSearchSelect: React.FC<CaseSearchSelectProps> = ({
   placeholder,
   label,
 }) => {
+  const { t } = useTranslation();
   const [query, setQuery] = useState("");
   const [results, setResults] = useState<CaseSearchResult[]>([]);
   const [loading, setLoading] = useState(false);
@@ -115,7 +117,7 @@ export const CaseSearchSelect: React.FC<CaseSearchSelectProps> = ({
           }}
           className="hover:bg-stone-850 shrink-0 cursor-pointer rounded border border-stone-800 bg-stone-900 px-3 py-1.5 text-xs font-semibold text-stone-300 transition-colors hover:border-stone-700"
         >
-          Thay đổi
+          {t("common.change", "Change")}
         </Button>
       </div>
     );
@@ -127,7 +129,7 @@ export const CaseSearchSelect: React.FC<CaseSearchSelectProps> = ({
         className="mb-1.5 block text-xs font-semibold text-stone-300"
         htmlFor="case-search"
       >
-        {label || "Tìm kiếm vật phẩm"}
+        {label || t("inventoryScanner.searchItem", "Search item")}
       </label>
       <div className="flex items-center gap-2 rounded-md border border-stone-800 bg-stone-950/70 px-3 py-0.5">
         <Search className="size-4 text-stone-500" />
@@ -135,7 +137,7 @@ export const CaseSearchSelect: React.FC<CaseSearchSelectProps> = ({
           id="case-search"
           value={query}
           onChange={(e) => handleInputChange(e.target.value)}
-          placeholder={placeholder || "Ví dụ: Kilowatt Case..."}
+          placeholder={placeholder || t("inventoryScanner.exampleCasePlaceholder", "e.g., Kilowatt Case...")}
           className="h-10 w-full bg-transparent text-sm text-stone-200 outline-none placeholder:text-stone-600"
         />
         {loading && <Loader2 className="size-4 animate-spin text-stone-500" />}
@@ -168,7 +170,7 @@ export const CaseSearchSelect: React.FC<CaseSearchSelectProps> = ({
                 </span>
               </span>
               <span className="shrink-0 text-xs font-semibold text-stone-400">
-                {r.price > 0 ? formatCurrency(r.price) : "Chưa có giá"}
+                {r.price > 0 ? formatCurrency(r.price) : t("portfolio.noPrice", "No price yet")}
               </span>
             </button>
           ))}
@@ -177,7 +179,7 @@ export const CaseSearchSelect: React.FC<CaseSearchSelectProps> = ({
 
       {query.trim() && results.length === 0 && !loading && (
         <div className="mt-2 rounded-md border border-stone-800 bg-stone-950 px-4 py-6 text-center text-sm text-stone-500 shadow-xl">
-          Không tìm thấy vật phẩm nào phù hợp
+          {t("inventoryScanner.noResultsFound", "No results found")}
         </div>
       )}
     </div>

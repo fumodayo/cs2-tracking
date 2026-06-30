@@ -1,5 +1,6 @@
 import { Package } from "lucide-react";
 import Image from "next/image";
+import { proxySteamUrl } from "@/utils/url";
 
 type CaseThumbnailProps = {
   imageUrl?: string;
@@ -24,13 +25,14 @@ export function CaseThumbnail({
   name,
   size = "md",
 }: CaseThumbnailProps) {
+  const displayUrl = imageUrl ? proxySteamUrl(imageUrl) : undefined;
   return (
     <div
       className={`${sizeClassNames[size]} grid shrink-0 place-items-center overflow-hidden rounded-md border border-stone-700 bg-stone-900`}
     >
-      {imageUrl ? (
+      {displayUrl ? (
         <Image
-          src={imageUrl}
+          src={displayUrl}
           alt={name}
           width={96}
           height={96}

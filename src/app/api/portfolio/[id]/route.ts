@@ -6,6 +6,7 @@ import { getPortfolioOwnerId } from "@/services/auth-service";
 import { serializeReport } from "@/services/dto";
 import { ObjectId } from "mongodb";
 import { getDatabase } from "@/infrastructure/db/mongo-client";
+import { STORAGE_UNIT_MAX_CAPACITY } from "@/domain/storage-unit";
 
 export const dynamic = "force-dynamic";
 
@@ -34,7 +35,7 @@ export async function PATCH(request: NextRequest, context: RouteContext) {
 
     if (!oldItem) {
       return NextResponse.json(
-        { message: "Không tìm thấy item." },
+        { message: "itemNotFound" },
         { status: 404 },
       );
     }
@@ -73,18 +74,83 @@ export async function PATCH(request: NextRequest, context: RouteContext) {
         ? new Date(body.tradeHoldUntil)
         : undefined;
     }
+    if (body.dopplerPhase !== undefined) input.dopplerPhase = body.dopplerPhase;
+    if (body.inspectLink !== undefined) input.inspectLink = body.inspectLink;
+    if (body.patternInfo !== undefined) input.patternInfo = body.patternInfo;
+    if (body.stickerPriceRate !== undefined) {
+      const stickerPriceRate = Number(body.stickerPriceRate);
+      input.stickerPriceRate = Number.isFinite(stickerPriceRate)
+        ? Math.max(0, stickerPriceRate)
+        : 0;
+    }
+    if (body.stickerBuyPriceRate !== undefined) {
+      const stickerBuyPriceRate = Number(body.stickerBuyPriceRate);
+      input.stickerBuyPriceRate = Number.isFinite(stickerBuyPriceRate)
+        ? Math.max(0, stickerBuyPriceRate)
+        : 0;
+    }
+    if (body.stickerScanTotalPrice !== undefined) {
+      const stickerScanTotalPrice = Number(body.stickerScanTotalPrice);
+      input.stickerScanTotalPrice = Number.isFinite(stickerScanTotalPrice)
+        ? Math.max(0, stickerScanTotalPrice)
+        : undefined;
+    }
+    if (body.stickerScanPriceCapturedAt !== undefined) {
+      input.stickerScanPriceCapturedAt = body.stickerScanPriceCapturedAt
+        ? new Date(body.stickerScanPriceCapturedAt)
+        : undefined;
+    }
+    if (
+      input.stickerBuyPriceRate !== undefined ||
+      input.stickerScanTotalPrice !== undefined
+    ) {
+      const nextBuyRate =
+        input.stickerBuyPriceRate ??
+        (oldItem.stickerBuyPriceRate !== undefined
+          ? Number(oldItem.stickerBuyPriceRate)
+          : undefined);
+      const nextScanTotal =
+        input.stickerScanTotalPrice ??
+        (oldItem.stickerScanTotalPrice !== undefined
+          ? Number(oldItem.stickerScanTotalPrice)
+          : undefined);
+      input.stickerBuyPriceAdd =
+        nextBuyRate !== undefined && nextScanTotal !== undefined
+          ? Math.round((Math.max(0, nextScanTotal) * Math.max(0, nextBuyRate)) / 100)
+          : undefined;
+    }
 
     // Adjust storage unit items
     const suCollection = db.collection("storage_units");
     const adjustStorageUnitItem = async (suId: string, qtyDelta: number) => {
-      if (!ObjectId.isValid(suId) || qtyDelta === 0) return;
+      if (qtyDelta === 0) return;
+      if (!ObjectId.isValid(suId)) {
+        if (qtyDelta > 0) throw new Error("storageUnitNotFound");
+        return;
+      }
+
       const suDoc = await suCollection.findOne({
         _id: new ObjectId(suId),
         ...ownerFilter,
       });
-      if (!suDoc) return;
+      if (!suDoc) {
+        if (qtyDelta > 0) throw new Error("storageUnitNotFound");
+        return;
+      }
 
       const existingItems = Array.isArray(suDoc.items) ? suDoc.items : [];
+      const currentCount = existingItems.reduce(
+        (sum: number, item: { quantity?: unknown }) =>
+          sum + (Number(item.quantity) || 0),
+        0,
+      );
+
+      if (qtyDelta > 0 && currentCount + qtyDelta > STORAGE_UNIT_MAX_CAPACITY) {
+        throw new Error(
+          `storageUnitCapacityExceeded:name=${suDoc.name},currentCount=${currentCount},addingCount=${qtyDelta},maxCapacity=${STORAGE_UNIT_MAX_CAPACITY}`,
+        );
+      }
+
       const updatedItems = [...existingItems];
       const existingIdx = updatedItems.findIndex(
         (ei: { caseId: unknown }) => String(ei.caseId) === caseId,
@@ -113,7 +179,7 @@ export async function PATCH(request: NextRequest, context: RouteContext) {
       }
 
       await suCollection.updateOne(
-        { _id: new ObjectId(suId) },
+        { _id: new ObjectId(suId), ...ownerFilter },
         { $set: { items: updatedItems, updatedAt: new Date() } },
       );
     };
@@ -129,7 +195,7 @@ export async function PATCH(request: NextRequest, context: RouteContext) {
 
     if (!updated) {
       return NextResponse.json(
-        { message: "Không tìm thấy item." },
+        { message: "itemNotFound" },
         { status: 404 },
       );
     }
@@ -140,7 +206,7 @@ export async function PATCH(request: NextRequest, context: RouteContext) {
     return NextResponse.json(serializeReport(report));
   } catch (error) {
     return NextResponse.json(
-      { message: getErrorMessage(error, "Không thể cập nhật portfolio.") },
+      { message: getErrorMessage(error, "cannotUpdatePortfolio") },
       { status: 400 },
     );
   }
@@ -195,7 +261,7 @@ export async function DELETE(_request: NextRequest, context: RouteContext) {
             };
           }
           await suCollection.updateOne(
-            { _id: new ObjectId(oldSuId) },
+            { _id: new ObjectId(oldSuId), ...ownerFilter },
             { $set: { items: updatedItems, updatedAt: new Date() } },
           );
         }
@@ -206,7 +272,7 @@ export async function DELETE(_request: NextRequest, context: RouteContext) {
 
     if (!deleted) {
       return NextResponse.json(
-        { message: "Không tìm thấy item." },
+        { message: "itemNotFound" },
         { status: 404 },
       );
     }
@@ -217,7 +283,7 @@ export async function DELETE(_request: NextRequest, context: RouteContext) {
     return NextResponse.json(serializeReport(report));
   } catch (error) {
     return NextResponse.json(
-      { message: getErrorMessage(error, "Không thể cập nhật portfolio.") },
+      { message: getErrorMessage(error, "cannotUpdatePortfolio") },
       { status: 400 },
     );
   }

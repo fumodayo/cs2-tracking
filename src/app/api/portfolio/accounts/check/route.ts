@@ -4,7 +4,9 @@ import { USER_AGENTS } from "@/utils/api-client";
 import { getPortfolioOwnerId } from "@/services/auth-service";
 import { decrypt } from "@/services/crypto-service";
 import { ObjectId } from "mongodb";
-import { resolveSteamId } from "@/infrastructure/steam";
+import { resolveSteamId, fetchSteamWalletBalance } from "@/infrastructure/steam";
+import { parseSteamCookies, buildSteamCookie, mergeIncomingCookieWithExisting } from "@/utils/steam-cookies";
+import { getOwnerFilter } from "@/infrastructure/db/owner-filter";
 
 export const dynamic = "force-dynamic";
 
@@ -28,15 +30,6 @@ function parseSteamLoginSecure(rawCookie: string): string {
 }
 
 
-function getOwnerFilter(ownerId: string) {
-  if (ownerId === "guest") {
-    return {
-      $or: [{ ownerId: "guest" }, { ownerId: { $exists: false } }],
-    };
-  }
-  return { ownerId };
-}
-
 export async function POST(request: NextRequest) {
   let accountId: string | undefined;
   let ownerId: string | undefined;
@@ -52,7 +45,7 @@ export async function POST(request: NextRequest) {
     if (accountId) {
       if (!ObjectId.isValid(accountId)) {
         return NextResponse.json(
-          { message: "Id tài khoản không hợp lệ." },
+          { message: "invalidAccountId" },
           { status: 400 },
         );
       }
@@ -65,7 +58,7 @@ export async function POST(request: NextRequest) {
 
       if (!account) {
         return NextResponse.json(
-          { message: "Không tìm thấy tài khoản." },
+          { message: "accountNotFound" },
           { status: 404 },
         );
       }
@@ -73,7 +66,7 @@ export async function POST(request: NextRequest) {
       if (!account.steamCookie) {
         return NextResponse.json({
           isValid: false,
-          message: "Tài khoản chưa cấu hình cookie.",
+          message: "accountCookieNotConfigured",
         });
       }
 
@@ -90,24 +83,40 @@ export async function POST(request: NextRequest) {
             message:
               resolveErr instanceof Error
                 ? resolveErr.message
-                : "Không tìm thấy profile Steam.",
+                : "steamProfileNotFound",
           });
         }
       }
 
       if (!targetSteamId64) {
         return NextResponse.json(
-          { message: "Thiếu thông tin SteamID64 hoặc Steam URL." },
+          { message: "missingSteamIdOrUrl" },
           { status: 400 },
         );
       }
       if (!steamCookie) {
         return NextResponse.json({
           isValid: false,
-          message: "Vui lòng nhập cookie để kiểm tra.",
+          message: "enterCookieToCheck",
         });
       }
-      decryptedCookie = steamCookie;
+      let finalCookie = steamCookie;
+      if (targetSteamId64) {
+        try {
+          const db = await getDatabase();
+          const existingAccount = await db.collection("portfolio_accounts").findOne({
+            ownerId,
+            steamId64: targetSteamId64,
+          });
+          if (existingAccount?.steamCookie) {
+            const decryptedExisting = decrypt(existingAccount.steamCookie);
+            finalCookie = mergeIncomingCookieWithExisting(steamCookie, decryptedExisting);
+          }
+        } catch (dbErr) {
+          console.error("[check/route.ts] Failed to fetch and merge existing account cookie:", dbErr);
+        }
+      }
+      decryptedCookie = finalCookie;
     }
 
     const cookieValue = parseSteamLoginSecure(decryptedCookie);
@@ -142,7 +151,7 @@ export async function POST(request: NextRequest) {
     const accessToken = parts.length >= 2 && parts[1] ? parts[1] : null;
 
     if (!cookieSteamId || !accessToken) {
-      const errorMsg = "Cookie steamLoginSecure không đúng định dạng.";
+      const errorMsg = "invalidCookieFormat";
       if (accountId) {
         const db = await getDatabase();
         await db
@@ -156,7 +165,7 @@ export async function POST(request: NextRequest) {
     }
 
     if (cookieSteamId !== targetSteamId64) {
-      const errorMsg = `Cookie này thuộc về tài khoản Steam khác (${cookieSteamId}), không trùng khớp với tài khoản bạn đang cấu hình (${targetSteamId64}).`;
+      const errorMsg = `cookieSteamIdMismatch:cookieSteamId=${cookieSteamId},steamId64=${targetSteamId64}`;
       if (accountId) {
         const db = await getDatabase();
         await db
@@ -193,20 +202,46 @@ export async function POST(request: NextRequest) {
     );
 
     if (res.ok) {
+      let walletRaw: string | null = null;
+      let walletVnd: number | null = null;
+      try {
+        const parsed = parseSteamCookies(decryptedCookie);
+        const standardCookie = buildSteamCookie(
+          parsed.steamLoginSecure,
+          parsed.sessionid,
+          parsed.steamparental
+        );
+        const walletResult = await fetchSteamWalletBalance(standardCookie);
+        if (walletResult) {
+          walletRaw = walletResult.raw;
+          walletVnd = walletResult.vnd;
+        }
+      } catch (walletErr) {
+        console.error("Failed to fetch steam wallet balance on check:", walletErr);
+      }
+
       if (accountId) {
         const db = await getDatabase();
+        const updateDoc: Record<string, unknown> = {
+          cookieError: null,
+          updatedAt: new Date()
+        };
+        if (walletRaw !== null) {
+          updateDoc.walletBalance = walletRaw;
+          updateDoc.walletBalanceVnd = walletVnd;
+        }
         await db
           .collection("portfolio_accounts")
           .updateOne(
             { _id: new ObjectId(accountId), ...getOwnerFilter(ownerId) },
-            { $set: { cookieError: null, updatedAt: new Date() } },
+            { $set: updateDoc },
           );
       }
       return NextResponse.json({ isValid: true });
     }
 
     if (res.status === 401 || res.status === 403) {
-      const errorMsg = "Cookie đã hết hạn hoặc không hợp lệ.";
+      const errorMsg = "cookieExpiredOrInvalid";
       if (accountId) {
         const db = await getDatabase();
         await db
@@ -223,7 +258,7 @@ export async function POST(request: NextRequest) {
       });
     }
 
-    const errorMsg = `Lỗi kết nối Steam (HTTP ${res.status}).`;
+    const errorMsg = `steamConnectionError:status=${res.status}`;
     if (accountId) {
       const db = await getDatabase();
       await db
@@ -236,7 +271,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ isValid: false, message: errorMsg });
   } catch (error) {
     const errorMsg =
-      error instanceof Error ? error.message : "Đã xảy ra lỗi khi kiểm tra.";
+      error instanceof Error ? error.message : "checkErrorGeneric";
     if (accountId) {
       try {
         const db = await getDatabase();

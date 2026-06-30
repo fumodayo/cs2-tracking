@@ -13,6 +13,7 @@ export type PortfolioReportRow = {
   item: PortfolioItem;
   case: CaseItem;
   currentPrice: number | null;
+  skinCurrentPrice?: number | null;
   currentPriceCapturedAt: string | null;
   investedValue: number;
   currentValue: number | null;

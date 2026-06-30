@@ -2,7 +2,9 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
 import { toast, toastStore } from "@/stores";
 import { getErrorMessage } from "@/utils/error";
-import { refreshBuffPrice } from "@/services/buff-api";
+import { refreshBuffPrice } from "@/lib/api-client/buff-api";
+import { mapWithConcurrency } from "@/services/parser/utils";
+import { translateAccountError } from "@/components/inventory-scanner/utils";
 import {
   PORTFOLIO_QUERY_KEY,
   refreshPortfolioPrices,
@@ -10,7 +12,7 @@ import {
   deletePortfolioItem,
   deleteManyPortfolioItems,
   updatePortfolioItem,
-} from "@/services/portfolio-api";
+} from "@/lib/api-client/portfolio-api";
 import type { PortfolioReportDto } from "@/types/report";
 import type { Dispatch, SetStateAction } from "react";
 
@@ -33,7 +35,8 @@ export function usePortfolioMutations({
   const { t } = useTranslation();
 
   function setMutationError(mutationError: unknown) {
-    setError(getErrorMessage(mutationError));
+    const msg = getErrorMessage(mutationError);
+    setError(translateAccountError(msg, t));
   }
 
   // Helper to standardise loading, success and error toast callbacks for mutations
@@ -66,10 +69,11 @@ export function usePortfolioMutations({
         context: { toastId: string } | undefined,
       ) => {
         if (context?.toastId) {
+          const msg = getErrorMessage(err);
           toastStore.update(context.toastId, {
             type: "error",
             title: t(errorKey),
-            description: getErrorMessage(err),
+            description: translateAccountError(msg, t),
             duration: 5000,
           });
         }
@@ -103,33 +107,23 @@ export function usePortfolioMutations({
         const newPrices: Record<string, number> = {};
         const concurrency = 4;
         const items = [...skinsToRefresh];
-        let nextIndex = 0;
 
-        const fetchWorker = async () => {
-          while (nextIndex < items.length) {
-            const currentHashName = items[nextIndex++];
-            try {
-              const data = await refreshBuffPrice(
-                currentHashName,
-                buffCnyToVndRate,
-              );
-              if (data) {
-                newPrices[currentHashName] = data.priceCny;
-              }
-            } catch (err) {
-              console.error(
-                `Failed to refresh Buff price for ${currentHashName}:`,
-                err,
-              );
+        await mapWithConcurrency(items, concurrency, async (currentHashName) => {
+          try {
+            const data = await refreshBuffPrice(
+              currentHashName,
+              buffCnyToVndRate,
+            );
+            if (data) {
+              newPrices[currentHashName] = data.priceCny;
             }
+          } catch (err) {
+            console.error(
+              `Failed to refresh Buff price for ${currentHashName}:`,
+              err,
+            );
           }
-        };
-
-        const workers = Array.from(
-          { length: Math.min(concurrency, items.length) },
-          fetchWorker,
-        );
-        await Promise.all(workers);
+        });
 
         if (Object.keys(newPrices).length > 0) {
           setBuffPricesCny((prev) => {
@@ -165,7 +159,7 @@ export function usePortfolioMutations({
     onSuccess: (report, variables, context) => {
       addCallbacks.onSuccess(report, variables, context);
       queryClient.setQueryData(PORTFOLIO_QUERY_KEY, report);
-      queryClient.invalidateQueries({ queryKey: ["storage_units"] });
+      queryClient.invalidateQueries({ queryKey: ["portfolio-storage-units"] });
       setDialogOpen(false);
       setError(null);
     },
@@ -198,7 +192,7 @@ export function usePortfolioMutations({
     onSuccess: (report, id, context) => {
       deleteCallbacks.onSuccess(report, id, context);
       queryClient.setQueryData(PORTFOLIO_QUERY_KEY, report);
-      queryClient.invalidateQueries({ queryKey: ["storage_units"] });
+      queryClient.invalidateQueries({ queryKey: ["portfolio-storage-units"] });
       setError(null);
     },
     onError: (err, id, context) => {
@@ -233,7 +227,7 @@ export function usePortfolioMutations({
     onSuccess: (report, ids, context) => {
       deleteManyCallbacks.onSuccess(report, ids, context);
       queryClient.setQueryData(PORTFOLIO_QUERY_KEY, report);
-      queryClient.invalidateQueries({ queryKey: ["storage_units"] });
+      queryClient.invalidateQueries({ queryKey: ["portfolio-storage-units"] });
       setError(null);
     },
     onError: (err, ids, context) => {
@@ -284,7 +278,7 @@ export function usePortfolioMutations({
     onSuccess: (report, variables, context) => {
       updateCallbacks.onSuccess(report, variables, context);
       queryClient.setQueryData(PORTFOLIO_QUERY_KEY, report);
-      queryClient.invalidateQueries({ queryKey: ["storage_units"] });
+      queryClient.invalidateQueries({ queryKey: ["portfolio-storage-units"] });
       setError(null);
     },
     onError: (err, variables, context) => {

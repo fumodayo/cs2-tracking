@@ -61,11 +61,11 @@ export function ImportExcelMappingDialog({
 
   // Target system fields definitions
   const systemFields = useMemo(() => [
-    { key: "name", label: t("excelMapping.fieldName", "Tên vật phẩm"), required: true, defaultValue: "" },
-    { key: "quantity", label: t("excelMapping.fieldQuantity", "Số lượng"), required: false, defaultValue: "1" },
-    { key: "buyPrice", label: t("excelMapping.fieldBuyPrice", "Giá mua"), required: false, defaultValue: "0" },
-    { key: "buyDate", label: t("excelMapping.fieldBuyDate", "Ngày mua"), required: false, defaultValue: t("excelMapping.defaultValueToday", "Hôm nay") },
-    { key: "note", label: t("excelMapping.fieldNote", "Ghi chú"), required: false, defaultValue: '"Import từ Excel"' },
+    { key: "name", label: t("excelMapping.fieldName", "Item Name"), required: true, defaultValue: "" },
+    { key: "quantity", label: t("excelMapping.fieldQuantity", "Quantity"), required: false, defaultValue: "1" },
+    { key: "buyPrice", label: t("excelMapping.fieldBuyPrice", "Buy Price"), required: false, defaultValue: "0" },
+    { key: "buyDate", label: t("excelMapping.fieldBuyDate", "Buy Date"), required: false, defaultValue: t("excelMapping.defaultValueToday", "Today") },
+    { key: "note", label: t("excelMapping.fieldNote", "Note"), required: false, defaultValue: '"Import t\u1eeb Excel"' },
     { key: "caseId", label: t("excelMapping.fieldCaseId", "Case ID"), required: false, defaultValue: "empty" },
   ], [t]);
 
@@ -188,33 +188,33 @@ export function ImportExcelMappingDialog({
 
   return (
     <Dialog open={open} onOpenChange={(nextOpen) => !nextOpen && onClose()}>
-      <DialogContent className="max-w-4xl border-stone-850 bg-[#0c0f17]/98 p-6 text-stone-100 shadow-[0_30px_90px_rgba(0,0,0,0.95)] backdrop-blur-3xl sm:rounded-xl">
+      <DialogContent className="max-w-4xl border border-border bg-card p-6 text-foreground shadow-[0_30px_90px_rgba(0,0,0,0.25)] dark:shadow-[0_30px_90px_rgba(0,0,0,0.95)] backdrop-blur-3xl sm:rounded-xl">
         <DialogHeader className="mb-4">
-          <DialogTitle className="text-xl font-bold text-stone-200">
-            {t("excelMapping.title", "Ánh xạ cột Excel")}
+          <DialogTitle className="text-xl font-bold text-foreground">
+            {t("excelMapping.title", "Excel Column Mapping")}
           </DialogTitle>
-          <DialogDescription className="text-xs text-stone-400">
+          <DialogDescription className="text-xs text-muted-foreground">
             {t(
               "excelMapping.description",
-              "Kéo cột Excel bên trái thả vào trường tương ứng bên phải, hoặc chọn từ dropdown."
+              "Drag Excel columns from the left and drop them into the corresponding system fields on the right, or select them from the dropdown."
             )}
-            <span className="ml-1 font-semibold text-blue-400">({fileName})</span>
+            <span className="ml-1 font-semibold text-blue-600 dark:text-blue-400">({fileName})</span>
           </DialogDescription>
         </DialogHeader>
 
         {/* Template Selection */}
         {savedTemplates.length > 0 && (
-          <div className="mb-4 flex items-center justify-between rounded-lg border border-stone-850 bg-stone-950/20 px-4 py-2.5">
-            <span className="text-xs text-stone-400 font-medium">
-              {t("excelMapping.selectTemplate", "Chọn template đã lưu:")}
+          <div className="mb-4 flex items-center justify-between rounded-lg border border-border bg-surface-muted/30 px-4 py-2.5">
+            <span className="text-xs text-muted-foreground font-medium">
+              {t("excelMapping.selectTemplate", "Select saved template:")}
             </span>
             <div className="flex items-center gap-2">
               <select
                 value={selectedTemplateId}
                 onChange={(e) => handleTemplateSelect(e.target.value)}
-                className="h-8 rounded-md border border-stone-800 bg-stone-900 px-2 text-xs text-stone-200 focus:border-accent outline-none cursor-pointer"
+                className="h-8 rounded-md border border-border bg-background px-2 text-xs text-foreground focus:border-accent outline-none cursor-pointer"
               >
-                <option value="">{t("excelMapping.noTemplates", "— Mặc định gợi ý —")}</option>
+                <option value="">{t("excelMapping.noTemplates", "— Default suggestion —")}</option>
                 {savedTemplates.map((tpl) => (
                   <option key={tpl.id} value={tpl.id}>
                     {tpl.label}
@@ -228,8 +228,8 @@ export function ImportExcelMappingDialog({
                     onDeleteTemplate(selectedTemplateId);
                     setSelectedTemplateId("");
                   }}
-                  className="h-8 w-8 p-0 border-stone-800 text-stone-400 hover:text-red-400 hover:bg-stone-900"
-                  title="Xóa template này"
+                  className="h-8 w-8 p-0 border-border text-muted-foreground hover:text-red-500 dark:hover:text-red-400 hover:bg-red-50 dark:hover:bg-red-500/10"
+                  title={t("excelMapping.deleteTemplateTooltip", "Delete this template")}
                 >
                   <FaTrash className="size-3" />
                 </Button>
@@ -242,10 +242,10 @@ export function ImportExcelMappingDialog({
         <div className="grid grid-cols-1 gap-6 md:grid-cols-5">
           {/* Left Side: Excel Columns */}
           <div className="md:col-span-2 flex flex-col">
-            <h3 className="mb-2 text-xs font-semibold uppercase tracking-wider text-stone-400">
-              {t("excelMapping.excelColumns", "Cột trong Excel")}
+            <h3 className="mb-2 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+              {t("excelMapping.excelColumns", "Excel Columns")}
             </h3>
-            <div className="flex-1 max-h-[300px] overflow-y-auto rounded-lg border border-stone-850 bg-stone-950/40 p-3 space-y-2">
+            <div className="flex-1 max-h-[300px] overflow-y-auto rounded-lg border border-border bg-surface-muted/20 p-3 space-y-2">
               {excelHeaders.map((header, idx) => {
                 const mappedTo = getMappedField(idx);
                 return (
@@ -256,16 +256,16 @@ export function ImportExcelMappingDialog({
                     onDragEnd={handleDragEnd}
                     className={`group flex items-center justify-between rounded-md border px-3 py-2.5 text-xs font-medium transition-all cursor-grab active:cursor-grabbing shadow-sm ${
                       mappedTo
-                        ? "border-emerald-500/20 bg-emerald-500/5 text-emerald-400/70 opacity-60"
-                        : "border-stone-800 bg-stone-900/60 hover:border-stone-700 hover:bg-stone-850 text-stone-300"
+                        ? "border-emerald-500/20 bg-emerald-50/50 dark:bg-emerald-500/5 text-emerald-600/70 dark:text-emerald-400/70 opacity-60"
+                        : "border-border bg-background hover:border-stone-300 dark:hover:border-stone-700 hover:bg-stone-50 dark:hover:bg-stone-850 text-foreground"
                     }`}
                   >
                     <div className="flex items-center gap-2 overflow-hidden mr-1">
-                      <FaGripVertical className="size-3 text-stone-500 shrink-0 cursor-grab" />
-                      <FaFileExcel className="size-3.5 text-emerald-400 shrink-0" />
+                      <FaGripVertical className="size-3 text-stone-400 dark:text-stone-500 shrink-0 cursor-grab" />
+                      <FaFileExcel className="size-3.5 text-emerald-500 dark:text-emerald-400 shrink-0" />
                       <span className="truncate">{header}</span>
                     </div>
-                    <span className="text-[10px] text-stone-500 select-none font-semibold shrink-0 bg-stone-950/40 px-1.5 py-0.5 rounded border border-stone-850/60">
+                    <span className="text-[10px] text-muted-foreground select-none font-semibold shrink-0 bg-surface-muted/40 px-1.5 py-0.5 rounded border border-border/60">
                       #{idx + 1}
                     </span>
                   </div>
@@ -276,10 +276,10 @@ export function ImportExcelMappingDialog({
 
           {/* Right Side: System Fields Target Slots */}
           <div className="md:col-span-3 flex flex-col">
-            <h3 className="mb-2 text-xs font-semibold uppercase tracking-wider text-stone-400">
-              {t("excelMapping.systemFields", "Trường hệ thống")}
+            <h3 className="mb-2 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+              {t("excelMapping.systemFields", "System Fields")}
             </h3>
-            <div className="flex-1 max-h-[300px] overflow-y-auto rounded-lg border border-stone-850 bg-stone-950/40 p-3 space-y-2.5">
+            <div className="flex-1 max-h-[300px] overflow-y-auto rounded-lg border border-border bg-surface-muted/20 p-3 space-y-2.5">
               {systemFields.map((field) => {
                 const currentMappedIdx = mapping[field.key as keyof ColumnMapping];
                 const isHovered = hoveredTarget === field.key;
@@ -294,28 +294,28 @@ export function ImportExcelMappingDialog({
                       isHovered
                         ? "border-accent bg-accent/5 ring-1 ring-accent"
                         : currentMappedIdx !== undefined
-                        ? "border-stone-800 bg-stone-900/30"
-                        : "border-stone-850/60 bg-stone-950/10"
+                        ? "border-border bg-background"
+                        : "border-border/60 bg-surface-muted/10"
                     }`}
                   >
                     <div className="flex items-center justify-between">
                       <div className="flex items-center gap-1.5">
-                        <span className="text-xs font-semibold text-stone-200">
+                        <span className="text-xs font-semibold text-foreground">
                           {field.label}
                         </span>
                         {field.required ? (
-                          <span className="text-[10px] font-bold uppercase text-red-400 select-none">
-                            *{t("excelMapping.required", "Bắt buộc")}
+                          <span className="text-[10px] font-bold uppercase text-red-500 dark:text-red-400 select-none">
+                            *{t("excelMapping.required", "Required")}
                           </span>
                         ) : (
-                          <span className="text-[9px] text-stone-500 font-normal select-none">
+                          <span className="text-[9px] text-muted-foreground font-normal select-none">
                             {t("excelMapping.defaultValue", { value: field.defaultValue })}
                           </span>
                         )}
                       </div>
                       
                       {currentMappedIdx !== undefined && (
-                        <div className="flex items-center gap-1.5 rounded-full bg-emerald-500/10 border border-emerald-500/20 px-2 py-0.5 text-[10px] font-semibold text-emerald-400 select-none">
+                        <div className="flex items-center gap-1.5 rounded-full bg-emerald-50 dark:bg-emerald-500/10 border border-emerald-200 dark:border-emerald-500/20 px-2 py-0.5 text-[10px] font-semibold text-emerald-600 dark:text-emerald-400 select-none">
                           <FaCheck className="size-2.5" />
                           <span className="max-w-[120px] truncate">
                             {excelHeaders[currentMappedIdx]}
@@ -328,9 +328,9 @@ export function ImportExcelMappingDialog({
                       <select
                         value={currentMappedIdx === undefined ? "" : currentMappedIdx.toString()}
                         onChange={(e) => handleFieldChange(field.key, e.target.value)}
-                        className="h-9 w-full rounded-md border border-stone-800 bg-stone-900 px-3 text-xs text-stone-300 focus:border-accent outline-none cursor-pointer transition-all hover:bg-stone-850"
+                        className="h-9 w-full rounded-md border border-border bg-background px-3 text-xs text-foreground focus:border-accent outline-none cursor-pointer transition-all hover:bg-surface-muted/30"
                       >
-                        <option value="">{t("excelMapping.notMapped", "— Không chọn —")}</option>
+                        <option value="">{t("excelMapping.notMapped", "— Not mapped —")}</option>
                         {excelHeaders.map((header, idx) => (
                           <option key={idx} value={idx.toString()}>
                             {header} (#{idx + 1})
@@ -346,17 +346,17 @@ export function ImportExcelMappingDialog({
         </div>
 
         {/* Template Save Options */}
-        <div className="mt-4 border-t border-stone-900 pt-4 flex flex-col gap-2">
-          <label className="flex items-center gap-2 text-xs text-stone-400 font-medium cursor-pointer select-none">
+        <div className="mt-4 border-t border-border pt-4 flex flex-col gap-2">
+          <label className="flex items-center gap-2 text-xs text-muted-foreground font-medium cursor-pointer select-none">
             <input
               type="checkbox"
               checked={saveAsTemplate}
               onChange={(e) => setSaveAsTemplate(e.target.checked)}
-              className="size-4 rounded border-stone-800 bg-stone-900 text-accent focus:ring-accent focus:ring-offset-stone-950 cursor-pointer"
+              className="size-4 rounded border-border bg-background text-accent focus:ring-accent focus:ring-offset-card cursor-pointer"
             />
             <span className="flex items-center gap-1.5">
               <FaFloppyDisk className="size-3" />
-              {t("excelMapping.saveTemplate", "Lưu cấu hình này làm template")}
+              {t("excelMapping.saveTemplate", "Save this mapping as a template")}
             </span>
           </label>
 
@@ -364,10 +364,10 @@ export function ImportExcelMappingDialog({
             <div className="mt-1 max-w-sm">
               <Input
                 type="text"
-                placeholder={t("excelMapping.templateNamePlaceholder", "Ví dụ: File xuất Buff, File cá nhân...")}
+                placeholder={t("excelMapping.templateNamePlaceholder", "E.g.: Buff export, personal sheet...")}
                 value={templateLabel}
                 onChange={(e) => setTemplateLabel(e.target.value)}
-                className="h-8 text-xs border-stone-800 bg-stone-900/60"
+                className="h-8 text-xs"
               />
             </div>
           )}
@@ -376,31 +376,31 @@ export function ImportExcelMappingDialog({
         {/* Preview section */}
         {previewRows.length > 0 && (
           <div className="mt-4">
-            <h4 className="mb-2 text-xs font-semibold uppercase tracking-wider text-stone-400 flex items-center gap-1.5">
-              <FaInfo className="size-3 text-blue-400" />
-              {t("excelMapping.preview", "Xem trước (3 dòng đầu)")}
+            <h4 className="mb-2 text-xs font-semibold uppercase tracking-wider text-muted-foreground flex items-center gap-1.5">
+              <FaInfo className="size-3 text-blue-600 dark:text-blue-400" />
+              {t("excelMapping.preview", "Preview (first 3 rows)")}
             </h4>
-            <div className="overflow-x-auto rounded-lg border border-stone-850 bg-stone-950/40">
+            <div className="overflow-x-auto rounded-lg border border-border bg-surface-muted/20">
               <table className="w-full text-left text-xs border-collapse">
-                <thead className="bg-[#0e121e] text-[10px] uppercase text-stone-500 font-semibold border-b border-stone-850">
+                <thead className="bg-surface-muted/40 text-[10px] uppercase text-muted-foreground font-semibold border-b border-border">
                   <tr>
-                    <th className="py-2 px-3">{t("excelMapping.fieldName", "Tên vật phẩm")}</th>
-                    <th className="py-2 px-3 w-16 text-center">{t("excelMapping.fieldQuantity", "SL")}</th>
-                    <th className="py-2 px-3 w-28 text-right">{t("excelMapping.fieldBuyPrice", "Giá mua")}</th>
-                    <th className="py-2 px-3 w-28 text-center">{t("excelMapping.fieldBuyDate", "Ngày mua")}</th>
-                    <th className="py-2 px-3 w-32">{t("excelMapping.fieldNote", "Ghi chú")}</th>
+                    <th className="py-2 px-3">{t("excelMapping.fieldName", "Item Name")}</th>
+                    <th className="py-2 px-3 w-16 text-center">{t("excelMapping.fieldQuantityShort", "Qty")}</th>
+                    <th className="py-2 px-3 w-28 text-right">{t("excelMapping.fieldBuyPrice", "Buy Price")}</th>
+                    <th className="py-2 px-3 w-28 text-center">{t("excelMapping.fieldBuyDate", "Buy Date")}</th>
+                    <th className="py-2 px-3 w-32">{t("excelMapping.fieldNote", "Note")}</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-stone-900/50">
+                <tbody className="divide-y divide-border/50">
                   {previewRows.map((row, idx) => (
-                    <tr key={idx} className="hover:bg-stone-900/20">
-                      <td className="py-2 px-3 font-medium text-stone-300 truncate max-w-[200px]" title={row.marketHashName}>
+                    <tr key={idx} className="hover:bg-surface-muted/20">
+                      <td className="py-2 px-3 font-medium text-foreground truncate max-w-[200px]" title={row.marketHashName}>
                         {row.marketHashName}
                       </td>
-                      <td className="py-2 px-3 text-center text-stone-400">{row.quantity}</td>
-                      <td className="py-2 px-3 text-right text-blue-300">{row.buyPrice.toLocaleString()}</td>
-                      <td className="py-2 px-3 text-center text-stone-400">{row.buyDate}</td>
-                      <td className="py-2 px-3 text-stone-400 truncate max-w-[120px]" title={row.note}>
+                      <td className="py-2 px-3 text-center text-muted-foreground">{row.quantity}</td>
+                      <td className="py-2 px-3 text-right text-blue-600 dark:text-blue-300">{row.buyPrice.toLocaleString()}</td>
+                      <td className="py-2 px-3 text-center text-muted-foreground">{row.buyDate}</td>
+                      <td className="py-2 px-3 text-muted-foreground truncate max-w-[120px]" title={row.note}>
                         {row.note}
                       </td>
                     </tr>
@@ -412,13 +412,13 @@ export function ImportExcelMappingDialog({
         )}
 
         {/* Footer actions */}
-        <div className="mt-5 flex items-center justify-end gap-2.5 border-t border-stone-900 pt-4">
+        <div className="mt-5 flex items-center justify-end gap-2.5 border-t border-border pt-4">
           <Button
             variant="outline"
             onClick={onClose}
-            className="h-9 border-stone-800 bg-stone-900/60 px-4 text-xs font-medium text-stone-300 hover:border-stone-700 hover:bg-stone-850"
+            className="h-9 px-4 text-xs font-medium"
           >
-            {t("excelMapping.cancelButton", "Hủy bỏ")}
+            {t("excelMapping.cancelButton", "Cancel")}
           </Button>
           <Button
             variant="primary"
@@ -426,7 +426,7 @@ export function ImportExcelMappingDialog({
             onClick={handleConfirmClick}
             className="h-9 bg-accent hover:bg-accent-hover text-accent-foreground px-5 text-xs font-bold shadow-md shadow-accent/10 disabled:opacity-40"
           >
-            {t("excelMapping.confirmButton", "Xác nhận ánh xạ")}
+            {t("excelMapping.confirmButton", "Confirm Mapping")}
             <FaArrowRight className="ml-1.5 size-3" />
           </Button>
         </div>

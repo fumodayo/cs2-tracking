@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { useTranslation } from "react-i18next";
 import { Card } from "@/components/ui/card";
 import type { PortfolioTableRow } from "@/components/portfolio";
 import { TbPercentage, TbShoppingBag, TbInfoCircle } from "react-icons/tb";
@@ -91,6 +92,7 @@ function ProfitBadge({
  * Renders as a fragment — designed to be slotted into the SummaryCards grid.
  */
 export function RateCards({ rows, totalInvested }: RateCardsProps) {
+  const { t } = useTranslation();
   const [rateSi, setRateSi] = useState(() => readRate(LS_KEY_RATE_SI, 60));
   const [rateLe, setRateLe] = useState(() => readRate(LS_KEY_RATE_LE, 65));
 
@@ -111,18 +113,18 @@ export function RateCards({ rows, totalInvested }: RateCardsProps) {
   return (
     <>
       {/* Rate sỉ (all) */}
-      <Card className="h-full border border-accent/24 bg-accent/8 p-4 text-foreground transition-all duration-300 hover:scale-[1.015] hover:shadow-[0_8px_30px_rgb(0,0,0,0.04)] dark:hover:shadow-[0_8px_30px_rgb(0,0,0,0.12)]">
+      <Card className="h-full border border-accent/24 bg-accent/8 p-4 text-foreground transition-all duration-300 hover:shadow-[0_8px_30px_rgb(0,0,0,0.04)] dark:hover:shadow-[0_8px_30px_rgb(0,0,0,0.12)]">
         <div className="flex items-start justify-between gap-3">
           <div className="min-w-0 flex-1">
             <div className="flex items-center gap-2">
               <p className="text-xs font-medium tracking-[0.12em] text-muted-foreground uppercase">
-                Rate sỉ (all)
+                {t("rateCards.rateSi")}
               </p>
               <TooltipProvider>
                 <Tooltip
                   content={
                     <span>
-                      Giá trị quy đổi khi bán sỉ toàn bộ kho đồ. Áp dụng tỷ lệ chiết khấu cho hòm, capsule, sticker và skin thường. Skin có cài giá Buff được tính 100% giá Buff.
+                      {t("rateCards.rateSiTooltip")}
                     </span>
                   }
                   side="top"
@@ -140,8 +142,8 @@ export function RateCards({ rows, totalInvested }: RateCardsProps) {
                   max={100}
                   value={rateSi}
                   onChange={(e) => setRateSi(Number(e.target.value) || 0)}
-                  aria-label="Tỷ lệ chiết khấu sỉ"
-                  className="w-10 [appearance:textfield] bg-transparent text-center text-sm font-bold text-foreground outline-none [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
+                  aria-label={t("rateCards.rateSiAriaLabel")}
+                  className="w-10 [appearance:textfield] bg-transparent text-center text-sm font-bold text-accent outline-none [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
                 />
                 <span className="text-xs text-muted-foreground">
                   %
@@ -155,7 +157,7 @@ export function RateCards({ rows, totalInvested }: RateCardsProps) {
             <div className="mt-2">
               <ProfitBadge profit={profitSi} invested={totalInvested} />
               <p className="mt-1 text-xs text-muted-foreground">
-                Giá bán khi bán sỉ toàn bộ
+                {t("rateCards.rateSiDesc")}
               </p>
             </div>
           </div>
@@ -166,18 +168,18 @@ export function RateCards({ rows, totalInvested }: RateCardsProps) {
       </Card>
 
       {/* Rate lẻ */}
-      <Card className="h-full border border-amber-500/20 bg-amber-500/5 p-4 text-foreground transition-all duration-300 hover:scale-[1.015] hover:shadow-[0_8px_30px_rgb(0,0,0,0.04)] dark:hover:shadow-[0_8px_30px_rgb(0,0,0,0.12)]">
+      <Card className="h-full border border-amber-500/20 bg-amber-500/5 p-4 text-foreground transition-all duration-300 hover:shadow-[0_8px_30px_rgb(0,0,0,0.04)] dark:hover:shadow-[0_8px_30px_rgb(0,0,0,0.12)]">
         <div className="flex items-start justify-between gap-3">
           <div className="min-w-0 flex-1">
             <div className="flex items-center gap-2">
               <p className="text-xs font-medium tracking-[0.12em] text-muted-foreground uppercase">
-                Rate lẻ
+                {t("rateCards.rateLe")}
               </p>
               <TooltipProvider>
                 <Tooltip
                   content={
                     <span>
-                      Giá trị quy đổi khi bán lẻ. Áp dụng tỷ lệ chiết khấu lẻ cho hòm, capsule, sticker. Skin có cài giá Buff được tính 100% giá Buff.
+                      {t("rateCards.rateLeTooltip")}
                     </span>
                   }
                   side="top"
@@ -195,8 +197,8 @@ export function RateCards({ rows, totalInvested }: RateCardsProps) {
                   max={100}
                   value={rateLe}
                   onChange={(e) => setRateLe(Number(e.target.value) || 0)}
-                  aria-label="Tỷ lệ chiết khấu lẻ"
-                  className="w-10 [appearance:textfield] bg-transparent text-center text-sm font-bold text-foreground outline-none [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
+                  aria-label={t("rateCards.rateLeAriaLabel")}
+                  className="w-10 [appearance:textfield] bg-transparent text-center text-sm font-bold text-amber-500 dark:text-amber-400 outline-none [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
                 />
                 <span className="text-xs text-muted-foreground">
                   %
@@ -210,7 +212,7 @@ export function RateCards({ rows, totalInvested }: RateCardsProps) {
             <div className="mt-2">
               <ProfitBadge profit={profitLe} invested={totalInvested} />
               <p className="mt-1 text-xs text-muted-foreground">
-                Giá bán khi bán lẻ từng hòm
+                {t("rateCards.rateLeDesc")}
               </p>
             </div>
           </div>

@@ -6,6 +6,8 @@ import { useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Button } from "@/components/ui/button";
+import { PORTFOLIO_QUERY_KEY } from "@/lib/api-client/portfolio-api";
+import { translateImportProgressMessage } from "@/components/inventory-scanner/utils";
 
 export function GlobalImportProgress() {
   const status = useImportStore();
@@ -24,7 +26,7 @@ export function GlobalImportProgress() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ ids: status.importedIds }),
       });
-      await queryClient.invalidateQueries({ queryKey: ["portfolio-report"] });
+      await queryClient.invalidateQueries({ queryKey: PORTFOLIO_QUERY_KEY });
       importStore.setState({ phase: "idle" });
     } catch (err) {
       console.error(err);
@@ -58,7 +60,7 @@ export function GlobalImportProgress() {
               <p className="mt-0.5 truncate text-xs text-stone-400">
                 {status.fileName}
                 {status.phase === "uploading" && status.rowsCount
-                  ? ` · ${status.rowsCount} ${t("common.rows")}`
+                  ? ` · ${status.importedCount !== undefined ? `${status.importedCount}/` : ""}${status.rowsCount} ${t("common.rows")}`
                   : ""}
                 {status.phase === "done" && status.rowsCount
                   ? ` · ${status.importedCount}/${status.rowsCount} ${t("common.rows")}`
@@ -67,7 +69,7 @@ export function GlobalImportProgress() {
             )}
             {status.message && (
               <p className="mt-1 line-clamp-2 text-xs text-stone-400">
-                {status.message}
+                {translateImportProgressMessage(status.message, t)}
               </p>
             )}
 

@@ -25,7 +25,7 @@ export class PortfolioImportService {
     rows: PortfolioImportRowInput[],
   ): Promise<PortfolioImportResult> {
     if (rows.length === 0) {
-      throw new Error("File không có dòng portfolio hợp lệ.");
+      throw new Error("importErrorNoValidRows");
     }
 
     const inputs = [];
@@ -69,7 +69,7 @@ export class PortfolioImportService {
     }
 
     throw new Error(
-      `Dòng ${index + 2}: không tìm thấy case. Hãy nhập Case ID hoặc Market Hash Name đúng.`,
+      `importErrorRowCaseNotFound:row=${index + 2}`,
     );
   }
 }

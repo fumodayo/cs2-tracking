@@ -1,8 +1,8 @@
 /* eslint-disable react-refresh/only-export-components */
 import { type ColumnDef, type HeaderContext } from "@tanstack/react-table";
+import { useTranslation } from "react-i18next";
 import { FaSteam, FaCoins } from "react-icons/fa";
 import { TbLock } from "react-icons/tb";
-import { ArrowUpDown } from "lucide-react";
 import type { PortfolioReportRowDto } from "@/types/report";
 import { formatPercent } from "@/utils/format";
 import { formatRelative as formatRelativeTime } from "@/utils/date";
@@ -17,8 +17,10 @@ import {
   toInputNumber,
 } from "./portfolio-table-utils";
 import { RatedValueCell } from "./portfolio-table-cells";
+import { estimateOverpay } from "@/services/pattern/overpay-calculator";
 
-import { Button } from "@/components/ui/button";
+import { DataTableColumnHeader } from "@/components/ui/actions";
+
 export function sortableHeader(
   label: string,
   align: "left" | "right" = "left",
@@ -27,16 +29,11 @@ export function sortableHeader(
     column,
   }: HeaderContext<PortfolioTableRow, unknown>) {
     return (
-      <Button
-        type="button"
-        variant="ghost"
-        size="sm"
-        onClick={() => column.toggleSorting()}
-        className={`h-8 px-2 -mx-2 font-medium hover:bg-stone-800/80 hover:text-white ${align === "right" ? "w-full justify-end" : "justify-start"}`}
-      >
-        <span>{label}</span>
-        <ArrowUpDown className="ml-1 size-3 text-stone-500" />
-      </Button>
+      <DataTableColumnHeader
+        column={column}
+        title={label}
+        align={align}
+      />
     );
   }
 
@@ -76,16 +73,18 @@ export function BuffRateInput({
   value: number;
   onChange: (val: number) => void;
 }) {
+  const { t } = useTranslation();
   return (
-    <label className="flex h-9 cursor-pointer items-center gap-1.5 rounded-md border border-border bg-input px-2.5 text-xs text-muted-foreground transition-all focus-within:border-ring focus-within:ring-1 focus-within:ring-ring hover:border-stone-700">
-      <span className="font-semibold text-stone-400">Tỷ giá BUFF:</span>
+    <label className="flex h-9 cursor-pointer items-center gap-2 rounded-lg border border-border bg-surface-muted/30 px-3 text-xs text-muted-foreground transition-all duration-200 focus-within:border-accent/40 focus-within:ring-1 focus-within:ring-accent/20 hover:border-stone-700 hover:bg-surface-muted/50">
+      <FaCoins className="size-3.5 text-amber-500 shrink-0" />
+      <span className="font-bold text-stone-300">{t("portfolio.buffRateLabel", "BUFF Rate")}:</span>
       <input
         type="number"
         value={value}
         onChange={(event) => onChange(Number(event.target.value) || 0)}
-        className="h-7 w-12 [appearance:textfield] bg-transparent text-center text-xs font-bold text-accent outline-none [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
+        className="h-7 w-14 [appearance:textfield] bg-transparent text-center text-xs font-extrabold text-accent outline-none [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
       />
-      <span className="font-semibold opacity-70">đ</span>
+      <span className="font-bold text-stone-400 opacity-90">{t("portfolio.currencyVndSymbol", "₫")}</span>
     </label>
   );
 }
@@ -93,6 +92,7 @@ export function BuffRateInput({
 // Forward declaration — ItemCell is in portfolio-item-cell.tsx
 // This import is here for circular-dependency avoidance; caller passes ItemCell as a render prop.
 export type BuildColumnsParams = {
+  t: any;
   mode: PortfolioTableMode;
   deletingId: string | null;
   onDelete: (id: string) => void;
@@ -122,6 +122,7 @@ export type BuildColumnsParams = {
   retailRatePercent: number;
   onUpdateBuffRate?: (rate: number) => void;
   formatCurrency: (value: number | null | undefined) => string;
+  onSellItem?: (id: string) => void;
   ItemCellComponent: React.ComponentType<{
     item: PortfolioTableRow;
     mode: PortfolioTableMode;
@@ -138,10 +139,12 @@ export type BuildColumnsParams = {
     onUpdateBuffPrice?: (marketHashName: string, priceCny: number | null) => void;
     onDelete: (id: string) => void;
     deletingId: string | null;
+    onSellItem?: (id: string) => void;
   }>;
 };
 
 export function buildColumns({
+  t,
   mode,
   deletingId,
   onDelete,
@@ -159,11 +162,13 @@ export function buildColumns({
   wholesaleRatePercent,
   retailRatePercent,
   formatCurrency,
+  onSellItem,
   ItemCellComponent,
 }: BuildColumnsParams): ColumnDef<PortfolioTableRow>[] {
   return [
     {
       id: "select",
+      enableHiding: false,
       header: ({ table }) => (
         <div className="flex justify-center">
           <input
@@ -171,7 +176,7 @@ export function buildColumns({
             className="border-stone-750 size-4 cursor-pointer rounded bg-stone-900 text-blue-500 accent-blue-500"
             checked={table.getIsAllPageRowsSelected()}
             onChange={(e) => table.toggleAllPageRowsSelected(e.target.checked)}
-            aria-label="Chọn tất cả"
+            aria-label={t("portfolio.selectAllRows", "Select all")}
           />
         </div>
       ),
@@ -182,7 +187,7 @@ export function buildColumns({
             className="border-stone-750 size-4 cursor-pointer rounded bg-stone-900 text-blue-500 accent-blue-500"
             checked={row.getIsSelected()}
             onChange={(e) => row.toggleSelected(e.target.checked)}
-            aria-label="Chọn dòng"
+            aria-label={t("portfolio.selectRow", "Select row")}
           />
         </div>
       ),
@@ -190,6 +195,7 @@ export function buildColumns({
 
     {
       id: "case",
+      enableHiding: false,
       header: "Item",
       accessorFn: (row) => row.case.name,
       cell: ({ row }) => {
@@ -219,12 +225,14 @@ export function buildColumns({
             onUpdateBuffPrice={onUpdateBuffPrice}
             onDelete={onDelete}
             deletingId={deletingId}
+            onSellItem={onSellItem}
           />
         );
       },
     },
     {
       id: "quantity",
+      enableHiding: false,
       header: sortableHeader("SL", "right"),
       accessorFn: (row) => row.quantity,
       cell: ({ row }) => {
@@ -240,7 +248,8 @@ export function buildColumns({
             {suQty > 0 && (
               <span
                 className="mt-0.5 inline-flex cursor-help items-center gap-0.5 rounded border border-amber-500/20 bg-amber-500/10 px-1 text-[9px] font-bold text-amber-400 select-none"
-                title={`Kho thường: ${invQty} | Storage Unit: ${suQty}`}
+                title={t("portfolio.quantityTooltip", "Inventory: {{invQty}} | Storage Unit: {{suQty}}", { invQty, suQty })}
+                aria-label={t("portfolio.quantityTooltip", "Inventory: {{invQty}} | Storage Unit: {{suQty}}", { invQty, suQty })}
               >
                 <TbLock className="size-2.5 shrink-0" /> {suQty}
               </span>
@@ -252,7 +261,7 @@ export function buildColumns({
     {
       id: "buyPrice",
       header: sortableHeader(
-        mode === "case-summary" ? "Giá mua TB" : "Giá mua",
+        t("portfolio.buyPrice", "Buy Price"),
         "right",
       ),
       accessorFn: (row) => row.buyPrice,
@@ -265,13 +274,13 @@ export function buildColumns({
               {item.isTemporaryPrice && (
                 <span
                   className="inline-block size-1.5 shrink-0 animate-pulse rounded-full bg-amber-500"
-                  title="Giá mua tạm tính theo Steam Market (Tự động sync)."
+                  title={t("portfolio.temporaryPriceTooltip", "Temporary buy price based on Steam Market (Auto sync).")}
                 />
               )}
             </span>
             {item.isTemporaryPrice && (
               <span className="text-[8px] leading-none font-semibold text-amber-500 select-none">
-                Tạm tính
+                {t("portfolio.temporaryPriceBadge", "Temporary")}
               </span>
             )}
           </div>
@@ -280,7 +289,7 @@ export function buildColumns({
     },
     {
       id: "investedValue",
-      header: sortableHeader("Tổng vốn", "right"),
+      header: sortableHeader(t("portfolio.investedValue", "Invested Value"), "right"),
       accessorFn: (row) => row.investedValue,
       cell: ({ row }) => (
         <span className="font-medium">
@@ -290,7 +299,7 @@ export function buildColumns({
     },
     {
       id: "currentPrice",
-      header: sortableHeader("Giá hiện tại", "right"),
+      header: sortableHeader(t("portfolio.currentPrice", "Current Price"), "right"),
       accessorFn: (row) => row.currentPrice ?? -1,
       cell: ({ row }) => {
         const item = row.original;
@@ -301,6 +310,10 @@ export function buildColumns({
         const rate = buffCnyToVndRate || 3600;
         const steamVal = item.steamPrice ?? item.currentPrice;
         const hasBuffPrice = buffPriceCny !== undefined && buffPriceCny > 0;
+
+        const overpayInfo = item.patternInfo && buffPriceCny !== undefined && buffPriceCny > 0
+          ? estimateOverpay(item.patternInfo, buffPriceCny)
+          : null;
 
         return (
           <div className="flex flex-col items-end justify-center py-1 gap-1 min-h-[3rem]">
@@ -313,24 +326,26 @@ export function buildColumns({
 
               {/* Premium Tooltip */}
               <div className="pointer-events-none absolute bottom-full left-1/2 z-50 mb-2 -translate-x-1/2 rounded border border-slate-800/80 bg-slate-950 px-2 py-1 text-[10px] font-medium whitespace-nowrap text-slate-200 opacity-0 shadow-[0_4px_12px_rgba(0,0,0,0.5)] transition-all duration-200 group-hover:opacity-100">
-                Giá Steam
+                {t("portfolio.steamPriceTooltip", "Steam Price")}
               </div>
             </div>
 
             {/* Buff Price */}
             {hasBuffPrice && (
               <div className="group relative flex cursor-help items-center gap-1.5">
-                <span className="text-[13px] font-medium text-accent">
-                  {formatCurrency(Math.round(buffPriceCny * rate))}{" "}
+                <span className={`text-[13px] font-medium ${overpayInfo ? "text-emerald-400" : "text-accent"}`}>
+                  {formatCurrency(Math.round((overpayInfo ? overpayInfo.estimatedTypical : buffPriceCny) * rate))}{" "}
                   <span className="text-[10px] text-muted-foreground font-normal">
-                    ({new Intl.NumberFormat("vi-VN").format(buffPriceCny)} x {new Intl.NumberFormat("vi-VN").format(rate)})
+                    ({new Intl.NumberFormat("vi-VN").format(overpayInfo ? overpayInfo.estimatedTypical : buffPriceCny)} x {new Intl.NumberFormat("vi-VN").format(rate)})
                   </span>
                 </span>
-                <FaCoins className="size-3.5 text-accent" />
+                <FaCoins className={`size-3.5 ${overpayInfo ? "text-emerald-400" : "text-accent"}`} />
 
                 {/* Premium Tooltip */}
                 <div className="pointer-events-none absolute bottom-full left-1/2 z-50 mb-2 -translate-x-1/2 rounded border border-slate-800/80 bg-slate-950 px-2 py-1 text-[10px] font-medium whitespace-nowrap text-slate-200 opacity-0 shadow-[0_4px_12px_rgba(0,0,0,0.5)] transition-all duration-200 group-hover:opacity-100">
-                  Giá Buff (¥{new Intl.NumberFormat("vi-VN").format(buffPriceCny)} × {new Intl.NumberFormat("vi-VN").format(rate)})
+                  {overpayInfo
+                    ? `${t("portfolio.buffPriceTooltip", "Buff Price")} + Overpay (${overpayInfo.multiplierSource})`
+                    : t("portfolio.buffPriceTooltip", "Buff Price (¥{{buffPrice}} × {{rate}})", { buffPrice: new Intl.NumberFormat("vi-VN").format(buffPriceCny), rate: new Intl.NumberFormat("vi-VN").format(rate) })}
                 </div>
               </div>
             )}
@@ -341,7 +356,7 @@ export function buildColumns({
     {
       id: "wholesaleValue",
       header: sortableHeader(
-        `Sỉ ${toInputNumber(wholesaleRatePercent)}%`,
+        `${t("portfolio.wholesaleLabel", "Wholesale")} ${toInputNumber(wholesaleRatePercent)}%`,
         "right",
       ),
       accessorFn: (row) => calculateRatedValue(row, wholesaleRatePercent) ?? -1,
@@ -349,14 +364,14 @@ export function buildColumns({
         <RatedValueCell
           item={row.original}
           ratePercent={wholesaleRatePercent}
-          label="Sỉ"
+          label={t("portfolio.wholesaleLabel", "Wholesale")}
         />
       ),
     },
     {
       id: "retailValue",
       header: sortableHeader(
-        `Lẻ ${toInputNumber(retailRatePercent)}%`,
+        `${t("portfolio.retailLabel", "Retail")} ${toInputNumber(retailRatePercent)}%`,
         "right",
       ),
       accessorFn: (row) => calculateRatedValue(row, retailRatePercent) ?? -1,
@@ -364,13 +379,13 @@ export function buildColumns({
         <RatedValueCell
           item={row.original}
           ratePercent={retailRatePercent}
-          label="Lẻ"
+          label={t("portfolio.retailLabel", "Retail")}
         />
       ),
     },
     {
       id: "profitAmount",
-      header: sortableHeader("Lãi/lỗ", "right"),
+      header: sortableHeader(t("portfolio.profit", "Profit"), "right"),
       accessorFn: (row) => row.profitAmount ?? -Number.MAX_SAFE_INTEGER,
       cell: ({ row }) => {
         const item = row.original;
@@ -393,7 +408,7 @@ export function buildColumns({
             </span>
             {hasBuffPrice ? (
               <span className="inline-flex rounded bg-accent/10 px-1 py-0.5 text-[8.5px] font-semibold tracking-wider text-accent uppercase">
-                Định giá BUFF
+                {t("portfolio.buffValuation", "BUFF Valuation")}
               </span>
             ) : null}
           </div>
@@ -418,7 +433,7 @@ export function buildColumns({
     },
     {
       id: "updatedAt",
-      header: sortableHeader("Ngày cập nhật", "right"),
+      header: sortableHeader(t("portfolio.updatedAt", "Updated At"), "right"),
       accessorFn: (row) =>
         row.currentPriceCapturedAt
           ? new Date(row.currentPriceCapturedAt).getTime()
@@ -435,7 +450,7 @@ export function buildColumns({
     {
       id: "buyDate",
       header: sortableHeader(
-        mode === "case-summary" ? "Khoảng mua" : "Ngày mua",
+        mode === "case-summary" ? t("portfolio.buyInterval", "Buy Range") : t("portfolio.buyDate", "Buy Date"),
         "right",
       ),
       accessorFn: (row) => getBuyDateSortValue(row.buyDate),

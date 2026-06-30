@@ -1,7 +1,14 @@
 "use client";
 
 import React, { useState } from "react";
+import { useTranslation } from "react-i18next";
 import { useQuery } from "@tanstack/react-query";
+import {
+  STEAM_ACCOUNTS_QUERY_KEY,
+  STORAGE_UNITS_QUERY_KEY,
+  fetchSteamAccounts,
+  fetchAccountStorageUnits,
+} from "@/lib/api-client/steam-accounts-api";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   TbUser,
@@ -14,11 +21,13 @@ import {
 import { ChevronDown, ChevronUp, Trash2, Pencil } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
+import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { Select } from "@/components/ui/select";
 import { useCurrency } from "@/components/currency-provider";
 import { formatDateVi, calculateTradeHoldUntil } from "@/utils/date";
 import { PortfolioTableRow } from "../portfolio-table-model";
 import { TradeHoldBadge } from "./trade-hold-badge";
+import { AccessoryPreviewStrip } from "./accessory-preview-strip";
 
 interface ItemLotsListProps {
   relatedRows: PortfolioTableRow[];
@@ -34,11 +43,16 @@ interface ItemLotsListProps {
       sourceAccounts?: Array<{ steamId64: string; name: string }>;
       storageUnitId?: string;
       tradeHoldUntil?: string | null;
+      stickerPriceRate?: number;
+      stickerBuyPriceRate?: number;
+      stickerScanTotalPrice?: number;
+      stickerScanPriceCapturedAt?: string;
     },
   ) => Promise<void> | void;
   onDelete?: (id: string) => void;
   embedded?: boolean;
   onSelectOpenChange?: (open: boolean) => void;
+  onEditLot?: (lot: PortfolioTableRow) => void;
 }
 
 export function ItemLotsList({
@@ -50,7 +64,9 @@ export function ItemLotsList({
   onDelete,
   embedded = false,
   onSelectOpenChange,
+  onEditLot,
 }: ItemLotsListProps) {
+  const { t } = useTranslation();
   const { formatCurrency } = useCurrency();
   const [showDetails, setShowDetails] = useState(embedded);
   const [editingLotId, setEditingLotId] = useState<string | null>(null);
@@ -64,36 +80,26 @@ export function ItemLotsList({
   const [editState, setEditState] = useState<"tradeable" | "hold" | "protected">("tradeable");
   const [editHoldDays, setEditHoldDays] = useState("");
   const [savingLot, setSavingLot] = useState(false);
+  const [deleteTarget, setDeleteTarget] = useState<PortfolioTableRow | null>(null);
 
   const accountsQuery = useQuery({
-    queryKey: ["portfolio-accounts"],
-    queryFn: async () => {
-      const res = await fetch("/api/portfolio/accounts");
-      if (!res.ok) throw new Error("Failed to fetch accounts");
-      const data = await res.json();
-      return data as Array<{ id: string; steamId64: string; name: string }>;
-    },
+    queryKey: STEAM_ACCOUNTS_QUERY_KEY,
+    queryFn: () => fetchSteamAccounts(),
+    staleTime: 5 * 60 * 1000,
   });
 
   const storageUnitsQuery = useQuery({
-    queryKey: ["portfolio-storage-units", editAccountId],
-    queryFn: async () => {
-      if (!editAccountId) return [];
-      const res = await fetch(
-        `/api/portfolio/storage-units?steamId64=${editAccountId}`,
-      );
-      if (!res.ok) throw new Error("Failed to fetch storage units");
-      const data = await res.json();
-      return data.storageUnits as Array<{
-        id: string;
-        name: string;
-        currentCount: number;
-      }>;
-    },
+    queryKey: STORAGE_UNITS_QUERY_KEY(editAccountId),
+    queryFn: () => fetchAccountStorageUnits(editAccountId),
     enabled: !!editAccountId,
+    staleTime: 5 * 60 * 1000,
   });
 
   const startEditingLot = (lot: PortfolioTableRow) => {
+    if (onEditLot) {
+      onEditLot(lot);
+      return;
+    }
     setEditingLotId(lot.id);
     setEditQty(String(lot.quantity));
     setEditPriceVnd(String(lot.buyPrice));
@@ -157,11 +163,11 @@ export function ItemLotsList({
               holdDetails:
                 editState === "hold" || editState === "protected"
                   ? [
-                      {
-                        quantity: nextQuantity,
-                        holdDays: Number(editHoldDays) || 0,
-                      },
-                    ]
+                    {
+                      quantity: nextQuantity,
+                      holdDays: Number(editHoldDays) || 0,
+                    },
+                  ]
                   : [],
             };
             sourceAccounts = [
@@ -214,13 +220,13 @@ export function ItemLotsList({
       <button
         type="button"
         onClick={() => setShowDetails(!showDetails)}
-        className="group flex w-full cursor-pointer items-center justify-between py-2 text-left text-[10px] font-bold tracking-wider text-slate-400 uppercase transition-colors hover:text-slate-200 focus:outline-none"
+        className="group flex w-full cursor-pointer items-center justify-between py-2 text-left text-[10px] font-bold tracking-wider text-stone-400 uppercase transition-colors hover:text-stone-200 focus:outline-none"
       >
         <span className="flex items-center gap-1.5">
-          <TbTag className="size-3.5 text-slate-400" />
-          Chi tiết các đợt scan / mua ({relatedRows.length} đợt)
+          <TbTag className="size-3.5 text-stone-400" />
+          {t("portfolio.scanPurchaseDetails", "Scan / purchase details ({{count}} lots)", { count: relatedRows.length })}
         </span>
-        <span className="text-slate-400 transition-transform duration-200 group-hover:text-slate-200">
+        <span className="text-stone-400 transition-transform duration-200 group-hover:text-stone-200">
           {showDetails ? (
             <ChevronUp className="size-3.5" />
           ) : (
@@ -239,16 +245,28 @@ export function ItemLotsList({
             className="overflow-hidden"
           >
             <div
-              className={`mt-2 space-y-3 pr-1 [&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar-track]:bg-transparent [&::-webkit-scrollbar-thumb]:bg-slate-800/80 [&::-webkit-scrollbar-thumb]:rounded-full hover:[&::-webkit-scrollbar-thumb]:bg-slate-700/80 ${
-                embedded ? "max-h-[32rem] overflow-y-auto" : "max-h-[18rem] overflow-y-auto"
-              }`}
+              className={`mt-2 space-y-3 pr-1 [&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar-track]:bg-transparent [&::-webkit-scrollbar-thumb]:bg-stone-800/80 [&::-webkit-scrollbar-thumb]:rounded-full hover:[&::-webkit-scrollbar-thumb]:bg-stone-700/80 ${embedded ? "max-h-[32rem] overflow-y-auto" : "max-h-[18rem] overflow-y-auto"
+                }`}
             >
-              {relatedRows.map((lot) => {
+              {relatedRows.map((lot, lotIndex) => {
                 const isEditing = editingLotId === lot.id;
                 const formattedDate = lot.buyDate
                   ? formatDateVi(lot.buyDate)
-                  : "Chưa rõ ngày";
+                  : t("common.unknownDate", "Unknown date");
                 const accountName = lot.sourceAccounts?.[0]?.name;
+                const stickers = lot.patternInfo?.stickers ?? [];
+                const charms = lot.patternInfo?.charms ?? [];
+                const hasAccessories = stickers.length + charms.length > 0;
+                const shouldShowAccessoryLine =
+                  lot.itemType === "skin" || hasAccessories;
+                const patternBadges = [
+                  lot.patternInfo?.floatValue !== undefined
+                    ? `${t("inventoryScanner.floatValue", "Float")}: ${lot.patternInfo.floatValue.toFixed(8)}`
+                    : null,
+                  lot.patternInfo?.paintSeed !== undefined
+                    ? `${t("inventoryScanner.paintSeed", "Paint Seed")}: ${lot.patternInfo.paintSeed}`
+                    : null,
+                ].filter((value): value is string => Boolean(value));
 
                 const isProtected = Boolean(
                   lot.sourceAccounts?.[0]?.breakdown?.tradeProtected &&
@@ -264,11 +282,10 @@ export function ItemLotsList({
                 return (
                   <div
                     key={lot.id}
-                    className={`group relative space-y-2.5 rounded-xl border transition duration-200 ${
-                      isEditing
-                        ? "border-slate-750 bg-slate-900/20 p-4 shadow-lg shadow-black/35"
-                        : "border-slate-800/40 bg-slate-950/20 p-3 hover:border-slate-800 hover:bg-slate-900/10"
-                    }`}
+                    className={`group relative space-y-2.5 rounded-xl border transition duration-200 ${isEditing
+                        ? "border-stone-700 bg-stone-900/20 p-4 shadow-lg shadow-black/35"
+                        : "border-stone-800/40 bg-stone-950/20 p-3 hover:border-stone-800 hover:bg-stone-900/10"
+                      }`}
                   >
                     {isEditing ? (
                       <div className="space-y-4">
@@ -276,17 +293,17 @@ export function ItemLotsList({
                           <div className="flex items-center justify-between rounded-lg border border-cyan-500/30 bg-cyan-950/30 px-3 py-2 text-[10px] font-bold text-cyan-400 select-none">
                             <span className="flex items-center gap-1.5">
                               <TbShield className="size-3.5" />
-                              ĐÃ SCAN TỪ INVENTORY
+                              {t("portfolio.scannedFromInventory", "SCANNED FROM INVENTORY")}
                             </span>
                             <span className="text-[9px] font-medium text-cyan-400/80">
-                              Chỉ cho phép sửa đơn giá & ghi chú
+                              {t("portfolio.onlyEditPriceAndNote", "Only unit price and note can be edited")}
                             </span>
                           </div>
                         )}
                         <div className="grid grid-cols-2 gap-3.5">
                           <div className="flex flex-col gap-1.5">
-                            <label className="text-[10px] font-bold tracking-wider text-slate-400 uppercase">
-                              Số lượng
+                            <label className="text-[10px] font-extrabold tracking-wider text-stone-500 uppercase">
+                              {t("common.quantity", "Quantity")}
                             </label>
                             <div className="relative flex items-center">
                               <input
@@ -294,25 +311,25 @@ export function ItemLotsList({
                                 value={editQty}
                                 onChange={(e) => setEditQty(e.target.value)}
                                 disabled={lot.sourceType === "existing"}
-                                className="h-10 w-full [appearance:textfield] rounded-lg border border-slate-800 bg-slate-950/40 pr-3 pl-12 text-right text-sm font-semibold text-slate-100 placeholder-slate-600 transition duration-200 hover:border-slate-750/80 focus:border-sky-500/60 focus:ring-1 focus:ring-sky-500/20 focus:outline-none disabled:opacity-50 disabled:bg-slate-950/20 disabled:border-slate-900 disabled:text-slate-500 disabled:cursor-not-allowed [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
+                                className="h-10 w-full [appearance:textfield] rounded-lg border border-stone-800 bg-stone-950/30 pr-3 pl-12 text-right text-sm font-semibold text-stone-100 placeholder-stone-600 transition-all duration-200 hover:border-stone-750 hover:bg-stone-950/60 focus:border-accent/40 focus:ring-2 focus:ring-accent/10 focus:outline-none disabled:opacity-50 disabled:bg-stone-950/20 disabled:border-stone-900 disabled:text-stone-500 disabled:cursor-not-allowed [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
                               />
-                              <span className="pointer-events-none absolute left-2.5 text-[8px] font-extrabold tracking-wider text-slate-400 bg-slate-900 border border-slate-800/60 px-1.5 py-0.5 rounded select-none">
+                              <span className="pointer-events-none absolute left-2.5 text-[8px] font-extrabold tracking-wider text-stone-400 bg-stone-900/60 border border-stone-800/50 px-1.5 py-0.5 rounded select-none">
                                 QTY
                               </span>
                             </div>
                           </div>
                           <div className="flex flex-col gap-1.5">
-                            <label className="text-[10px] font-bold tracking-wider text-slate-400 uppercase">
-                              Giá mua VND
+                            <label className="text-[10px] font-extrabold tracking-wider text-stone-500 uppercase">
+                              {t("portfolio.buyPriceVnd", "Buy price VND")}
                             </label>
                             <div className="relative flex items-center">
                               <input
                                 type="number"
                                 value={editPriceVnd}
                                 onChange={(e) => setEditPriceVnd(e.target.value)}
-                                className="h-10 w-full [appearance:textfield] rounded-lg border border-slate-800 bg-slate-950/40 pr-3 pl-12 text-right text-sm font-semibold text-slate-100 placeholder-slate-600 transition duration-200 hover:border-slate-750/80 focus:border-sky-500/60 focus:ring-1 focus:ring-sky-500/20 focus:outline-none [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
+                                className="h-10 w-full [appearance:textfield] rounded-lg border border-stone-800 bg-stone-950/30 pr-3 pl-12 text-right text-sm font-semibold text-stone-100 placeholder-stone-600 transition-all duration-200 hover:border-stone-750 hover:bg-stone-950/60 focus:border-accent/40 focus:ring-2 focus:ring-accent/10 focus:outline-none [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
                               />
-                              <span className="pointer-events-none absolute left-2.5 text-[8px] font-extrabold tracking-wider text-slate-400 bg-slate-900 border border-slate-800/60 px-1.5 py-0.5 rounded select-none">
+                              <span className="pointer-events-none absolute left-2.5 text-[8px] font-extrabold tracking-wider text-stone-400 bg-stone-900/60 border border-stone-800/50 px-1.5 py-0.5 rounded select-none">
                                 VND
                               </span>
                             </div>
@@ -321,8 +338,8 @@ export function ItemLotsList({
 
                         <div className="grid grid-cols-2 gap-3.5">
                           <div className="flex flex-col gap-1.5">
-                            <label className="text-[10px] font-bold tracking-wider text-slate-400 uppercase">
-                              Tài khoản sở hữu
+                            <label className="text-[10px] font-extrabold tracking-wider text-stone-500 uppercase">
+                              {t("portfolio.owningAccounts", "Owning Accounts")}
                             </label>
                             <Select
                               value={editAccountId || "__manual__"}
@@ -333,12 +350,12 @@ export function ItemLotsList({
                               disabled={lot.sourceType === "existing"}
                               onOpenChange={onSelectOpenChange}
                             >
-                              <Select.Trigger className="h-10 rounded-lg border-slate-800 bg-slate-950/40 text-sm text-slate-200 hover:border-slate-750/80 focus:border-sky-500/60 transition disabled:opacity-50 disabled:bg-slate-950/20 disabled:border-slate-900 disabled:text-slate-500">
-                                <Select.Value placeholder="Thủ công (Không liên kết)" />
+                              <Select.Trigger className="h-10 rounded-lg border border-stone-800 bg-stone-950/30 text-sm text-stone-200 hover:border-stone-750 hover:bg-stone-950/60 focus:border-accent/40 focus:ring-2 focus:ring-accent/10 focus:outline-none transition disabled:opacity-50 disabled:bg-stone-950/20 disabled:border-stone-900 disabled:text-stone-500">
+                                <Select.Value placeholder={t("portfolio.manualNoLink", "Manual (Unlinked)")} />
                               </Select.Trigger>
-                              <Select.Content className="border-slate-850 bg-[#0e121a]">
+                              <Select.Content className="border-stone-850 bg-stone-950">
                                 <Select.Item value="__manual__">
-                                  Thủ công (Không liên kết)
+                                  {t("portfolio.manualNoLink", "Manual (Unlinked)")}
                                 </Select.Item>
                                 {accountsQuery.data?.map((acc) => (
                                   <Select.Item key={acc.steamId64} value={acc.steamId64}>
@@ -349,8 +366,8 @@ export function ItemLotsList({
                             </Select>
                           </div>
                           <div className="flex flex-col gap-1.5">
-                            <label className="text-[10px] font-bold tracking-wider text-slate-400 uppercase">
-                              Lưu trữ ở
+                            <label className="text-[10px] font-extrabold tracking-wider text-stone-500 uppercase">
+                              {t("portfolio.storedIn", "Stored in")}
                             </label>
                             <Select
                               value={editStorageUnitId || "__inventory__"}
@@ -360,18 +377,18 @@ export function ItemLotsList({
                               disabled={lot.sourceType === "existing" || !editAccountId}
                               onOpenChange={onSelectOpenChange}
                             >
-                              <Select.Trigger className="h-10 rounded-lg border-slate-800 bg-slate-950/40 text-sm text-slate-200 hover:border-slate-750/80 focus:border-sky-500/60 transition disabled:opacity-50 disabled:bg-slate-950/20 disabled:border-slate-900 disabled:text-slate-500">
+                              <Select.Trigger className="h-10 rounded-lg border border-stone-800 bg-stone-950/30 text-sm text-stone-200 hover:border-stone-750 hover:bg-stone-950/60 focus:border-accent/40 focus:ring-2 focus:ring-accent/10 focus:outline-none transition disabled:opacity-50 disabled:bg-stone-950/20 disabled:border-stone-900 disabled:text-stone-500">
                                 <Select.Value
                                   placeholder={
                                     !editAccountId
-                                      ? "Chọn tài khoản trước"
-                                      : "Hòm đồ cá nhân (Inventory)"
+                                      ? t("portfolio.selectAccountFirst", "Select owning account first")
+                                      : t("portfolio.personalInventory", "Personal inventory (Inventory)")
                                   }
                                 />
                               </Select.Trigger>
-                              <Select.Content className="border-slate-850 bg-[#0e121a]">
+                              <Select.Content className="border-stone-850 bg-stone-950">
                                 <Select.Item value="__inventory__">
-                                  Hòm đồ cá nhân (Inventory)
+                                  {t("portfolio.personalInventory", "Personal inventory (Inventory)")}
                                 </Select.Item>
                                 {storageUnitsQuery.data?.map((su) => (
                                   <Select.Item key={su.id} value={su.id}>
@@ -385,8 +402,8 @@ export function ItemLotsList({
 
                         <div className="grid grid-cols-2 gap-3.5">
                           <div className={editState === "hold" || editState === "protected" ? "flex flex-col gap-1.5" : "col-span-2 flex flex-col gap-1.5"}>
-                            <label className="text-[10px] font-bold tracking-wider text-slate-400 uppercase">
-                              Trạng thái
+                            <label className="text-[10px] font-extrabold tracking-wider text-stone-500 uppercase">
+                              {t("portfolio.filterStatus", "Status")}
                             </label>
                             <Select
                               value={editState}
@@ -396,31 +413,32 @@ export function ItemLotsList({
                               disabled={lot.sourceType === "existing"}
                               onOpenChange={onSelectOpenChange}
                             >
-                              <Select.Trigger className="h-10 rounded-lg border-slate-800 bg-slate-950/40 text-sm text-slate-200 hover:border-slate-750/80 focus:border-sky-500/60 transition disabled:opacity-50 disabled:bg-slate-950/20 disabled:border-slate-900 disabled:text-slate-500">
+                              <Select.Trigger className="h-10 rounded-lg border border-stone-800 bg-stone-950/30 text-sm text-stone-200 hover:border-stone-750 hover:bg-stone-950/60 focus:border-accent/40 focus:ring-2 focus:ring-accent/10 focus:outline-none transition disabled:opacity-50 disabled:bg-stone-950/20 disabled:border-stone-900 disabled:text-stone-500">
                                 <Select.Value />
                               </Select.Trigger>
-                              <Select.Content className="border-slate-850 bg-[#0e121a]">
-                                <Select.Item value="tradeable">Trade được ngay</Select.Item>
-                                <Select.Item value="hold">Hold trade</Select.Item>
-                                <Select.Item value="protected">Trade Protected</Select.Item>
+                              <Select.Content className="border-stone-850 bg-stone-950">
+                                <Select.Item value="tradeable">{t("portfolio.statusTradeable", "Tradeable")}</Select.Item>
+                                <Select.Item value="hold">{t("portfolio.statusHold", "Hold")}</Select.Item>
+                                <Select.Item value="protected">{t("portfolio.statusTradeProtected", "Trade Protected")}</Select.Item>
                               </Select.Content>
                             </Select>
                           </div>
+
                           {(editState === "hold" || editState === "protected") && (
                             <div className="flex flex-col gap-1.5">
-                              <label className="text-[10px] font-bold tracking-wider text-slate-400 uppercase">
-                                Số ngày hold
+                              <label className="text-[10px] font-extrabold tracking-wider text-stone-500 uppercase">
+                                {t("portfolio.holdDaysLabel", "Hold days")}
                               </label>
                               <div className="relative flex items-center">
                                 <input
                                   type="number"
                                   value={editHoldDays}
                                   onChange={(e) => setEditHoldDays(e.target.value)}
-                                  placeholder="Ví dụ: 7"
+                                  placeholder={t("portfolio.exampleHoldDays", "e.g., 7")}
                                   disabled={lot.sourceType === "existing"}
-                                  className="h-10 w-full rounded-lg border border-slate-800 bg-slate-950/40 pr-3 pl-14 text-sm font-semibold text-slate-100 placeholder-slate-600 transition duration-200 hover:border-slate-750/80 focus:border-sky-500/60 focus:ring-1 focus:ring-sky-500/20 focus:outline-none disabled:opacity-50 disabled:bg-slate-950/20 disabled:border-slate-900 disabled:text-slate-500 disabled:cursor-not-allowed"
+                                  className="h-10 w-full rounded-lg border border-stone-800 bg-stone-950/30 pr-3 pl-14 text-sm font-semibold text-stone-100 placeholder-stone-600 transition-all duration-200 hover:border-stone-750 hover:bg-stone-950/60 focus:border-accent/40 focus:ring-2 focus:ring-accent/10 focus:outline-none disabled:opacity-50 disabled:bg-stone-950/20 disabled:border-stone-900 disabled:text-stone-500 disabled:cursor-not-allowed"
                                 />
-                                <span className="pointer-events-none absolute left-2.5 text-[8px] font-extrabold tracking-wider text-slate-400 bg-slate-900 border border-slate-800/60 px-1.5 py-0.5 rounded select-none">
+                                <span className="pointer-events-none absolute left-2.5 text-[8px] font-extrabold tracking-wider text-stone-400 bg-stone-900/60 border border-stone-800/50 px-1.5 py-0.5 rounded select-none">
                                   HOLD
                                 </span>
                               </div>
@@ -429,17 +447,17 @@ export function ItemLotsList({
                         </div>
 
                         <div className="flex flex-col gap-1.5">
-                          <label className="text-[10px] font-bold tracking-wider text-slate-400 uppercase">
-                            Ghi chú
+                          <label className="text-[10px] font-extrabold tracking-wider text-stone-500 uppercase">
+                            {t("portfolio.note", "Note")}
                           </label>
                           <div className="relative flex items-center">
                             <input
                               type="text"
                               value={editNote}
                               onChange={(e) => setEditNote(e.target.value)}
-                              className="h-10 w-full rounded-lg border border-slate-800 bg-slate-950/40 pr-3 pl-14 text-sm font-medium text-slate-100 placeholder-slate-650 transition duration-200 hover:border-slate-750/80 focus:border-sky-500/60 focus:ring-1 focus:ring-sky-500/20 focus:outline-none"
+                              className="h-10 w-full rounded-lg border border-stone-800 bg-stone-950/30 pr-3 pl-14 text-sm font-medium text-stone-100 placeholder:text-stone-600 transition-all duration-200 hover:border-stone-750 hover:bg-stone-950/60 focus:border-accent/40 focus:ring-2 focus:ring-accent/10 focus:outline-none"
                             />
-                            <span className="pointer-events-none absolute left-2.5 text-[8px] font-extrabold tracking-wider text-slate-400 bg-slate-900 border border-slate-800/60 px-1.5 py-0.5 rounded select-none">
+                            <span className="pointer-events-none absolute left-2.5 text-[8px] font-extrabold tracking-wider text-stone-400 bg-stone-900/60 border border-stone-800/50 px-1.5 py-0.5 rounded select-none">
                               NOTE
                             </span>
                           </div>
@@ -448,35 +466,41 @@ export function ItemLotsList({
                           <Button
                             type="button"
                             onClick={() => setEditingLotId(null)}
-                            className="h-10 cursor-pointer rounded-lg border border-slate-800 bg-slate-900/10 px-4 text-sm font-bold text-slate-300 shadow-sm transition hover:border-slate-750 hover:bg-slate-900/35 hover:text-slate-100 active:scale-[0.98]"
+                            className="h-10 cursor-pointer rounded-lg border border-stone-800 bg-stone-900/10 px-4 text-sm font-extrabold text-stone-300 shadow-sm transition hover:border-stone-750 hover:bg-stone-900/35 hover:text-stone-100 active:scale-[0.98]"
                           >
-                            Hủy
+                            {t("common.cancel", "Cancel")}
                           </Button>
                           <Button
                             type="button"
                             disabled={savingLot}
                             onClick={() => saveLot(lot.id)}
-                            className="h-10 cursor-pointer rounded-lg bg-rose-600 px-5 text-sm font-bold text-white shadow-[0_0_12px_rgba(225,29,72,0.2)] transition hover:bg-rose-500 active:scale-[0.98] disabled:cursor-not-allowed disabled:bg-stone-900/50 disabled:text-stone-600 disabled:border disabled:border-stone-850/50 disabled:shadow-none"
+                            className="h-10 cursor-pointer rounded-lg bg-accent hover:bg-accent-hover px-5 text-sm font-extrabold text-white shadow-[0_4px_12px_rgba(59,130,246,0.18)] hover:shadow-[0_4px_16px_rgba(59,130,246,0.32)] active:scale-[0.98] disabled:cursor-not-allowed disabled:bg-stone-900/50 disabled:text-stone-650 disabled:border disabled:border-stone-850/50 disabled:shadow-none"
                           >
-                            {savingLot ? "Đang lưu..." : "Lưu"}
+                            {savingLot ? t("common.saving", "Saving...") : t("common.save", "Save")}
                           </Button>
                         </div>
                       </div>
                     ) : (
-                      <div className="flex items-center justify-between">
+                      <div className="flex items-start justify-between gap-2">
                         <div className="min-w-0 flex-1">
-                          <div className="flex flex-wrap items-baseline gap-1.5">
-                            <span className="text-sm font-extrabold text-slate-100">
+                          <div className="flex flex-wrap items-center gap-1.5">
+                            <span
+                              className="inline-flex h-5 min-w-5 shrink-0 items-center justify-center rounded-md border border-stone-800/70 bg-stone-950/70 px-1 text-[10px] font-extrabold text-stone-300"
+                              title={t("portfolio.itemInstanceNumber", "Item #{{number}}", { number: lotIndex + 1 })}
+                            >
+                              #{lotIndex + 1}
+                            </span>
+                            <span className="text-sm font-extrabold text-stone-100">
                               {lot.quantity}
                             </span>
-                            <span className="text-[10px] font-semibold text-slate-400 mr-1.5">
-                              vật phẩm
+                            <span className="text-[10px] font-semibold text-stone-400 mr-1.5">
+                              {t("portfolio.itemsUnit", "items")}
                             </span>
-                            <span className="text-[10px] text-slate-500 font-semibold">@</span>
+                            <span className="text-[10px] text-stone-500 font-semibold">@</span>
                             <span className="text-sm font-extrabold text-emerald-400">
                               {formatCurrency(lot.buyPrice)}
                             </span>
-                            <span className="mx-1 text-slate-700">•</span>
+                            <span className="mx-1 text-stone-700">•</span>
                             {isProtected ? (
                               <span className="inline-flex items-center gap-1 rounded-md border border-cyan-500/20 bg-cyan-500/10 px-1.5 py-0.5 text-[9px] font-bold text-cyan-400">
                                 <TbShield className="size-2.5" />
@@ -487,13 +511,36 @@ export function ItemLotsList({
                             ) : (
                               <span className="inline-flex items-center gap-1 rounded-md border border-emerald-500/20 bg-emerald-500/10 px-1.5 py-0.5 text-[9px] font-bold text-emerald-400">
                                 <TbCircleCheck className="size-2.5" />
-                                Trade được ngay
+                                {t("portfolio.statusTradeable", "Tradeable")}
                               </span>
                             )}
                           </div>
-                          <div className="mt-2 flex flex-wrap items-center gap-1.5 text-[10px] text-slate-500">
-                            <span className="inline-flex items-center gap-1 rounded bg-slate-900/40 px-1.5 py-0.5 text-[9px] font-semibold text-slate-400 border border-slate-800/30">
-                              <TbCalendar className="size-3 text-slate-500" />{" "}
+                          {shouldShowAccessoryLine ? (
+                            <div className="mt-2">
+                              <AccessoryPreviewStrip
+                                stickers={stickers}
+                                charms={charms}
+                                maxVisible={5}
+                                showNames
+                                emptyLabel={t("portfolio.noStickerCharm", "No sticker/charm")}
+                              />
+                            </div>
+                          ) : null}
+                          {patternBadges.length > 0 ? (
+                            <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
+                              {patternBadges.map((label) => (
+                                <span
+                                  key={label}
+                                  className="inline-flex rounded border border-violet-500/15 bg-violet-500/5 px-1.5 py-0.5 text-[9px] font-semibold text-violet-300"
+                                >
+                                  {label}
+                                </span>
+                              ))}
+                            </div>
+                          ) : null}
+                          <div className="mt-2 flex flex-wrap items-center gap-1.5 text-[10px] text-stone-500">
+                            <span className="inline-flex items-center gap-1 rounded bg-stone-900/40 px-1.5 py-0.5 text-[9px] font-semibold text-stone-400 border border-stone-800/30">
+                              <TbCalendar className="size-3 text-stone-500" />{" "}
                               {formattedDate}
                             </span>
                             {accountName && (
@@ -520,27 +567,17 @@ export function ItemLotsList({
                           <Button
                             type="button"
                             onClick={() => startEditingLot(lot)}
-                            className="h-7 w-7 rounded-lg border border-slate-800/80 bg-slate-950/40 p-0 text-slate-400 hover:border-slate-750 hover:bg-slate-900/50 hover:text-slate-200 transition-all cursor-pointer flex items-center justify-center"
-                            title="Sửa đợt này"
+                            className="h-7 w-7 rounded-lg border border-stone-800/80 bg-stone-950/40 p-0 text-stone-400 hover:border-stone-750 hover:bg-stone-900/50 hover:text-stone-200 transition-all cursor-pointer flex items-center justify-center"
+                            title={t("portfolio.editLotTitle", "Edit this lot")}
                           >
                             <Pencil className="size-3" />
                           </Button>
                           {onDelete && (
                             <Button
                               type="button"
-                              onClick={async () => {
-                                if (
-                                  confirm(
-                                    `Bạn có chắc chắn muốn xóa đợt mua này (${
-                                      lot.quantity
-                                    } vật phẩm @ ${formatCurrency(lot.buyPrice)}) không?`
-                                  )
-                                ) {
-                                  await onDelete(lot.id);
-                                }
-                              }}
-                              className="h-7 w-7 rounded-lg border border-slate-800/80 bg-slate-950/40 p-0 text-slate-400 hover:border-rose-900/40 hover:bg-rose-950/30 hover:text-rose-400 transition-all cursor-pointer flex items-center justify-center"
-                              title="Xóa đợt này"
+                              onClick={() => setDeleteTarget(lot)}
+                              className="h-7 w-7 rounded-lg border border-stone-800/80 bg-stone-950/40 p-0 text-stone-400 hover:border-rose-900/40 hover:bg-rose-950/30 hover:text-rose-400 transition-all cursor-pointer flex items-center justify-center"
+                              title={t("portfolio.deleteLotTitle", "Delete this lot")}
                             >
                               <Trash2 className="size-3" />
                             </Button>
@@ -555,6 +592,23 @@ export function ItemLotsList({
           </motion.div>
         )}
       </AnimatePresence>
+      <ConfirmDialog
+        open={deleteTarget !== null}
+        onClose={() => setDeleteTarget(null)}
+        title={t("portfolio.deleteLotTitle", "Delete this lot")}
+        description={t("portfolio.confirmDeleteLot", "Are you sure you want to delete this purchase lot ({{quantity}} items @ {{buyPrice}})?", {
+          quantity: deleteTarget?.quantity ?? 0,
+          buyPrice: deleteTarget ? formatCurrency(deleteTarget.buyPrice) : "",
+        })}
+        confirmText={t("portfolio.confirmDeleteButton", "Yes, delete")}
+        cancelText={t("common.cancel", "Cancel")}
+        variant="danger"
+        onConfirm={async () => {
+          if (deleteTarget && onDelete) {
+            await onDelete(deleteTarget.id);
+          }
+        }}
+      />
     </div>
   );
 }

@@ -135,24 +135,24 @@ export function ImportExcelConfirmDialog({
 
   return (
     <Dialog open={open} onOpenChange={(nextOpen) => !nextOpen && onClose()}>
-      <DialogContent className="max-w-4xl border-stone-800 bg-[#0c0f17]/98 p-6 text-stone-100 shadow-[0_30px_90px_rgba(0,0,0,0.95)] backdrop-blur-3xl sm:rounded-xl">
+      <DialogContent className="max-w-4xl border border-border bg-card p-6 text-foreground shadow-[0_30px_90px_rgba(0,0,0,0.25)] dark:shadow-[0_30px_90px_rgba(0,0,0,0.95)] backdrop-blur-3xl sm:rounded-xl">
         <DialogHeader className="mb-4">
-          <DialogTitle className="text-xl font-bold text-stone-200">
-            {t("importExcelConfirm.title", "Xác nhận nhập từ Excel")}
+          <DialogTitle className="text-xl font-bold text-foreground">
+            {t("importExcelConfirm.title", "Confirm Excel Import")}
           </DialogTitle>
-          <DialogDescription className="text-xs text-stone-400">
+          <DialogDescription className="text-xs text-muted-foreground">
             {t(
               "importExcelConfirm.description",
-              "Kiểm tra lại danh sách vật phẩm từ file. Bạn có thể chọn/bỏ chọn các vật phẩm để nhập và chỉnh sửa nhanh số lượng hoặc giá mua."
+              "Review the items list from the file. You can select/deselect items to import and quickly edit their quantity or buy price."
             )}
-            <span className="ml-1 font-semibold text-blue-400">({fileName})</span>
+            <span className="ml-1 font-semibold text-blue-600 dark:text-blue-400">({fileName})</span>
           </DialogDescription>
         </DialogHeader>
 
         {/* Scrollable Table Container */}
-        <div className="relative max-h-[50vh] min-h-[200px] overflow-y-auto rounded-lg border border-stone-850 bg-stone-950/40">
+        <div className="relative max-h-[50vh] min-h-[200px] overflow-y-auto rounded-lg border border-border bg-surface-muted/20">
           <table className="w-full text-left text-sm border-collapse">
-            <thead className="sticky top-0 z-10 bg-[#0e121e] text-xs font-semibold uppercase tracking-wider text-stone-400 border-b border-stone-850 shadow-sm">
+            <thead className="sticky top-0 z-10 bg-surface-muted/60 dark:bg-[#0e121e] text-xs font-semibold uppercase tracking-wider text-muted-foreground border-b border-border shadow-sm backdrop-blur-sm">
               <tr>
                 <th className="py-3.5 px-4 w-12 text-center">
                   <input
@@ -160,29 +160,29 @@ export function ImportExcelConfirmDialog({
                     type="checkbox"
                     checked={allChecked}
                     onChange={handleToggleAll}
-                    aria-label="Chọn tất cả vật phẩm"
-                    className="size-4 rounded border-stone-800 bg-stone-900 text-accent focus:ring-accent focus:ring-offset-stone-950 cursor-pointer"
+                    aria-label={t("importExcelConfirm.selectAllItems", "Select all items")}
+                    className="size-4 rounded border-border bg-background text-accent focus:ring-accent focus:ring-offset-card cursor-pointer"
                   />
                 </th>
                 <th className="py-3.5 px-4 min-w-[240px]">
-                  {t("importExcelConfirm.itemName", "Tên vật phẩm")}
+                  {t("importExcelConfirm.itemName", "Item Name")}
                 </th>
                 <th className="py-3.5 px-4 w-32">
-                  {t("importExcelConfirm.quantity", "Số lượng")}
+                  {t("importExcelConfirm.quantity", "Quantity")}
                 </th>
                 <th className="py-3.5 px-4 w-44">
-                  {t("importExcelConfirm.buyPrice", "Giá mua (VND)")}
+                  {t("importExcelConfirm.buyPrice", "Buy Price (VND)")}
                 </th>
                 <th className="py-3.5 px-4 w-36 text-center">
-                  {t("importExcelConfirm.status", "Trạng thái")}
+                  {t("importExcelConfirm.status", "Status")}
                 </th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-stone-900">
+            <tbody className="divide-y divide-border/50">
               {localRows.length === 0 ? (
                 <tr>
-                  <td colSpan={5} className="py-8 text-center text-stone-500">
-                    {t("common.noResults", "Không có dữ liệu")}
+                  <td colSpan={5} className="py-8 text-center text-muted-foreground">
+                    {t("common.noResults", "No results found.")}
                   </td>
                 </tr>
               ) : (
@@ -198,8 +198,8 @@ export function ImportExcelConfirmDialog({
                       key={item.id}
                       className={`transition-colors duration-150 ${
                         item.checked
-                          ? "hover:bg-stone-900/40"
-                          : "opacity-45 hover:bg-stone-950/20 bg-stone-950/10"
+                          ? "hover:bg-surface-muted/30"
+                          : "opacity-45 hover:bg-surface-muted/10 bg-surface-muted/5"
                       }`}
                     >
                       {/* Checkbox */}
@@ -208,18 +208,18 @@ export function ImportExcelConfirmDialog({
                           type="checkbox"
                           checked={item.checked}
                           onChange={() => handleToggleRow(item.id)}
-                          aria-label={`Chọn vật phẩm ${item.marketHashName}`}
-                          className="size-4 rounded border-stone-850 bg-stone-900 text-accent focus:ring-accent focus:ring-offset-stone-950 cursor-pointer"
+                          aria-label={t("importExcelConfirm.selectItemName", "Select {{name}}", { name: item.marketHashName })}
+                          className="size-4 rounded border-border bg-background text-accent focus:ring-accent focus:ring-offset-card cursor-pointer"
                         />
                       </td>
 
                       {/* Name */}
-                      <td className="py-3.5 px-4 font-medium text-stone-200">
+                      <td className="py-3.5 px-4 font-medium text-foreground">
                         <div className="line-clamp-2" title={item.marketHashName}>
                           {item.marketHashName}
                         </div>
-                        {item.note && item.note !== "Import từ Excel" && (
-                          <span className="mt-0.5 block text-[10px] text-stone-500 font-normal">
+                        {item.note && item.note !== "Import t\u1eeb Excel" && (
+                          <span className="mt-0.5 block text-[10px] text-muted-foreground font-normal">
                             {item.note}
                           </span>
                         )}
@@ -233,8 +233,8 @@ export function ImportExcelConfirmDialog({
                           value={item.quantity}
                           disabled={!item.checked}
                           onChange={(e) => handleQuantityChange(item.id, e.target.value)}
-                          aria-label={`Số lượng cho ${item.marketHashName}`}
-                          className="h-8 w-24 border-stone-800 bg-stone-950/60 px-2 py-1 text-center text-sm font-medium focus:border-accent"
+                          aria-label={t("importExcelConfirm.quantityForName", "Quantity for {{name}}", { name: item.marketHashName })}
+                          className="h-8 w-24 px-2 py-1 text-center text-sm font-medium focus:border-accent"
                         />
                       </td>
 
@@ -245,8 +245,8 @@ export function ImportExcelConfirmDialog({
                           value={item.buyPrice.toLocaleString()}
                           disabled={!item.checked}
                           onChange={(e) => handleBuyPriceChange(item.id, e.target.value)}
-                          aria-label={`Giá mua cho ${item.marketHashName}`}
-                          className="h-8 w-36 border-stone-800 bg-stone-950/60 px-2 py-1 text-right text-sm font-medium focus:border-accent text-blue-300"
+                          aria-label={t("importExcelConfirm.buyPriceForName", "Buy price for {{name}}", { name: item.marketHashName })}
+                          className="h-8 w-36 px-2 py-1 text-right text-sm font-medium focus:border-accent text-blue-600 dark:text-blue-300"
                         />
                       </td>
 
@@ -254,19 +254,19 @@ export function ImportExcelConfirmDialog({
                       <td className="py-3.5 px-4 text-center">
                         {isDuplicate ? (
                           <div
-                            className="inline-flex items-center gap-1 rounded-full border border-amber-950/40 bg-amber-500/10 px-2 py-0.5 text-xs font-medium text-amber-400 select-none"
+                            className="inline-flex items-center gap-1 rounded-full border border-amber-200 dark:border-amber-950/40 bg-amber-50 dark:bg-amber-500/10 px-2 py-0.5 text-xs font-medium text-amber-600 dark:text-amber-400 select-none"
                             title={t(
                               "importExcelConfirm.alreadyExistsTooltip",
-                              "Vật phẩm này đã tồn tại trong portfolio."
+                              "This item already exists in your portfolio."
                             )}
                           >
                             <AlertTriangle className="size-3" />
-                            <span>{t("importExcelConfirm.alreadyExists", "Đã có")}</span>
+                            <span>{t("importExcelConfirm.alreadyExists", "Exists")}</span>
                           </div>
                         ) : (
-                          <div className="inline-flex items-center gap-1 rounded-full border border-emerald-950/40 bg-emerald-500/10 px-2 py-0.5 text-xs font-medium text-emerald-400 select-none">
+                          <div className="inline-flex items-center gap-1 rounded-full border border-emerald-200 dark:border-emerald-950/40 bg-emerald-50 dark:bg-emerald-500/10 px-2 py-0.5 text-xs font-medium text-emerald-600 dark:text-emerald-400 select-none">
                             <Check className="size-3" />
-                            <span>Mới</span>
+                            <span>{t("importExcelConfirm.newStatus", "New")}</span>
                           </div>
                         )}
                       </td>
@@ -279,8 +279,8 @@ export function ImportExcelConfirmDialog({
         </div>
 
         {/* Footer Area */}
-        <div className="mt-5 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between border-t border-stone-900 pt-4">
-          <div className="text-xs text-stone-400 font-medium">
+        <div className="mt-5 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between border-t border-border pt-4">
+          <div className="text-xs text-muted-foreground font-medium">
             {t("importExcelConfirm.selectedCount", {
               selected: checkedCount,
               total: localRows.length,
@@ -291,9 +291,9 @@ export function ImportExcelConfirmDialog({
             <Button
               variant="outline"
               onClick={onClose}
-              className="h-9 border-stone-800 bg-stone-900/60 px-4 text-xs font-medium text-stone-300 hover:border-stone-700 hover:bg-stone-850"
+              className="h-9 px-4 text-xs font-medium"
             >
-              {t("importExcelConfirm.cancelButton", "Hủy bỏ")}
+              {t("importExcelConfirm.cancelButton", "Cancel")}
             </Button>
             <Button
               variant="primary"
@@ -301,7 +301,7 @@ export function ImportExcelConfirmDialog({
               onClick={handleConfirm}
               className="h-9 bg-accent hover:bg-accent-hover text-accent-foreground px-5 text-xs font-bold shadow-md shadow-accent/10 disabled:opacity-40"
             >
-              {t("importExcelConfirm.confirmButton", "Xác nhận nhập")} ({checkedCount})
+              {t("importExcelConfirm.confirmButton", "Confirm Import")} ({checkedCount})
             </Button>
           </div>
         </div>

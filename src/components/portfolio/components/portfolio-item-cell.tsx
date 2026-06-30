@@ -23,8 +23,9 @@ import {
   colorWithAlpha,
 } from "../portfolio-table-utils";
 
-import { ItemHoverCard } from "./item-hover-card";
+import { ItemHoverCard } from "../item-hover-card";
 import { TradeHoldBadge } from "./trade-hold-badge";
+import { DopplerBadge, FadeBadge, BlueGemBadge, MarbleFadeBadge } from "@/components/shared/pattern-badge";
 
 export function ItemCell({
   item,
@@ -42,6 +43,7 @@ export function ItemCell({
   onUpdateBuffPrice,
   onDelete,
   deletingId,
+  onSellItem,
 }: {
   item: PortfolioTableRow;
   mode: PortfolioTableMode;
@@ -68,6 +70,7 @@ export function ItemCell({
   onUpdateBuffPrice?: (marketHashName: string, priceCny: number | null) => void;
   onDelete: (id: string) => void;
   deletingId: string | null;
+  onSellItem?: (id: string) => void;
 }) {
   const { t } = useTranslation();
   const [isDialogOpen, setIsDialogOpen] = useState(false);
@@ -97,7 +100,7 @@ export function ItemCell({
               type="button"
               onClick={() => setIsDialogOpen(true)}
               className="group relative flex shrink-0 cursor-pointer items-center justify-center overflow-hidden rounded-lg border border-stone-800 bg-surface-muted transition-all duration-300 hover:scale-[1.06] hover:border-blue-500/40 hover:shadow-lg active:scale-95 focus:outline-none"
-              title="Click để Tùy chỉnh / Sửa đợt mua"
+              title={t("portfolio.clickToEditLots", "Click to customize / edit purchase lots")}
             >
               <CaseThumbnail
                 imageUrl={item.case.imageUrl}
@@ -115,7 +118,7 @@ export function ItemCell({
                   type="button"
                   onClick={() => setIsDialogOpen(true)}
                   className="inline-flex max-w-[24rem] cursor-pointer items-center gap-1.5 truncate text-left font-bold text-foreground transition-colors hover:text-blue-400 focus:outline-none"
-                  title="Click để Tùy chỉnh / Sửa đợt mua"
+                  title={t("portfolio.clickToEditLots", "Click to customize / edit purchase lots")}
                 >
                   <span className="truncate">{item.case.name}</span>
                 </button>
@@ -125,7 +128,7 @@ export function ItemCell({
                   target="_blank"
                   rel="noreferrer"
                   className="flex cursor-pointer items-center justify-center rounded border border-stone-800 bg-stone-900 p-1 text-stone-400 shadow-sm transition-all hover:border-white hover:bg-white hover:text-[#171a21]"
-                  title="Mở trên Steam Market"
+                  title={t("portfolio.openSteamMarket", "Open on Steam Market")}
                 >
                   <FaSteam className="size-3.5" />
                 </a>
@@ -140,6 +143,16 @@ export function ItemCell({
                 >
                   {getItemTypeLabel(item.itemType)}
                 </span>
+                {item.dopplerPhase && <DopplerBadge phase={item.dopplerPhase} />}
+                {item.patternInfo?.fadePercentage !== undefined && (
+                  <FadeBadge percentage={item.patternInfo.fadePercentage} />
+                )}
+                {item.patternInfo?.blueGemTier && item.patternInfo.blueGemTier !== "Normal" && (
+                  <BlueGemBadge tier={item.patternInfo.blueGemTier} />
+                )}
+                {item.patternInfo?.marbleFadeTier && item.patternInfo.marbleFadeTier !== "Normal" && (
+                  <MarbleFadeBadge tier={item.patternInfo.marbleFadeTier} />
+                )}
                 {item.storageUnitQuantity && item.storageUnitQuantity > 0 ? (
                   <span className="inline-flex items-center rounded border border-amber-500/20 bg-amber-500/10 px-1.5 py-0.5 text-[10px] font-bold text-amber-400">
                     🔒 {item.storageUnitQuantity} {t("portfolio.inStorageUnit", "trong Storage Unit")}
@@ -152,23 +165,35 @@ export function ItemCell({
                     <>
                       {breakdown.tradeable > 0 &&
                         breakdown.tradeable !== item.quantity ? (
-                        <span className="inline-flex items-center rounded border border-emerald-500/20 bg-emerald-500/10 px-1.5 py-0.5 text-[10px] font-bold text-emerald-400">
+                        <span
+                          aria-label={t("portfolio.tradeableStatusWithQty", "{{count}} tradeable items", { count: breakdown.tradeable })}
+                          className="inline-flex items-center rounded border border-emerald-500/20 bg-emerald-500/10 px-1.5 py-0.5 text-[10px] font-bold text-emerald-400"
+                        >
                           🟢 {breakdown.tradeable}
                         </span>
                       ) : null}
                       {breakdown.onMarket > 0 ? (
-                        <span className="inline-flex items-center rounded border border-amber-500/20 bg-amber-500/10 px-1.5 py-0.5 text-[10px] font-bold text-amber-400">
+                        <span
+                          aria-label={t("portfolio.onMarketStatusWithQty", "{{count}} items on market", { count: breakdown.onMarket })}
+                          className="inline-flex items-center rounded border border-amber-500/20 bg-amber-500/10 px-1.5 py-0.5 text-[10px] font-bold text-amber-400"
+                        >
                           🟡 {breakdown.onMarket} Market
                         </span>
                       ) : null}
                       {breakdown.tradeProtected > 0 ? (
-                        <span className="inline-flex items-center rounded border border-cyan-500/20 bg-cyan-500/10 px-1.5 py-0.5 text-[10px] font-bold text-cyan-400">
+                        <span
+                          aria-label={t("portfolio.tradeProtectedStatusWithQty", "{{count}} trade-protected items", { count: breakdown.tradeProtected })}
+                          className="inline-flex items-center rounded border border-cyan-500/20 bg-cyan-500/10 px-1.5 py-0.5 text-[10px] font-bold text-cyan-400"
+                        >
                           🔵 {breakdown.tradeProtected} Protected
                         </span>
                       ) : null}
                       {breakdown.hold > 0 &&
                         breakdown.hold !== item.quantity ? (
-                        <span className="inline-flex items-center rounded border border-red-500/20 bg-red-500/10 px-1.5 py-0.5 text-[10px] font-bold text-red-400">
+                        <span
+                          aria-label={t("portfolio.holdStatusWithQty", "{{count}} items on hold", { count: breakdown.hold })}
+                          className="inline-flex items-center rounded border border-red-500/20 bg-red-500/10 px-1.5 py-0.5 text-[10px] font-bold text-red-400"
+                        >
                           🔴 {breakdown.hold} Hold
                         </span>
                       ) : null}
@@ -177,30 +202,28 @@ export function ItemCell({
                 })()}
                 {item.sourceType === "manual" ? (
                   <span className="inline-flex rounded border border-accent/30 bg-accent/10 px-1.5 py-0.5 text-[10px] font-semibold tracking-wider text-accent uppercase">
-                    {t("common.manual", "Thủ công")}
+                    {t("common.manual", "Manual")}
                   </span>
                 ) : null}
-                {relatedRows.length > 1 ? (
-                  <span className="inline-flex rounded border border-sky-500/25 bg-sky-500/10 px-1.5 py-0.5 text-[10px] font-semibold tracking-wider text-sky-300 uppercase">
-                    {t("common.lot_other", `${relatedRows.length} lot`, { count: relatedRows.length })}
-                  </span>
-                ) : null}
+
                 {item.note &&
                   !item.note.toLowerCase().includes("inventory scanner") &&
-                  !item.note.toLowerCase().includes("import từ inventory scanner") &&
-                  !item.note.toLowerCase().includes("đồng bộ từ") &&
+                  !item.note.toLowerCase().includes("import t\u1eeb inventory scanner") &&
+                  !item.note.toLowerCase().includes("\u0111\u1ed3ng b\u1ed9 t\u1eeb") &&
                   !item.note.toLowerCase().includes("trade history") &&
-                  item.note !== "Thủ công" ? (
+                  item.note !== "Th\u1ee7 c\u00f4ng" ? (
                   <span
                     className="inline-flex max-w-[12rem] items-center gap-1 truncate rounded border border-emerald-500/25 bg-emerald-500/10 px-1.5 py-0.5 text-[10px] font-semibold tracking-wider text-emerald-300 uppercase shadow-[0_0_8px_rgba(16,185,129,0.08)]"
-                    title={item.note === "Thủ công" ? t("common.manual") : item.note}
+                    title={item.note === "Th\u1ee7 c\u00f4ng" ? t("common.manual", "Manual") : item.note === "onlyInStorageUnit" ? t("portfolio.onlyInStorageUnit", "Only in Storage Unit") : item.note}
                   >
                     <Tag className="size-2.5 shrink-0 text-emerald-400" />
                     <span className="truncate">
-                      {item.note === "Thủ công"
-                        ? t("common.manual")
-                        : item.note === "Import từ inventory scanner"
-                        ? t("portfolio.noteInventoryScan")
+                      {item.note === "Th\u1ee7 c\u00f4ng"
+                        ? t("common.manual", "Manual")
+                        : item.note === "Import t\u1eeb inventory scanner"
+                        ? t("portfolio.noteInventoryScan", "Imported from inventory scanner")
+                        : item.note === "onlyInStorageUnit"
+                        ? t("portfolio.onlyInStorageUnit", "Only in Storage Unit")
                         : item.note}
                     </span>
                   </span>
@@ -228,7 +251,7 @@ export function ItemCell({
               ) : null}
               {mode === "case-summary" ? (
                 <div className="mt-1 text-xs text-muted-foreground">
-                  {t("common.purchasesWithCount", `${item.lotCount} lần mua`, { count: item.lotCount })}
+                  {t("common.purchasesWithCount", "{{count}} purchases", { count: item.lotCount })}
                 </div>
               ) : null}
             </div>
@@ -263,6 +286,15 @@ export function ItemCell({
                 onDelete={onDelete}
                 deletingId={deletingId}
                 onSelectOpenChange={setIsSelectOpen}
+                onOpenDetails={() => {
+                  setHoverCardOpen(false);
+                  setIsSelectOpen(false);
+                  setIsDialogOpen(true);
+                }}
+                onSellItem={(id) => {
+                  onSellItem?.(id);
+                  setHoverCardOpen(false);
+                }}
               />
             </motion.div>
           </HoverCard.Content>
@@ -293,6 +325,10 @@ export function ItemCell({
             onDelete={onDelete}
             deletingId={deletingId}
             embedded
+            onSellItem={(id) => {
+              onSellItem?.(id);
+              setIsDialogOpen(false);
+            }}
           />
         </SlidePanelContent>
       </SlidePanel>

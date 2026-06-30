@@ -5,6 +5,10 @@ import { getPortfolioOwnerId } from "@/services/auth-service";
 import { encrypt, decrypt } from "@/services/crypto-service";
 import { ObjectId } from "mongodb";
 import { resolveSteamId } from "@/infrastructure/steam";
+import { getCookiePreview, mergeIncomingCookieWithExisting } from "@/utils/steam-cookies";
+import { getOwnerFilter } from "@/infrastructure/db/owner-filter";
+import { steamAccountSchema } from "@/utils/validation";
+import { SCANNER_IMPORT_NOTES } from "@/services/portfolio-sync";
 
 export const dynamic = "force-dynamic";
 
@@ -25,15 +29,17 @@ export async function GET() {
         steamUrl: acc.steamUrl,
         name: acc.name,
         avatarUrl: acc.avatarUrl,
-        steamCookie: acc.steamCookie ? decrypt(acc.steamCookie) : null,
+        steamCookie: acc.steamCookie ? getCookiePreview(decrypt(acc.steamCookie)) : null,
         cookieError: acc.cookieError || null,
+        walletBalance: acc.walletBalance || null,
+        walletBalanceVnd: acc.walletBalanceVnd || null,
         createdAt: acc.createdAt,
         updatedAt: acc.updatedAt,
       })),
     );
   } catch (error) {
     return NextResponse.json(
-      { message: getErrorMessage(error, "Đã xảy ra lỗi.") },
+      { message: getErrorMessage(error, "unknownError") },
       { status: 500 },
     );
   }
@@ -43,35 +49,46 @@ export async function POST(request: NextRequest) {
   try {
     const ownerId = await getPortfolioOwnerId();
     const body = await request.json();
-    const steamUrl = String(body.steamUrl ?? "").trim();
-    const steamCookie = String(body.steamCookie ?? "").trim();
-
-    if (!steamUrl) {
+    const parsed = steamAccountSchema.pick({ steamUrl: true, steamCookie: true }).safeParse(body);
+    if (!parsed.success) {
       return NextResponse.json(
-        { message: "Vui lòng cung cấp link Steam." },
+        { message: parsed.error.issues[0].message },
         { status: 400 },
       );
     }
+    const { steamUrl, steamCookie } = parsed.data;
 
     // Resolve Steam URL to SteamID64 and fetch profile info
     const resolved = await resolveSteamId(steamUrl);
     const db = await getDatabase();
     const accountsCol = db.collection("portfolio_accounts");
 
+    const existingAccount = await accountsCol.findOne({ ownerId, steamId64: resolved.steamId64 });
+    let finalCookie = steamCookie;
+    if (existingAccount?.steamCookie && steamCookie) {
+      const decryptedExisting = decrypt(existingAccount.steamCookie);
+      finalCookie = mergeIncomingCookieWithExisting(steamCookie, decryptedExisting);
+    }
+
     const now = new Date();
+    const setFields: Record<string, unknown> = {
+      ownerId,
+      steamId64: resolved.steamId64,
+      name: resolved.profile.name,
+      avatarUrl: resolved.profile.avatarUrl,
+      steamUrl,
+      cookieError: null,
+      updatedAt: now,
+    };
+
+    if (finalCookie) {
+      setFields.steamCookie = encrypt(finalCookie);
+    }
+
     await accountsCol.updateOne(
       { ownerId, steamId64: resolved.steamId64 },
       {
-        $set: {
-          ownerId,
-          steamId64: resolved.steamId64,
-          name: resolved.profile.name,
-          avatarUrl: resolved.profile.avatarUrl,
-          steamUrl,
-          steamCookie: steamCookie ? encrypt(steamCookie) : undefined,
-          cookieError: null,
-          updatedAt: now,
-        },
+        $set: setFields,
         $setOnInsert: {
           createdAt: now,
         },
@@ -90,14 +107,16 @@ export async function POST(request: NextRequest) {
         steamUrl: saved?.steamUrl,
         name: saved?.name,
         avatarUrl: saved?.avatarUrl,
-        steamCookie: saved?.steamCookie ? decrypt(saved.steamCookie) : null,
+        steamCookie: saved?.steamCookie ? getCookiePreview(decrypt(saved.steamCookie)) : null,
         cookieError: saved?.cookieError || null,
+        walletBalance: saved?.walletBalance || null,
+        walletBalanceVnd: saved?.walletBalanceVnd || null,
       },
       { status: 201 },
     );
   } catch (error) {
     return NextResponse.json(
-      { message: getErrorMessage(error, "Đã xảy ra lỗi.") },
+      { message: getErrorMessage(error, "unknownError") },
       { status: 400 },
     );
   }
@@ -111,7 +130,7 @@ export async function PATCH(request: NextRequest) {
 
     if (!id || !ObjectId.isValid(id)) {
       return NextResponse.json(
-        { message: "Id tài khoản không hợp lệ." },
+        { message: "invalidAccountId" },
         { status: 400 },
       );
     }
@@ -125,7 +144,18 @@ export async function PATCH(request: NextRequest) {
 
     if (steamCookie !== undefined) {
       const trimmed = String(steamCookie || "").trim();
-      updateDoc.steamCookie = trimmed ? encrypt(trimmed) : "";
+      let finalCookie = trimmed;
+      if (trimmed) {
+        const existingAccount = await accountsCol.findOne({
+          _id: new ObjectId(id),
+          ...getOwnerFilter(ownerId),
+        });
+        if (existingAccount?.steamCookie) {
+          const decryptedExisting = decrypt(existingAccount.steamCookie);
+          finalCookie = mergeIncomingCookieWithExisting(trimmed, decryptedExisting);
+        }
+      }
+      updateDoc.steamCookie = finalCookie ? encrypt(finalCookie) : "";
       updateDoc.cookieError = null;
     }
 
@@ -136,7 +166,7 @@ export async function PATCH(request: NextRequest) {
 
     if (result.matchedCount === 0) {
       return NextResponse.json(
-        { message: "Không tìm thấy tài khoản để cập nhật." },
+        { message: "accountNotFoundToUpdate" },
         { status: 404 },
       );
     }
@@ -144,7 +174,7 @@ export async function PATCH(request: NextRequest) {
     return NextResponse.json({ success: true });
   } catch (error) {
     return NextResponse.json(
-      { message: getErrorMessage(error, "Đã xảy ra lỗi.") },
+      { message: getErrorMessage(error, "unknownError") },
       { status: 500 },
     );
   }
@@ -158,7 +188,7 @@ export async function DELETE(request: NextRequest) {
 
     if (!id || !ObjectId.isValid(id)) {
       return NextResponse.json(
-        { message: "Id tài khoản không hợp lệ." },
+        { message: "invalidAccountId" },
         { status: 400 },
       );
     }
@@ -173,7 +203,7 @@ export async function DELETE(request: NextRequest) {
 
     if (!account) {
       return NextResponse.json(
-        { message: "Không tìm thấy tài khoản để xóa." },
+        { message: "accountNotFoundToDelete" },
         { status: 404 },
       );
     }
@@ -189,7 +219,7 @@ export async function DELETE(request: NextRequest) {
     // Delete associated portfolio items imported from this account
     await db.collection("portfolio_items").deleteMany({
       ...getOwnerFilter(ownerId),
-      note: "Import từ inventory scanner",
+      note: { $in: [...SCANNER_IMPORT_NOTES] },
       "sourceAccounts.steamId64": steamId64,
     });
 
@@ -202,19 +232,12 @@ export async function DELETE(request: NextRequest) {
     return NextResponse.json({ success: true });
   } catch (error) {
     return NextResponse.json(
-      { message: getErrorMessage(error, "Đã xảy ra lỗi.") },
+      { message: getErrorMessage(error, "unknownError") },
       { status: 500 },
     );
   }
 }
 
-function getOwnerFilter(ownerId: string) {
-  if (ownerId === "guest") {
-    return {
-      $or: [{ ownerId: "guest" }, { ownerId: { $exists: false } }],
-    };
-  }
-  return { ownerId };
-}
+
 
 

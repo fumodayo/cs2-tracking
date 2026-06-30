@@ -1,14 +1,7 @@
 import * as XLSX from "xlsx";
 import type { PortfolioReportDto } from "@/types/report";
-
-export type PortfolioImportRow = {
-  caseId?: string;
-  marketHashName?: string;
-  quantity: number;
-  buyPrice: number;
-  buyDate: string;
-  note?: string;
-};
+import type { PortfolioImportRow } from "@/types/portfolio-import";
+export type { PortfolioImportRow } from "@/types/portfolio-import";
 
 export type ColumnMapping = {
   name: number;           // BẮT BUỘC — index cột chứa tên vật phẩm
@@ -95,7 +88,7 @@ export async function parsePortfolioExcelFile(
   );
 
   if (rows.length === 0) {
-    throw new Error("File không có dòng portfolio hợp lệ.");
+    throw new Error("File does not contain valid portfolio rows.");
   }
 
   return rows;
@@ -162,8 +155,8 @@ function normalizeFlexibleImportRow(
         : normalizeExcelDate(row[columns.buyDate]),
     note:
       columns.note === undefined
-        ? "Import từ Excel"
-        : stringifyCell(row[columns.note]) || "Import từ Excel",
+        ? "Imported from Excel"
+        : stringifyCell(row[columns.note]) || "Imported from Excel",
   };
 }
 
@@ -368,8 +361,8 @@ export function parseMatrixWithMapping(
       : new Date().toISOString().slice(0, 10);
       
     const note = (mapping.note !== undefined && mapping.note < row.length)
-      ? (stringifyCell(row[mapping.note]) || "Import từ Excel")
-      : "Import từ Excel";
+      ? (stringifyCell(row[mapping.note]) || "Imported from Excel")
+      : "Imported from Excel";
       
     const caseId = (mapping.caseId !== undefined && mapping.caseId < row.length)
       ? (stringifyCell(row[mapping.caseId]) || undefined)

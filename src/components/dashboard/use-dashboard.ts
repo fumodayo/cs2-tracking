@@ -13,7 +13,8 @@ import type { PortfolioTableRow } from "@/components/portfolio";
 import {
   PORTFOLIO_QUERY_KEY,
   fetchPortfolioReport,
-} from "@/services/portfolio-api";
+} from "@/lib/api-client/portfolio-api";
+import { fetchSteamAccounts, STEAM_ACCOUNTS_QUERY_KEY } from "@/lib/api-client/steam-accounts-api";
 
 export function useDashboard() {
   const [dialogOpen, setDialogOpen] = useState(false);
@@ -48,6 +49,15 @@ export function useDashboard() {
   const reportQuery = useQuery({
     queryKey: PORTFOLIO_QUERY_KEY,
     queryFn: fetchPortfolioReport,
+    staleTime: 5 * 60 * 1000,
+    enabled: !!user,
+  });
+
+  const accountsQuery = useQuery({
+    queryKey: STEAM_ACCOUNTS_QUERY_KEY,
+    queryFn: () => fetchSteamAccounts(t("dashboard.cannotLoadAccounts")),
+    staleTime: 5 * 60 * 1000,
+    enabled: !!user,
   });
 
   const report = reportQuery.data ?? null;
@@ -129,6 +139,7 @@ export function useDashboard() {
 
     // Queries & Mutations
     reportQuery,
+    accountsQuery,
     mutations: {
       add: mutations.addMutation,
       delete: mutations.deleteMutation,

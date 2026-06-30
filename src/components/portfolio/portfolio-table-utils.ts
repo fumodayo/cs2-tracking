@@ -25,7 +25,7 @@ export function getBuyDateSortValue(value: string | null): number {
 
 export function formatBuyDate(value: string | null): string {
   if (!value) {
-    return "Chưa có";
+    return "None";
   }
 
   const [from, to] = value.split("|");
@@ -76,6 +76,12 @@ export function getItemTypeColor(type: PortfolioTableRow["itemType"]): string {
       return "#4b69ff";
     case "capsule":
     case "case":
+    case "graffiti":
+    case "agent":
+    case "music_kit":
+    case "patch":
+    case "pin":
+    case "charm":
       return "#b0c3d9"; // ALWAYS Consumer grade color
   }
 }
@@ -90,6 +96,18 @@ export function getItemTypeLabel(type: PortfolioTableRow["itemType"]): string {
       return "Capsule";
     case "case":
       return "Case";
+    case "graffiti":
+      return "Graffiti";
+    case "agent":
+      return "Agent";
+    case "music_kit":
+      return "Music Kit";
+    case "patch":
+      return "Patch";
+    case "pin":
+      return "Pin";
+    case "charm":
+      return "Charm";
   }
 }
 

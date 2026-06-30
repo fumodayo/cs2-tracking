@@ -3,6 +3,7 @@ import { getDatabase } from "@/infrastructure/db/mongo-client";
 import { getPortfolioOwnerId } from "@/services/auth-service";
 import { ObjectId } from "mongodb";
 import { STORAGE_UNIT_MAX_CAPACITY } from "@/domain/storage-unit";
+import { getOwnerFilter } from "@/infrastructure/db/owner-filter";
 
 export const dynamic = "force-dynamic";
 
@@ -31,9 +32,14 @@ export async function POST(request: Request) {
     const body = await request.json();
     const { storageUnitId, items } = body;
 
-    if (!storageUnitId || !Array.isArray(items) || items.length === 0) {
+    if (
+      !storageUnitId ||
+      !ObjectId.isValid(storageUnitId) ||
+      !Array.isArray(items) ||
+      items.length === 0
+    ) {
       return NextResponse.json(
-        { message: "Thiếu storageUnitId hoặc items." },
+        { message: "missingStorageUnitIdOrItems" },
         { status: 400 },
       );
     }
@@ -41,12 +47,12 @@ export async function POST(request: Request) {
     const collection = db.collection("storage_units");
     const doc = await collection.findOne({
       _id: new ObjectId(storageUnitId),
-      ownerId,
+      ...getOwnerFilter(ownerId),
     });
 
     if (!doc) {
       return NextResponse.json(
-        { message: "Storage Unit không tồn tại." },
+        { message: "storageUnitNotFound" },
         { status: 404 },
       );
     }
@@ -64,7 +70,7 @@ export async function POST(request: Request) {
     if (currentCount + addingCount > STORAGE_UNIT_MAX_CAPACITY) {
       return NextResponse.json(
         {
-          message: `Storage Unit "${doc.name}" đã chứa ${currentCount} items. Không thể thêm ${addingCount} items (tối đa ${STORAGE_UNIT_MAX_CAPACITY}).`,
+          message: `storageUnitCapacityExceeded:name=${doc.name},currentCount=${currentCount},addingCount=${addingCount},maxCapacity=${STORAGE_UNIT_MAX_CAPACITY}`,
           currentCount,
           addingCount,
           maxCapacity: STORAGE_UNIT_MAX_CAPACITY,
@@ -106,7 +112,7 @@ export async function POST(request: Request) {
     }
 
     await collection.updateOne(
-      { _id: new ObjectId(storageUnitId) },
+      { _id: new ObjectId(storageUnitId), ...getOwnerFilter(ownerId) },
       { $set: { items: updatedItems, updatedAt: now } },
     );
 
@@ -116,13 +122,13 @@ export async function POST(request: Request) {
     );
 
     return NextResponse.json({
-      message: `Đã thêm ${addingCount} items vào Storage Unit "${doc.name}".`,
+      message: `storageUnitItemsAdded:count=${addingCount},name=${doc.name}`,
       currentCount: newCount,
     });
   } catch (error) {
     console.error("Error assigning items to storage unit:", error);
     return NextResponse.json(
-      { message: "Không thể thêm items vào Storage Unit." },
+      { message: "cannotAddItemsToStorageUnit" },
       { status: 500 },
     );
   }

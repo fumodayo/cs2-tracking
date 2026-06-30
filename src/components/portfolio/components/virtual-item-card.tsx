@@ -1,9 +1,10 @@
 "use client";
 
-import React from "react";
+import React, { memo } from "react";
 import { CaseThumbnail } from "../case-thumbnail";
 import { useCurrency } from "@/components/currency-provider";
 import { PortfolioTableRow } from "../portfolio-table-model";
+import { useTranslation } from "react-i18next";
 
 interface VirtualItemCardProps {
   item: PortfolioTableRow;
@@ -11,19 +12,21 @@ interface VirtualItemCardProps {
   accounts?: Array<{ id: string; steamId64: string; name: string }>;
 }
 
-export function VirtualItemCard({ item, typeColor, accounts }: VirtualItemCardProps) {
+export const VirtualItemCard = memo(
+  function VirtualItemCard({ item, typeColor, accounts }: VirtualItemCardProps) {
   const { formatCurrency } = useCurrency();
+  const { t } = useTranslation();
 
   return (
     <div className="w-[25rem] text-left">
-      <div className="relative overflow-hidden rounded-2xl border border-slate-800/80 bg-[#0e121a] text-slate-100 shadow-[0_20px_50px_rgba(0,0,0,0.65)] backdrop-blur-xl transition-all duration-300 hover:border-slate-700/80">
+      <div className="relative overflow-hidden rounded-2xl border border-stone-800/80 bg-stone-950 text-stone-100 shadow-[0_20px_50px_rgba(0,0,0,0.65)] backdrop-blur-xl transition-all duration-300 hover:border-stone-700/80">
         <div
           className="pointer-events-none absolute -top-24 -left-24 h-48 w-48 rounded-full opacity-[0.08] blur-3xl"
           style={{ backgroundColor: typeColor }}
         />
 
-        <div className="flex items-center gap-4 border-b border-slate-800/80 bg-gradient-to-r from-slate-900/60 to-slate-900/10 px-4 py-4">
-          <div className="group relative flex shrink-0 items-center justify-center rounded-xl border border-slate-800/50 bg-slate-950/80 p-1 shadow-inner">
+        <div className="flex items-center gap-4 border-b border-stone-800/80 bg-gradient-to-r from-stone-900/60 to-stone-900/10 px-4 py-4">
+          <div className="group relative flex shrink-0 items-center justify-center rounded-xl border border-stone-800/50 bg-stone-950/80 p-1 shadow-inner">
             <CaseThumbnail
               imageUrl={item.case.imageUrl}
               name={item.case.name}
@@ -36,22 +39,22 @@ export function VirtualItemCard({ item, typeColor, accounts }: VirtualItemCardPr
           </div>
           <div className="min-w-0 flex-1">
             <p
-              className="text-sm leading-snug font-bold tracking-wide text-slate-100"
+              className="text-sm leading-snug font-bold tracking-wide text-stone-100"
               title={item.case.name}
             >
               {item.case.name}
             </p>
             <p className="mt-1 flex items-center gap-1 text-xs font-medium text-amber-500">
-              <span>🔒 Chỉ lưu trong Storage Unit</span>
+              <span>{t("portfolio.storedInStorageUnitOnly", "🔒 Stored in Storage Unit only")}</span>
             </p>
           </div>
         </div>
 
         <div className="space-y-4 px-4 py-4">
-          {item.storageUnitDetails && item.storageUnitDetails.length > 0 && (
-            <div className="mb-3 space-y-1.5 border-b border-slate-800/80 pb-3 text-xs">
-              <div className="mb-1 text-[10px] font-bold tracking-wider text-slate-500 uppercase">
-                Lưu trữ trong Storage Unit
+          {item.storageUnitDetails && item.storageUnitDetails.some((su) => su.quantity > 0) && (
+            <div className="mb-3 space-y-1.5 border-b border-stone-800/80 pb-3 text-xs">
+              <div className="mb-1 text-[10px] font-bold tracking-wider text-stone-500 uppercase">
+                {t("portfolio.storedInStorageUnits", "Stored in Storage Units")}
               </div>
               {item.storageUnitDetails.map((su) => {
                 const account = accounts?.find((a) => a.steamId64 === su.steamId64);
@@ -59,7 +62,7 @@ export function VirtualItemCard({ item, typeColor, accounts }: VirtualItemCardPr
                 return (
                   <div
                     key={su.storageUnitId}
-                    className="flex items-center justify-between text-slate-300"
+                    className="flex items-center justify-between text-stone-300"
                   >
                     <span className="flex items-center gap-1.5 min-w-0 flex-1">
                       <span className="size-1.5 rounded-full bg-amber-500 shrink-0" />
@@ -79,26 +82,26 @@ export function VirtualItemCard({ item, typeColor, accounts }: VirtualItemCardPr
             </div>
           )}
 
-          <div className="border-slate-850 grid grid-cols-2 gap-3 rounded-lg border bg-slate-950/45 p-3 text-xs">
+          <div className="border-stone-850 grid grid-cols-2 gap-3 rounded-lg border bg-stone-950/45 p-3 text-xs">
             <div>
-              <p className="text-[10px] font-bold text-slate-500 uppercase">
-                Tổng số lượng
+              <p className="text-[10px] font-bold text-stone-500 uppercase">
+                {t("portfolio.totalQuantity", "Total Quantity")}
               </p>
-              <p className="mt-0.5 text-sm font-bold text-slate-200">
-                {item.quantity} items
+              <p className="mt-0.5 text-sm font-bold text-stone-200">
+                {t("portfolio.itemsCount", "{{count}} items", { count: item.quantity })}
               </p>
             </div>
             <div>
-              <p className="text-[10px] font-bold text-slate-500 uppercase">
-                Giá hiện tại
+              <p className="text-[10px] font-bold text-stone-500 uppercase">
+                {t("portfolio.currentPrice", "Current Price")}
               </p>
               <p className="mt-0.5 text-sm font-bold text-emerald-400">
                 {formatCurrency(item.currentPrice ?? 0)}
               </p>
             </div>
-            <div className="col-span-2 border-t border-slate-800/40 pt-2">
-              <p className="text-[10px] font-bold text-slate-500 uppercase">
-                Tổng giá trị hiện tại
+            <div className="col-span-2 border-t border-stone-800/40 pt-2">
+              <p className="text-[10px] font-bold text-stone-500 uppercase">
+                {t("portfolio.totalCurrentValue", "Total Current Value")}
               </p>
               <p className="mt-0.5 text-base font-extrabold text-emerald-400">
                 {formatCurrency((item.currentPrice ?? 0) * item.quantity)}
@@ -107,12 +110,13 @@ export function VirtualItemCard({ item, typeColor, accounts }: VirtualItemCardPr
           </div>
 
           <div className="border-stone-850 rounded-lg border bg-stone-950/20 p-3 text-xs leading-relaxed text-stone-400">
-            💡 <strong>Lưu ý:</strong> Vật phẩm này chỉ tồn tại trong Storage
-            Unit, không có trong inventory chính. Số lượng được đồng bộ tự
-            động khi quét tài khoản Steam.
+            💡 <strong>{t("common.noteLabel", "Note")}:</strong> {t("portfolio.virtualItemCardNoticeBody", "This item only exists in Storage Units, not in the main inventory. Quantities are automatically updated when scanning Steam accounts.")}
           </div>
         </div>
       </div>
     </div>
   );
-}
+  }
+);
+
+VirtualItemCard.displayName = "VirtualItemCard";

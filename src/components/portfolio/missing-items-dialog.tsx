@@ -1,7 +1,9 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo, useCallback } from "react";
 import { Archive, ArrowRightLeft, Trash2, HelpCircle, PlusCircle, CheckCircle } from "lucide-react";
+import { useTranslation } from "react-i18next";
+import { proxySteamUrl } from "@/utils/url";
 import { Select } from "@/components/ui/select";
 import { Button } from "@/components/ui/button";
 import {
@@ -40,6 +42,12 @@ export type ExtraItem = {
   currentQuantity: number;
   extraQuantity: number;
   accounts?: AccountChangeDetail[];
+  breakdown?: {
+    tradeable: number;
+    onMarket: number;
+    tradeProtected: number;
+    hold: number;
+  };
 };
 
 export type SyncStorageUnit = {
@@ -68,37 +76,7 @@ type MissingItemsDialogProps = {
   onResolve: (resolutions: ItemResolution[]) => Promise<void>;
 };
 
-const RESOLUTION_OPTIONS: Array<{
-  value: Resolution;
-  label: string;
-  icon: typeof Archive;
-  color: string;
-}> = [
-  {
-    value: "storage_unit",
-    label: "Cất vào Storage Unit",
-    icon: Archive,
-    color: "text-amber-400",
-  },
-  {
-    value: "traded",
-    label: "Đã trade",
-    icon: ArrowRightLeft,
-    color: "text-blue-400",
-  },
-  {
-    value: "deleted",
-    label: "Đã xóa",
-    icon: Trash2,
-    color: "text-red-400",
-  },
-  {
-    value: "unknown",
-    label: "Không biết",
-    icon: HelpCircle,
-    color: "text-stone-400",
-  },
-];
+
 
 export function MissingItemsDialog({
   open,
@@ -108,6 +86,33 @@ export function MissingItemsDialog({
   storageUnits,
   onResolve,
 }: MissingItemsDialogProps) {
+  const { t } = useTranslation();
+  const resolutionOptions = useMemo(() => [
+    {
+      value: "storage_unit" as Resolution,
+      label: t("missingItemsDialog.resolutionStorageUnit", "Store in Storage Unit"),
+      icon: Archive,
+      color: "text-amber-400",
+    },
+    {
+      value: "traded" as Resolution,
+      label: t("missingItemsDialog.resolutionTraded", "Traded"),
+      icon: ArrowRightLeft,
+      color: "text-blue-400",
+    },
+    {
+      value: "deleted" as Resolution,
+      label: t("missingItemsDialog.resolutionDeleted", "Deleted"),
+      icon: Trash2,
+      color: "text-red-400",
+    },
+    {
+      value: "unknown" as Resolution,
+      label: t("missingItemsDialog.resolutionUnknown", "Unknown"),
+      icon: HelpCircle,
+      color: "text-stone-400",
+    },
+  ], [t]);
   const [resolutions, setResolutions] = useState<
     Record<string, { resolution: Resolution; storageUnitId?: string }>
   >({});
@@ -115,40 +120,47 @@ export function MissingItemsDialog({
   const [activeTab, setActiveTab] = useState<"missing" | "extra">("missing");
   const [submitting, setSubmitting] = useState(false);
 
+  const getStorageUnitsForItem = useCallback((item: MissingItem) => {
+    const accountIds = new Set((item.accounts ?? []).map((account) => String(account.steamId64)));
+    if (accountIds.size === 0) return storageUnits;
+    return storageUnits.filter((unit) => accountIds.has(String(unit.steamId64)));
+  }, [storageUnits]);
+
   // Reset/Initialize state when dialog opens or items change
   useEffect(() => {
     if (open) {
       const initial: Record<string, { resolution: Resolution; storageUnitId?: string }> = {};
       for (const item of missingItems) {
+        const itemStorageUnits = getStorageUnitsForItem(item);
         initial[item.caseId] = {
-          resolution: storageUnits.length > 0 ? "storage_unit" : "unknown",
-          storageUnitId: storageUnits[0]?.id,
+          resolution: itemStorageUnits.length > 0 ? "storage_unit" : "unknown",
+          storageUnitId: itemStorageUnits[0]?.id,
         };
       }
       setResolutions(initial);
       setActiveTab(missingItems.length > 0 ? "missing" : "extra");
     }
-  }, [open, missingItems, storageUnits]);
+  }, [open, missingItems, getStorageUnitsForItem]);
 
   if (!open || (missingItems.length === 0 && extraItems.length === 0)) return null;
 
   const showTabs = missingItems.length > 0 && extraItems.length > 0;
 
   // Dynamic Title and Description
-  let title = "Kết quả quét kho đồ Steam";
-  let description = "Phát hiện sự thay đổi về số lượng vật phẩm trong kho đồ.";
+  let title = t("missingItemsDialog.defaultTitle", "Steam Inventory Scan Results");
+  let description = t("missingItemsDialog.defaultDesc", "Detected changes in inventory item counts.");
 
   if (!showTabs) {
     if (missingItems.length > 0) {
-      title = `Phát hiện ${missingItems.length} loại item biến mất`;
-      description = "Các item dưới đây đã giảm số lượng so với lần quét trước. Hãy cho biết chúng đã đi đâu.";
+      title = t("missingItemsDialog.missingTitle", "Detected {{count}} disappeared item types", { count: missingItems.length });
+      description = t("missingItemsDialog.missingDesc", "The following items decreased in quantity compared to the last scan. Please specify where they went.");
     } else if (extraItems.length > 0) {
-      title = `Phát hiện ${extraItems.length} loại item mới / tăng thêm`;
-      description = "Các item dưới đây đã tăng số lượng hoặc mới xuất hiện so với lần quét trước. Chúng đã được tự động thêm vào portfolio.";
+      title = t("missingItemsDialog.extraTitle", "Detected {{count}} new / increased item types", { count: extraItems.length });
+      description = t("missingItemsDialog.extraDesc", "The following items increased in quantity or are new since the last scan. They have been automatically added to your portfolio.");
     }
   } else {
-    title = "Cập nhật thay đổi kho đồ";
-    description = "Phát hiện cả vật phẩm biến mất và vật phẩm mới/tăng thêm trong kho đồ của bạn.";
+    title = t("missingItemsDialog.syncTitle", "Sync Inventory Changes");
+    description = t("missingItemsDialog.syncDesc", "Detected both disappeared and new/increased items in your inventory.");
   }
 
   const handleSubmit = async () => {
@@ -212,7 +224,7 @@ export function MissingItemsDialog({
                   : "border-transparent text-stone-400 hover:text-stone-300"
               }`}
             >
-              Biến mất (Thiếu: {missingItems.length})
+              {t("missingItemsDialog.tabMissing", "Disappeared (Missing: {{count}})", { count: missingItems.length })}
             </button>
             <button
               type="button"
@@ -223,7 +235,7 @@ export function MissingItemsDialog({
                   : "border-transparent text-stone-400 hover:text-stone-300"
               }`}
             >
-              Mới / Tăng thêm (Thừa: {extraItems.length})
+              {t("missingItemsDialog.tabExtra", "New / Increased (Extra: {{count}})", { count: extraItems.length })}
             </button>
           </div>
         )}
@@ -233,10 +245,10 @@ export function MissingItemsDialog({
           <table className="w-full text-left text-sm border-collapse">
             <thead className="sticky top-0 z-10 bg-[#0e1220] text-xs font-bold uppercase tracking-wider text-stone-450 border-b border-stone-850 shadow-sm">
               <tr>
-                <th className="py-4 px-6 min-w-[260px]">Vật phẩm</th>
-                <th className="py-4 px-6 w-36 text-center">Biến động</th>
+                <th className="py-4 px-6 min-w-[260px]">{t("missingItemsDialog.item", "Item")}</th>
+                <th className="py-4 px-6 w-36 text-center">{t("missingItemsDialog.change", "Change")}</th>
                 <th className="py-4 px-6 w-[300px]">
-                  {activeTab === "missing" ? "Giải pháp" : "Trạng thái"}
+                  {activeTab === "missing" ? t("missingItemsDialog.resolution", "Resolution") : t("missingItemsDialog.status", "Status")}
                 </th>
               </tr>
             </thead>
@@ -245,12 +257,13 @@ export function MissingItemsDialog({
                 missingItems.length === 0 ? (
                   <tr>
                     <td colSpan={3} className="py-12 text-center text-stone-500 text-sm">
-                      Không có vật phẩm biến mất
+                      {t("missingItemsDialog.noMissingItems", "No disappeared items")}
                     </td>
                   </tr>
                 ) : (
                   missingItems.map((item) => {
                     const current = resolutions[item.caseId];
+                    const itemStorageUnits = getStorageUnitsForItem(item);
                     return (
                       <tr
                         key={item.caseId}
@@ -261,7 +274,7 @@ export function MissingItemsDialog({
                           <div className="flex items-center gap-4">
                             {item.imageUrl ? (
                               <img
-                                src={item.imageUrl}
+                                src={proxySteamUrl(item.imageUrl)}
                                 alt={item.caseName}
                                 className="size-12 rounded-lg bg-stone-900 object-contain shrink-0 border border-stone-800/80 shadow-inner"
                               />
@@ -279,7 +292,7 @@ export function MissingItemsDialog({
                               </p>
                               {item.accounts && item.accounts.length > 0 && (
                                 <p className="mt-1.5 text-xs text-amber-400 bg-amber-500/5 border border-amber-500/10 rounded px-2 py-0.5 inline-block font-semibold">
-                                  Tài khoản: {item.accounts.map(a => `${a.name} (${a.change > 0 ? `+${a.change}` : a.change})`).join(", ")}
+                                  {t("missingItemsDialog.accountBreakdown", "Account: {{details}}", { details: item.accounts.map(a => `${a.name} (${a.change > 0 ? `+${a.change}` : a.change})`).join(", ") })}
                                 </p>
                               )}
                             </div>
@@ -308,7 +321,7 @@ export function MissingItemsDialog({
                                     resolution: val as Resolution,
                                     storageUnitId:
                                       val === "storage_unit"
-                                        ? (prev[item.caseId]?.storageUnitId ?? storageUnits[0]?.id)
+                                        ? (prev[item.caseId]?.storageUnitId ?? itemStorageUnits[0]?.id)
                                         : undefined,
                                   },
                                 }));
@@ -318,7 +331,7 @@ export function MissingItemsDialog({
                                 <Select.Value />
                               </Select.Trigger>
                               <Select.Content className="border-stone-800 bg-[#0c0f16] text-stone-200">
-                                {RESOLUTION_OPTIONS.map((opt) => {
+                                {resolutionOptions.map((opt) => {
                                   const Icon = opt.icon;
                                   return (
                                     <Select.Item key={opt.value} value={opt.value}>
@@ -335,7 +348,7 @@ export function MissingItemsDialog({
                             {/* Storage unit select, if storage_unit resolution is active */}
                             {current?.resolution === "storage_unit" && (
                               <div className="w-full">
-                                {storageUnits.length > 0 ? (
+                                {itemStorageUnits.length > 0 ? (
                                   <Select
                                     value={current.storageUnitId ?? ""}
                                     onValueChange={(val) => {
@@ -352,7 +365,7 @@ export function MissingItemsDialog({
                                       <Select.Value />
                                     </Select.Trigger>
                                     <Select.Content className="border-stone-800 bg-[#0c0f16]">
-                                      {storageUnits.map((su) => (
+                                      {itemStorageUnits.map((su) => (
                                         <Select.Item key={su.id} value={su.id}>
                                           <span className="text-sm font-semibold">
                                             {su.name} ({su.currentCount}/1000)
@@ -363,7 +376,7 @@ export function MissingItemsDialog({
                                   </Select>
                                 ) : (
                                   <p className="rounded border border-amber-500/20 bg-amber-500/5 px-2.5 py-1.5 text-xs text-amber-400/80 leading-normal">
-                                    Không tìm thấy Storage Unit nào trong kho.
+                                    {t("missingItemsDialog.noStorageUnitsFound", "No Storage Units found in inventory.")}
                                   </p>
                                 )}
                               </div>
@@ -378,7 +391,7 @@ export function MissingItemsDialog({
                 extraItems.length === 0 ? (
                   <tr>
                     <td colSpan={3} className="py-12 text-center text-stone-500 text-sm">
-                      Không có vật phẩm mới hoặc tăng thêm
+                      {t("missingItemsDialog.noExtraItems", "No new or increased items")}
                     </td>
                   </tr>
                 ) : (
@@ -392,7 +405,7 @@ export function MissingItemsDialog({
                         <div className="flex items-center gap-4">
                           {item.imageUrl ? (
                             <img
-                              src={item.imageUrl}
+                              src={proxySteamUrl(item.imageUrl)}
                               alt={item.caseName}
                               className="size-12 rounded-lg bg-stone-900 object-contain shrink-0 border border-stone-800/80 shadow-inner"
                             />
@@ -410,7 +423,7 @@ export function MissingItemsDialog({
                             </p>
                             {item.accounts && item.accounts.length > 0 && (
                               <p className="mt-1.5 text-xs text-emerald-400 bg-emerald-500/5 border border-emerald-500/10 rounded px-2 py-0.5 inline-block font-semibold">
-                                Tài khoản: {item.accounts.map(a => `${a.name} (${a.change > 0 ? `+${a.change}` : a.change})`).join(", ")}
+                                {t("missingItemsDialog.accountBreakdown", "Account: {{details}}", { details: item.accounts.map(a => `${a.name} (${a.change > 0 ? `+${a.change}` : a.change})`).join(", ") })}
                               </p>
                             )}
                           </div>
@@ -429,10 +442,48 @@ export function MissingItemsDialog({
 
                       {/* Status */}
                       <td className="py-4 px-6">
-                        <div className="inline-flex items-center gap-2 rounded-full border border-emerald-950/50 bg-emerald-500/10 px-3.5 py-1 text-xs font-semibold text-emerald-400 select-none">
-                          <CheckCircle className="size-4" />
-                          <span>Tự động thêm vào Portfolio</span>
-                        </div>
+                        {item.breakdown ? (
+                          <div className="flex flex-col gap-1.5">
+                            {item.breakdown.tradeable > 0 && (
+                              <div className="inline-flex w-fit items-center gap-1.5 rounded bg-emerald-500/10 border border-emerald-500/20 px-2 py-0.5 text-xs font-semibold text-emerald-400">
+                                <span className="size-1.5 rounded-full bg-emerald-400" />
+                                <span>{t("missingItemsDialog.breakdownTradeable", "Tradeable ({{count}})", { count: item.breakdown.tradeable })}</span>
+                              </div>
+                            )}
+                            {item.breakdown.onMarket > 0 && (
+                              <div className="inline-flex w-fit items-center gap-1.5 rounded bg-amber-500/10 border border-amber-500/20 px-2 py-0.5 text-xs font-semibold text-amber-400">
+                                <span className="size-1.5 rounded-full bg-amber-400" />
+                                <span>{t("missingItemsDialog.breakdownOnMarket", "On Market ({{count}})", { count: item.breakdown.onMarket })}</span>
+                              </div>
+                            )}
+                            {item.breakdown.tradeProtected > 0 && (
+                              <div className="inline-flex w-fit items-center gap-1.5 rounded bg-cyan-500/10 border border-cyan-500/20 px-2 py-0.5 text-xs font-semibold text-cyan-400">
+                                <span className="size-1.5 rounded-full bg-cyan-400" />
+                                <span>{t("missingItemsDialog.breakdownProtected", "Trade Protected ({{count}})", { count: item.breakdown.tradeProtected })}</span>
+                              </div>
+                            )}
+                            {item.breakdown.hold > 0 && (
+                              <div className="inline-flex w-fit items-center gap-1.5 rounded bg-red-500/10 border border-red-500/20 px-2 py-0.5 text-xs font-semibold text-red-400">
+                                <span className="size-1.5 animate-pulse rounded-full bg-red-400" />
+                                <span>{t("missingItemsDialog.breakdownHold", "Hold trade ({{count}})", { count: item.breakdown.hold })}</span>
+                              </div>
+                            )}
+                            {item.breakdown.tradeable === 0 &&
+                              item.breakdown.onMarket === 0 &&
+                              item.breakdown.tradeProtected === 0 &&
+                              item.breakdown.hold === 0 && (
+                                <div className="inline-flex items-center gap-2 rounded-full border border-emerald-950/50 bg-emerald-500/10 px-3.5 py-1 text-xs font-semibold text-emerald-400 select-none">
+                                  <CheckCircle className="size-4" />
+                                  <span>{t("missingItemsDialog.autoAdded", "Auto-added to Portfolio")}</span>
+                                </div>
+                              )}
+                          </div>
+                        ) : (
+                          <div className="inline-flex items-center gap-2 rounded-full border border-emerald-950/50 bg-emerald-500/10 px-3.5 py-1 text-xs font-semibold text-emerald-400 select-none">
+                            <CheckCircle className="size-4" />
+                            <span>{t("missingItemsDialog.autoAdded", "Auto-added to Portfolio")}</span>
+                          </div>
+                        )}
                       </td>
                     </tr>
                   ))
@@ -449,7 +500,7 @@ export function MissingItemsDialog({
             onClick={onClose}
             className="h-10 px-5 text-sm font-semibold border-stone-850 bg-stone-900/60 text-stone-300 hover:border-stone-700 hover:bg-stone-850"
           >
-            Bỏ qua
+            {t("common.ignore", "Ignore")}
           </Button>
           <Button
             variant="primary"
@@ -457,7 +508,7 @@ export function MissingItemsDialog({
             onClick={handleSubmit}
             className="h-10 bg-accent hover:bg-accent-hover text-accent-foreground px-6 text-sm font-bold shadow-md shadow-accent/15 disabled:opacity-45"
           >
-            {submitting ? "Đang xử lý..." : "Xác nhận"}
+            {submitting ? t("common.processing", "Processing...") : t("common.confirm", "Confirm")}
           </Button>
         </div>
       </DialogContent>

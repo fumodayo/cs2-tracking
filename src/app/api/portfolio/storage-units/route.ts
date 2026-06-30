@@ -3,17 +3,9 @@ import { getDatabase } from "@/infrastructure/db/mongo-client";
 import { getPortfolioOwnerId } from "@/services/auth-service";
 import { ObjectId } from "mongodb";
 import { STORAGE_UNIT_MAX_CAPACITY } from "@/domain/storage-unit";
+import { getOwnerFilter } from "@/infrastructure/db/owner-filter";
 
 export const dynamic = "force-dynamic";
-
-function getOwnerFilter(ownerId: string) {
-  if (ownerId === "guest") {
-    return {
-      $or: [{ ownerId: "guest" }, { ownerId: { $exists: false } }],
-    };
-  }
-  return { ownerId };
-}
 
 /**
  * GET /api/portfolio/storage-units
@@ -25,6 +17,7 @@ export async function GET(request: Request) {
     const db = await getDatabase();
     const url = new URL(request.url);
     const steamId64 = url.searchParams.get("steamId64");
+    const shouldAggregate = url.searchParams.get("aggregate") === "1";
 
     const filter: Record<string, unknown> = { ...getOwnerFilter(ownerId) };
     if (steamId64) {
@@ -116,6 +109,12 @@ export async function GET(request: Request) {
                     } | null)
                   : null,
               quantity: Number(item.quantity || 0),
+              storageUnitItems: [
+                {
+                  storageUnitId: doc._id.toString(),
+                  quantity: Number(item.quantity || 0),
+                },
+              ],
               addedAt: item.addedAt,
             };
           })
@@ -124,11 +123,16 @@ export async function GET(request: Request) {
       updatedAt: doc.updatedAt,
     }));
 
-    return NextResponse.json({ storageUnits });
+    return NextResponse.json({
+      storageUnits:
+        shouldAggregate && steamId64
+          ? aggregateStorageUnits(storageUnits, steamId64)
+          : storageUnits,
+    });
   } catch (error) {
     console.error("Error fetching storage units:", error);
     return NextResponse.json(
-      { message: "Không thể tải danh sách Storage Unit." },
+      { message: "cannotLoadStorageUnits" },
       { status: 500 },
     );
   }
@@ -148,7 +152,7 @@ export async function POST(request: Request) {
 
     if (!steamId64 || !Array.isArray(storageUnits)) {
       return NextResponse.json(
-        { message: "Thiếu steamId64 hoặc storageUnits." },
+        { message: "missingSteamIdOrStorageUnits" },
         { status: 400 },
       );
     }
@@ -182,13 +186,13 @@ export async function POST(request: Request) {
     }
 
     return NextResponse.json({
-      message: `Đã đồng bộ ${upserted} Storage Unit.`,
+      message: `syncedStorageUnitsResult:count=${upserted}`,
       upserted,
     });
   } catch (error) {
     console.error("Error upserting storage units:", error);
     return NextResponse.json(
-      { message: "Không thể đồng bộ Storage Unit." },
+      { message: "cannotSyncStorageUnits" },
       { status: 500 },
     );
   }
@@ -203,4 +207,76 @@ function computeCurrentCount(items: unknown): number {
         : 0;
     return sum + (Number(quantity) || 0);
   }, 0);
+}
+
+type StorageUnitResponseItem = {
+  caseId: string;
+  marketHashName: string;
+  name: string;
+  imageUrl: string | null;
+  rarity: { name: string; color: string } | null;
+  quantity: number;
+  storageUnitItems?: Array<{
+    storageUnitId: string;
+    quantity: number;
+  }>;
+  addedAt?: unknown;
+};
+
+type StorageUnitResponse = {
+  id: string;
+  ownerId: unknown;
+  steamId64: unknown;
+  assetId: unknown;
+  name: unknown;
+  iconUrl: unknown;
+  currentCount: number;
+  maxCapacity: number;
+  items: StorageUnitResponseItem[];
+  createdAt: unknown;
+  updatedAt: unknown;
+};
+
+function aggregateStorageUnits(
+  storageUnits: StorageUnitResponse[],
+  steamId64: string,
+): StorageUnitResponse[] {
+  if (storageUnits.length <= 1) return storageUnits;
+
+  const itemMap = new Map<string, StorageUnitResponseItem>();
+  for (const su of storageUnits) {
+    for (const item of su.items) {
+      const key = item.caseId || item.marketHashName;
+      const existing = itemMap.get(key);
+      if (existing) {
+        existing.quantity += item.quantity;
+        existing.storageUnitItems = [
+          ...(existing.storageUnitItems ?? []),
+          { storageUnitId: su.id, quantity: item.quantity },
+        ];
+      } else {
+        itemMap.set(key, {
+          ...item,
+          storageUnitItems: [{ storageUnitId: su.id, quantity: item.quantity }],
+        });
+      }
+    }
+  }
+
+  const first = storageUnits[0];
+  return [
+    {
+      ...first,
+      id: `storage-units:${steamId64}`,
+      steamId64,
+      assetId: null,
+      name: "Storage Unit",
+      iconUrl: null,
+      currentCount: storageUnits.reduce((sum, su) => sum + su.currentCount, 0),
+      maxCapacity: storageUnits.reduce((sum, su) => sum + su.maxCapacity, 0),
+      items: Array.from(itemMap.values()).sort((firstItem, secondItem) =>
+        firstItem.name.localeCompare(secondItem.name),
+      ),
+    },
+  ];
 }

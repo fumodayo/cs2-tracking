@@ -1,150 +1,60 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getDatabase } from "@/infrastructure/db/mongo-client";
-import { getPortfolioOwnerId } from "@/services/auth-service";
+import { getPortfolioOwnerId, getCurrentUser, isAdminAccessAllowed } from "@/services/auth-service";
 import { decrypt } from "@/services/crypto-service";
 import { createServices } from "@/infrastructure/container";
-import { ObjectId, Db } from "mongodb";
+import { ObjectId } from "mongodb";
+import { getOwnerFilter } from "@/infrastructure/db/owner-filter";
 import {
-  normalizeRarity,
+  SCANNER_IMPORT_NOTE,
+  SCANNER_IMPORT_NOTES,
   mergeSourceAccounts,
+  getImportableScanPrice,
+  buildAccessoryPriceFields,
   resolveSyncTransactions,
+  processScanResult,
+  pollJobProgress,
+  startInventoryScanJob,
+  buildSyncGroupKey,
+  createImportedCase,
+  updateImportedCaseMetadata,
   type ExistingPortfolioItem,
+  type SyncScannedItem,
+  type GroupedInput,
+  type SyncProgressEvent,
+  type AccountChangeDetail,
+  type MissingItem,
+  type ExtraItem,
+  type SyncStorageUnit,
 } from "@/services/portfolio-sync";
 
 export const dynamic = "force-dynamic";
-
-type PortfolioSourceAccount = {
-  steamId64: string;
-  name: string;
-  breakdown?: {
-    tradeable: number;
-    onMarket: number;
-    tradeProtected: number;
-    hold: number;
-    holdDetails?: Array<{
-      quantity: number;
-      holdDays: number;
-      tradeHoldUntil?: string;
-    }>;
-  };
-};
-
-type SyncScannedItem = {
-  caseItem: {
-    id: string;
-    name: string;
-    marketHashName: string;
-    imageUrl: string | null;
-  };
-  rarity?: {
-    name: string;
-    color: string;
-  };
-  quantity: number;
-  price: number;
-  sourceAccounts: PortfolioSourceAccount[];
-  holdDays?: number;
-  tradeHoldUntil?: string;
-  onMarket?: boolean;
-  tradeProtected?: boolean;
-};
-
-type GroupedInput = {
-  caseId: string;
-  quantity: number;
-  buyPrice: number;
-  note: string;
-  sourceAccounts: PortfolioSourceAccount[];
-  holdDays: number;
-  tradeHoldUntil?: string;
-};
-
-type SyncProgressEvent = {
-  type:
-    | "account_start"
-    | "account_progress"
-    | "account_done"
-    | "account_error"
-    | "import_start"
-    | "import_done"
-    | "complete"
-    | "error";
-  accountIndex?: number;
-  totalAccounts?: number;
-  accountName?: string;
-  steamId64?: string;
-  avatarUrl?: string | null;
-  message: string;
-  percent: number;
-  scanProgress?: {
-    stage: string;
-    message: string;
-    percent: number;
-    detail?: Record<string, number | string>;
-  };
-  summary?: {
-    scannedAccountsCount: number;
-    totalAccountsCount: number;
-    importedCount: number;
-    skippedAccounts: string[];
-    missingItems?: MissingItem[];
-    extraItems?: ExtraItem[];
-    storageUnits?: SyncStorageUnit[];
-  };
-};
-
-type AccountChangeDetail = {
-  steamId64: string;
-  name: string;
-  change: number;
-  previousQuantity: number;
-  currentQuantity: number;
-};
-
-type MissingItem = {
-  caseId: string;
-  marketHashName: string;
-  caseName: string;
-  imageUrl: string | null;
-  previousQuantity: number;
-  currentQuantity: number;
-  missingQuantity: number;
-  accounts?: AccountChangeDetail[];
-};
-
-type ExtraItem = {
-  caseId: string;
-  marketHashName: string;
-  caseName: string;
-  imageUrl: string | null;
-  previousQuantity: number;
-  currentQuantity: number;
-  extraQuantity: number;
-  accounts?: AccountChangeDetail[];
-};
-
-type SyncStorageUnit = {
-  id: string;
-  name: string;
-  steamId64: string;
-  currentCount: number;
-};
 
 export async function POST(request: NextRequest) {
   const ownerId = await getPortfolioOwnerId();
   const db = await getDatabase();
 
   const { searchParams } = new URL(request.url);
-  const bypassCooldown = searchParams.get("bypassCooldown") === "true";
+  const user = await getCurrentUser();
+  const isAdmin = isAdminAccessAllowed(user);
+  const bypassCooldown = isAdmin && searchParams.get("bypassCooldown") === "true";
 
-  const accounts = await db
+  const accounts = (await db
     .collection("portfolio_accounts")
     .find(getOwnerFilter(ownerId))
-    .toArray();
+    .toArray()) as Array<{
+      _id: ObjectId;
+      name?: string;
+      steamId64: string;
+      avatarUrl?: string;
+      lastSyncedAt?: string | Date;
+      steamCookie?: string;
+      steamUrl: string;
+    }>;
 
   if (accounts.length === 0) {
     return NextResponse.json(
-      { message: "Không có tài khoản Steam nào được liên kết để đồng bộ." },
+      { message: "noLinkedSteamAccounts" },
       { status: 400 },
     );
   }
@@ -154,10 +64,17 @@ export async function POST(request: NextRequest) {
 
   const stream = new ReadableStream({
     async start(controller) {
+      let isClosed = false;
       const send = (event: SyncProgressEvent) => {
+        if (isClosed) return;
         controller.enqueue(
           encoder.encode(`data: ${JSON.stringify(event)}\n\n`),
         );
+      };
+      const close = () => {
+        if (isClosed) return;
+        isClosed = true;
+        controller.close();
       };
 
       try {
@@ -187,7 +104,7 @@ export async function POST(request: NextRequest) {
             accountName,
             steamId64: String(account.steamId64),
             avatarUrl: account.avatarUrl ?? null,
-            message: `Bắt đầu quét kho đồ: ${accountName}`,
+            message: `syncStartingScan:name=${accountName}`,
             percent: accountPercent(0),
           });
 
@@ -200,29 +117,12 @@ export async function POST(request: NextRequest) {
             const rawCookie = account.steamCookie
               ? decrypt(account.steamCookie)
               : undefined;
-            const startRes = await fetch(`${origin}/api/inventory/scan`, {
-              method: "POST",
-              headers: {
-                "Content-Type": "application/json",
-                Cookie:
-                  request.headers.get("Cookie") ||
-                  request.headers.get("cookie") ||
-                  "",
-              },
-              body: JSON.stringify({
-                steamUrl: account.steamUrl,
-                steamCookie: rawCookie?.trim() || undefined,
-                forceRefresh,
-                progress: true,
-              }),
+            const jobId = await startInventoryScanJob({
+              steamUrl: account.steamUrl,
+              steamCookie: rawCookie?.trim() || undefined,
+              forceRefresh,
+              ownerId,
             });
-
-            if (!startRes.ok) {
-              const errData = await startRes.json().catch(() => ({}));
-              throw new Error(errData.message || `HTTP ${startRes.status}`);
-            }
-
-            const { jobId } = await startRes.json();
 
             // Poll job progress
             const scanResult = await pollJobProgress(
@@ -245,70 +145,18 @@ export async function POST(request: NextRequest) {
 
             if (forceRefresh) {
               await db.collection("portfolio_accounts").updateOne(
-                { _id: account._id },
+                { _id: account._id, ...getOwnerFilter(ownerId) },
                 { $set: { lastSyncedAt: new Date() } }
               );
             }
 
-            // Collect items from scan result
-            if (scanResult.items && Array.isArray(scanResult.items)) {
-              for (const item of scanResult.items) {
-                const quantity = Number(item.quantity);
-                const holdDays =
-                  typeof item.holdDays === "number" && item.holdDays > 0
-                    ? item.holdDays
-                    : 0;
-                const onMarket = item.onMarket === true;
-                const tradeProtected = item.tradeProtected === true;
-
-                const itemSourceAccount: PortfolioSourceAccount = {
-                  steamId64: String(account.steamId64),
-                  name: accountName,
-                  breakdown: {
-                    tradeable:
-                      !holdDays && !onMarket && !tradeProtected ? quantity : 0,
-                    onMarket: onMarket ? quantity : 0,
-                    tradeProtected: tradeProtected ? quantity : 0,
-                    hold: holdDays > 0 ? quantity : 0,
-                    holdDetails: holdDays > 0 ? [{ quantity, holdDays, tradeHoldUntil: item.tradeHoldUntil }] : [],
-                  },
-                };
-
-                allScannedItems.push({
-                  caseItem: {
-                    id: String(item.caseItem?.id || ""),
-                    name: String(item.caseItem?.name || ""),
-                    marketHashName: String(item.caseItem?.marketHashName || ""),
-                    imageUrl: item.caseItem?.imageUrl
-                      ? String(item.caseItem.imageUrl)
-                      : null,
-                  },
-                  rarity: normalizeRarity(item.rarity),
-                  quantity,
-                  price: Number(item.price),
-                  sourceAccounts: [itemSourceAccount],
-                  holdDays: holdDays > 0 ? holdDays : undefined,
-                  tradeHoldUntil: holdDays > 0 ? item.tradeHoldUntil : undefined,
-                  onMarket: onMarket || undefined,
-                  tradeProtected: tradeProtected || undefined,
-                });
-              }
-            }
-
-            // Collect Storage Units from scan result
-            if (
-              scanResult.storageUnits &&
-              Array.isArray(scanResult.storageUnits)
-            ) {
-              for (const su of scanResult.storageUnits) {
-                allScannedStorageUnits.push({
-                  steamId64: String(account.steamId64),
-                  assetId: String(su.assetId || ""),
-                  name: String(su.name || "Storage Unit"),
-                  iconUrl: su.iconUrl ? String(su.iconUrl) : null,
-                });
-              }
-            }
+            // Process live results
+            processScanResult(
+              scanResult,
+              account,
+              allScannedItems,
+              allScannedStorageUnits
+            );
 
             send({
               type: "account_done",
@@ -317,7 +165,7 @@ export async function POST(request: NextRequest) {
               accountName,
               steamId64: String(account.steamId64),
               avatarUrl: account.avatarUrl ?? null,
-              message: `Hoàn tất quét: ${accountName} (${Array.isArray(scanResult.items) ? scanResult.items.length : 0} item)`,
+              message: `syncDoneScan:name=${accountName},count=${Array.isArray(scanResult.items) ? scanResult.items.length : 0}`,
               percent: accountPercent(100),
             });
           } catch (scanError) {
@@ -331,7 +179,7 @@ export async function POST(request: NextRequest) {
               accountName,
               steamId64: String(account.steamId64),
               avatarUrl: account.avatarUrl ?? null,
-              message: `Lỗi quét ${accountName}: ${scanError instanceof Error ? scanError.message : "Unknown error"}`,
+              message: `syncErrorScan:name=${accountName},error=${scanError instanceof Error ? scanError.message : "Unknown error"}`,
               percent: accountPercent(100),
             });
           }
@@ -343,20 +191,29 @@ export async function POST(request: NextRequest) {
         }
 
         // Import phase
+        if (skippedAccounts.length > 0) {
+          send({
+            type: "error",
+            message: "syncFailedSkippedAccountsPreserved",
+            percent: 100,
+          });
+          close();
+          return;
+        }
+
         send({
           type: "import_start",
-          message: `Đang import ${allScannedItems.length} item vào portfolio...`,
+          message: `syncImportingItems:count=${allScannedItems.length}`,
           percent: 82,
         });
 
         if (allScannedItems.length === 0) {
           send({
             type: "error",
-            message:
-              "Đồng bộ thất bại. Không thể tải dữ liệu kho đồ từ bất kỳ tài khoản nào.",
+            message: "syncFailedNoInventoryLoaded",
             percent: 100,
           });
-          controller.close();
+          close();
           return;
         }
 
@@ -365,18 +222,18 @@ export async function POST(request: NextRequest) {
         const existingPortfolioItems = (await portfolioCol
           .find({
             ...getOwnerFilter(ownerId),
-            note: "Import từ inventory scanner",
+            note: { $in: [...SCANNER_IMPORT_NOTES] },
           })
           .toArray()) as unknown as ExistingPortfolioItem[];
 
         // Clear existing automated scan items
         await portfolioCol.deleteMany({
           ...getOwnerFilter(ownerId),
-          note: "Import từ inventory scanner",
+          note: { $in: [...SCANNER_IMPORT_NOTES] },
         });
 
         // Group and resolve items
-        const { caseRepository, portfolioService } = createServices({
+        const { caseRepository, portfolioService, priceService } = createServices({
           ownerId,
         });
         const groupedInputs = new Map<string, GroupedInput>();
@@ -416,14 +273,12 @@ export async function POST(request: NextRequest) {
           const imageUrl = item.caseItem.imageUrl;
           const rarity = item.rarity;
           const quantity = Number(item.quantity);
-          const price = Number(item.price);
+          const price = getImportableScanPrice(item.price);
           const sourceAccounts = item.sourceAccounts || [];
 
           if (
             !Number.isFinite(quantity) ||
-            quantity <= 0 ||
-            !Number.isFinite(price) ||
-            price <= 0
+            quantity <= 0
           ) {
             skippedItems.push(marketHashName || "unknown");
             continue;
@@ -498,7 +353,20 @@ export async function POST(request: NextRequest) {
             continue;
           }
 
-          const existing = groupedInputs.get(resolvedCaseItem.id);
+          const stickerFields = await buildAccessoryPriceFields(
+            item.patternInfo,
+            priceService,
+          );
+          const priceWithSticker = Math.round(
+            price + (stickerFields.stickerBuyPriceAdd ?? 0),
+          );
+          const groupKey = buildSyncGroupKey({
+            caseId: resolvedCaseItem.id,
+            dopplerPhase: item.dopplerPhase,
+            inspectLink: item.inspectLink,
+            patternInfo: item.patternInfo,
+          });
+          const existing = groupedInputs.get(groupKey);
           if (existing) {
             const nextQuantity = existing.quantity + quantity;
             let updatedTradeHoldUntil = existing.tradeHoldUntil;
@@ -507,11 +375,12 @@ export async function POST(request: NextRequest) {
                 updatedTradeHoldUntil = item.tradeHoldUntil;
               }
             }
-            groupedInputs.set(resolvedCaseItem.id, {
+            groupedInputs.set(groupKey, {
               ...existing,
               quantity: nextQuantity,
               buyPrice: Math.round(
-                (existing.buyPrice * existing.quantity + price * quantity) /
+                (existing.buyPrice * existing.quantity +
+                  priceWithSticker * quantity) /
                   nextQuantity,
               ),
               sourceAccounts: mergeSourceAccounts(
@@ -520,16 +389,25 @@ export async function POST(request: NextRequest) {
               ),
               holdDays: Math.max(existing.holdDays, item.holdDays ?? 0),
               tradeHoldUntil: updatedTradeHoldUntil,
+              stickerPriceRate: existing.stickerPriceRate,
+              stickerBuyPriceRate: existing.stickerBuyPriceRate,
+              stickerBuyPriceAdd: existing.stickerBuyPriceAdd,
+              stickerScanTotalPrice: existing.stickerScanTotalPrice,
+              stickerScanPriceCapturedAt: existing.stickerScanPriceCapturedAt,
             });
           } else {
-            groupedInputs.set(resolvedCaseItem.id, {
+            groupedInputs.set(groupKey, {
               caseId: resolvedCaseItem.id,
               quantity,
-              buyPrice: Math.round(price),
-              note: "Import từ inventory scanner",
+              buyPrice: priceWithSticker,
+              note: SCANNER_IMPORT_NOTE,
               sourceAccounts,
               holdDays: item.holdDays ?? 0,
               tradeHoldUntil: item.tradeHoldUntil,
+              dopplerPhase: item.dopplerPhase,
+              inspectLink: item.inspectLink,
+              patternInfo: item.patternInfo,
+              ...stickerFields,
             });
           }
         }
@@ -547,8 +425,17 @@ export async function POST(request: NextRequest) {
                 input.holdDays,
                 existingPortfolioItems,
                 buyDate,
-                input.note || "Import từ inventory scanner",
+                input.note || SCANNER_IMPORT_NOTE,
                 input.tradeHoldUntil ? new Date(input.tradeHoldUntil) : undefined,
+                input.dopplerPhase,
+                input.inspectLink,
+                input.patternInfo,
+                {
+                  stickerPriceRate: input.stickerPriceRate,
+                  stickerBuyPriceRate: input.stickerBuyPriceRate,
+                  stickerScanTotalPrice: input.stickerScanTotalPrice,
+                  stickerScanPriceCapturedAt: input.stickerScanPriceCapturedAt,
+                },
               );
             },
           );
@@ -560,7 +447,7 @@ export async function POST(request: NextRequest) {
 
         send({
           type: "import_done",
-          message: `Đã import ${groupedInputs.size} loại item vào portfolio.`,
+          message: `syncImportedGroupedItems:count=${groupedInputs.size}`,
           percent: 90,
         });
 
@@ -611,11 +498,19 @@ export async function POST(request: NextRequest) {
         const missingItems: MissingItem[] = [];
         const extraItems: ExtraItem[] = [];
 
-        const getAccountChanges = (caseId: string) => {
+        const getAccountChanges = (groupKey: string) => {
           const prevMap = new Map<string, { steamId64: string; name: string; quantity: number }>();
           const newMap = new Map<string, { steamId64: string; name: string; quantity: number }>();
 
-          const prevItems = existingPortfolioItems.filter(item => String(item.caseId) === caseId);
+          const prevItems = existingPortfolioItems.filter(item => {
+            const k = buildSyncGroupKey({
+              caseId: String(item.caseId),
+              dopplerPhase: item.dopplerPhase,
+              inspectLink: item.inspectLink,
+              patternInfo: item.patternInfo,
+            });
+            return k === groupKey;
+          });
           for (const item of prevItems) {
             if (item.sourceAccounts) {
               for (const sa of item.sourceAccounts) {
@@ -635,7 +530,7 @@ export async function POST(request: NextRequest) {
             }
           }
 
-          const input = groupedInputs.get(caseId);
+          const input = groupedInputs.get(groupKey);
           if (input?.sourceAccounts) {
             for (const sa of input.sourceAccounts) {
               const qty = sa.breakdown
@@ -685,23 +580,32 @@ export async function POST(request: NextRequest) {
           return changes;
         };
 
-        // Build a map of caseId -> previous quantity from existing portfolio
+        // Build a map of groupKey -> previous quantity from existing portfolio
         const previousQuantities = new Map<
           string,
-          { quantity: number; caseId: string }
+          { quantity: number; groupKey: string }
         >();
         for (const doc of existingPortfolioItems) {
           const caseId = String(doc.caseId);
-          const existing = previousQuantities.get(caseId);
-          previousQuantities.set(caseId, {
+          const groupKey = buildSyncGroupKey({
             caseId,
+            dopplerPhase: doc.dopplerPhase,
+            inspectLink: doc.inspectLink,
+            patternInfo: doc.patternInfo,
+          });
+
+          const existing = previousQuantities.get(groupKey);
+          previousQuantities.set(groupKey, {
+            groupKey,
             quantity: (existing?.quantity ?? 0) + Number(doc.quantity),
           });
         }
 
         // 1. Compare items that were in previous portfolio
-        for (const [caseId, prev] of previousQuantities) {
-          const newQuantity = groupedInputs.get(caseId)?.quantity ?? 0;
+        for (const [groupKey, prev] of previousQuantities) {
+          const newQuantity = groupedInputs.get(groupKey)?.quantity ?? 0;
+          const [caseId] = groupKey.split(":");
+
           if (newQuantity < prev.quantity) {
             const caseDoc = await caseRepository.findById(caseId);
             missingItems.push({
@@ -712,10 +616,27 @@ export async function POST(request: NextRequest) {
               previousQuantity: prev.quantity,
               currentQuantity: newQuantity,
               missingQuantity: prev.quantity - newQuantity,
-              accounts: getAccountChanges(caseId),
+              accounts: getAccountChanges(groupKey),
             });
           } else if (newQuantity > prev.quantity) {
             const caseDoc = await caseRepository.findById(caseId);
+            const input = groupedInputs.get(groupKey);
+            const breakdown = {
+              tradeable: 0,
+              onMarket: 0,
+              tradeProtected: 0,
+              hold: 0,
+            };
+            if (input?.sourceAccounts) {
+              for (const sa of input.sourceAccounts) {
+                if (sa.breakdown) {
+                  breakdown.tradeable += sa.breakdown.tradeable ?? 0;
+                  breakdown.onMarket += sa.breakdown.onMarket ?? 0;
+                  breakdown.tradeProtected += sa.breakdown.tradeProtected ?? 0;
+                  breakdown.hold += sa.breakdown.hold ?? 0;
+                }
+              }
+            }
             extraItems.push({
               caseId,
               marketHashName: caseDoc?.marketHashName ?? "unknown",
@@ -724,15 +645,33 @@ export async function POST(request: NextRequest) {
               previousQuantity: prev.quantity,
               currentQuantity: newQuantity,
               extraQuantity: newQuantity - prev.quantity,
-              accounts: getAccountChanges(caseId),
+              accounts: getAccountChanges(groupKey),
+              breakdown,
             });
           }
         }
 
         // 2. Identify brand new items (not in previous portfolio at all)
-        for (const [caseId, input] of groupedInputs) {
-          if (!previousQuantities.has(caseId)) {
+        for (const [groupKey, input] of groupedInputs) {
+          if (!previousQuantities.has(groupKey)) {
+            const [caseId] = groupKey.split(":");
             const caseDoc = await caseRepository.findById(caseId);
+            const breakdown = {
+              tradeable: 0,
+              onMarket: 0,
+              tradeProtected: 0,
+              hold: 0,
+            };
+            if (input?.sourceAccounts) {
+              for (const sa of input.sourceAccounts) {
+                if (sa.breakdown) {
+                  breakdown.tradeable += sa.breakdown.tradeable ?? 0;
+                  breakdown.onMarket += sa.breakdown.onMarket ?? 0;
+                  breakdown.tradeProtected += sa.breakdown.tradeProtected ?? 0;
+                  breakdown.hold += sa.breakdown.hold ?? 0;
+                }
+              }
+            }
             extraItems.push({
               caseId,
               marketHashName: caseDoc?.marketHashName ?? "unknown",
@@ -741,7 +680,8 @@ export async function POST(request: NextRequest) {
               previousQuantity: 0,
               currentQuantity: input.quantity,
               extraQuantity: input.quantity,
-              accounts: getAccountChanges(caseId),
+              accounts: getAccountChanges(groupKey),
+              breakdown,
             });
           }
         }
@@ -757,26 +697,20 @@ export async function POST(request: NextRequest) {
             syncedStorageUnits.length > 0 ? syncedStorageUnits : undefined,
         };
 
-        const changesMsg = [
-          missingItems.length > 0 ? `thiếu ${missingItems.length} loại` : "",
-          extraItems.length > 0 ? `thừa ${extraItems.length} loại` : ""
-        ].filter(Boolean).join(" và ");
-        const messageDetail = changesMsg ? ` Phát hiện ${changesMsg}.` : "";
-
         send({
           type: "complete",
-          message: `Đồng bộ thành công ${summary.scannedAccountsCount}/${summary.totalAccountsCount} tài khoản. Đã cập nhật ${summary.importedCount} loại hòm đồ.${messageDetail}`,
+          message: `syncComplete:scanned=${summary.scannedAccountsCount},total=${summary.totalAccountsCount},imported=${summary.importedCount},missingCount=${missingItems.length},extraCount=${extraItems.length}`,
           percent: 100,
           summary,
         });
       } catch (error) {
         send({
           type: "error",
-          message: error instanceof Error ? error.message : "Đồng bộ thất bại.",
+          message: error instanceof Error ? error.message : "syncFailed",
           percent: 100,
         });
       } finally {
-        controller.close();
+        close();
       }
     },
   });
@@ -788,124 +722,4 @@ export async function POST(request: NextRequest) {
       Connection: "keep-alive",
     },
   });
-}
-
-// Poll scan job progress with retries
-async function pollJobProgress(
-  origin: string,
-  jobId: string,
-  onProgress: (progress: {
-    stage: string;
-    message: string;
-    percent: number;
-    detail?: Record<string, number | string>;
-  }) => void,
-): Promise<Record<string, unknown>> {
-  const TIMEOUT_MS = 5 * 60 * 1000;
-  const startedAt = Date.now();
-
-  while (Date.now() - startedAt < TIMEOUT_MS) {
-    const res = await fetch(
-      `${origin}/api/inventory/scan?jobId=${encodeURIComponent(jobId)}`,
-      {
-        cache: "no-store",
-      },
-    );
-
-    if (!res.ok) {
-      throw new Error("Không thể đọc tiến độ quét.");
-    }
-
-    const progress = await res.json();
-
-    onProgress({
-      stage: progress.stage ?? "running",
-      message: progress.message ?? "Đang quét...",
-      percent: progress.percent ?? 0,
-      detail: progress.detail,
-    });
-
-    if (progress.status === "done") {
-      return (progress.result ?? {}) as Record<string, unknown>;
-    }
-
-    if (progress.status === "error") {
-      throw new Error(progress.error ?? progress.message ?? "Quét thất bại.");
-    }
-
-    await new Promise((resolve) => setTimeout(resolve, 800));
-  }
-
-  throw new Error("Quét inventory quá lâu. Hãy thử lại sau.");
-}
-
-async function createImportedCase(
-  db: Db,
-  input: {
-    name: string;
-    marketHashName: string;
-    imageUrl?: string;
-    rarity?: SyncScannedItem["rarity"];
-  },
-) {
-  const now = new Date();
-  const collection = db.collection("cases");
-  await collection.updateOne(
-    { marketHashName: input.marketHashName },
-    {
-      $set: {
-        name: input.name,
-        marketHashName: input.marketHashName,
-        imageUrl: input.imageUrl,
-        ...(input.rarity ? { rarity: input.rarity } : {}),
-        isActive: true,
-        updatedAt: now,
-      },
-      $setOnInsert: {
-        createdAt: now,
-      },
-    },
-    { upsert: true },
-  );
-  const doc = await collection.findOne({
-    marketHashName: input.marketHashName,
-  });
-  return doc
-    ? {
-        id: doc._id.toString(),
-        name: doc.name,
-        marketHashName: doc.marketHashName,
-        imageUrl: doc.imageUrl,
-      }
-    : null;
-}
-
-async function updateImportedCaseMetadata(
-  db: Db,
-  input: {
-    marketHashName: string;
-    imageUrl?: string;
-    rarity?: SyncScannedItem["rarity"];
-  },
-) {
-  const $set: Record<string, unknown> = { updatedAt: new Date() };
-  if (input.imageUrl) {
-    $set.imageUrl = input.imageUrl;
-  }
-  if (input.rarity) {
-    $set.rarity = input.rarity;
-  }
-
-  await db
-    .collection("cases")
-    .updateOne({ marketHashName: input.marketHashName }, { $set });
-}
-
-function getOwnerFilter(ownerId: string) {
-  if (ownerId === "guest") {
-    return {
-      $or: [{ ownerId: "guest" }, { ownerId: { $exists: false } }],
-    };
-  }
-  return { ownerId };
 }

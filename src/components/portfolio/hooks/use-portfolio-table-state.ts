@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useRouter, useSearchParams, usePathname } from "next/navigation";
 import type { SortingState } from "@tanstack/react-table";
 import type { PortfolioSourceFilter } from "../portfolio-table-model";
@@ -26,6 +26,7 @@ export function usePortfolioTableState({
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
+  const didMountRef = useRef(false);
 
   // Read page from searchParams, default to 1 (which is index 0)
   const pageParam = searchParams.get("page");
@@ -76,6 +77,11 @@ export function usePortfolioTableState({
 
   // Reset to first page when search filters change
   useEffect(() => {
+    if (!didMountRef.current) {
+      didMountRef.current = true;
+      return;
+    }
+
     setPagination((prev) => {
       if (prev.pageIndex === 0) return prev;
       return { ...prev, pageIndex: 0 };

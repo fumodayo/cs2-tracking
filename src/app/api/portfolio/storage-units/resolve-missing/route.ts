@@ -2,6 +2,8 @@ import { NextResponse } from "next/server";
 import { getDatabase } from "@/infrastructure/db/mongo-client";
 import { getPortfolioOwnerId } from "@/services/auth-service";
 import { ObjectId } from "mongodb";
+import { getOwnerFilter } from "@/infrastructure/db/owner-filter";
+import { STORAGE_UNIT_MAX_CAPACITY } from "@/domain/storage-unit";
 
 export const dynamic = "force-dynamic";
 
@@ -34,7 +36,7 @@ export async function POST(request: Request) {
 
     if (!Array.isArray(resolutions) || resolutions.length === 0) {
       return NextResponse.json(
-        { message: "Không có resolutions nào để xử lý." },
+        { message: "noResolutionsToProcess" },
         { status: 400 },
       );
     }
@@ -59,9 +61,19 @@ export async function POST(request: Request) {
 
       if (action === "storage_unit" && storageUnitId) {
         try {
+          if (!ObjectId.isValid(storageUnitId)) {
+            results.push({
+              marketHashName,
+              resolution: action,
+              success: false,
+              error: "storageUnitNotFound",
+            });
+            continue;
+          }
+
           const suDoc = await storageUnitCol.findOne({
             _id: new ObjectId(storageUnitId),
-            ownerId,
+            ...getOwnerFilter(ownerId),
           });
 
           if (!suDoc) {
@@ -69,7 +81,7 @@ export async function POST(request: Request) {
               marketHashName,
               resolution: action,
               success: false,
-              error: "Storage Unit không tồn tại.",
+              error: "storageUnitNotFound",
             });
             continue;
           }
@@ -82,12 +94,12 @@ export async function POST(request: Request) {
             0,
           );
 
-          if (currentCount + missingQuantity > 1000) {
+          if (currentCount + missingQuantity > STORAGE_UNIT_MAX_CAPACITY) {
             results.push({
               marketHashName,
               resolution: action,
               success: false,
-              error: `Storage Unit "${suDoc.name}" đã đầy (${currentCount}/1000).`,
+              error: `storageUnitFull:name=${suDoc.name},currentCount=${currentCount},maxCapacity=${STORAGE_UNIT_MAX_CAPACITY}`,
             });
             continue;
           }
@@ -107,7 +119,7 @@ export async function POST(request: Request) {
           }
 
           await storageUnitCol.updateOne(
-            { _id: new ObjectId(storageUnitId) },
+            { _id: new ObjectId(storageUnitId), ...getOwnerFilter(ownerId) },
             { $set: { items: existingItems, updatedAt: now } },
           );
 
@@ -117,7 +129,7 @@ export async function POST(request: Request) {
             marketHashName,
             resolution: action,
             success: false,
-            error: err instanceof Error ? err.message : "Lỗi không xác định.",
+            error: err instanceof Error ? err.message : "unknownError",
           });
         }
       } else {
@@ -127,13 +139,13 @@ export async function POST(request: Request) {
     }
 
     return NextResponse.json({
-      message: `Đã xử lý ${results.filter((r) => r.success).length}/${results.length} items.`,
+      message: `processedMissingItemsResult:successCount=${results.filter((r) => r.success).length},totalCount=${results.length}`,
       results,
     });
   } catch (error) {
     console.error("Error resolving missing items:", error);
     return NextResponse.json(
-      { message: "Không thể xử lý items biến mất." },
+      { message: "cannotResolveMissingItems" },
       { status: 500 },
     );
   }

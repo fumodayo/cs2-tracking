@@ -1,6 +1,7 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
+import { useRouter } from "next/navigation";
 import {
   Download,
   LogIn,
@@ -18,7 +19,6 @@ import {
   AddCaseDialog,
 } from "@/components/portfolio";
 import { SummaryCards } from "./summary-cards";
-import { RateCards } from "./rate-cards";
 import { FadeIn } from "@/components/ui/animation";
 import {
   RecentImportsPopover,
@@ -27,6 +27,14 @@ import { SteamAccountsCard } from "@/components/steam-accounts";
 import { Button } from "@/components/ui/button";
 
 export function Dashboard() {
+  const router = useRouter();
+
+  useEffect(() => {
+    if (typeof window !== "undefined" && localStorage.getItem("pending_portfolio_sync") === "true") {
+      router.push("/inventory-scanner");
+    }
+  }, [router]);
+
   const {
     report,
     loading,
@@ -68,6 +76,7 @@ export function Dashboard() {
       deletingId,
     },
     reportQuery,
+    accountsQuery,
     mutations: {
       add: addMutation,
       delete: deleteMutation,
@@ -79,7 +88,16 @@ export function Dashboard() {
     t,
   } = useDashboard();
 
+  const steamWalletTotal = useMemo(() => {
+    if (!accountsQuery.data) return 0;
+    return accountsQuery.data.reduce(
+      (sum, acc) => sum + (acc.walletBalanceVnd ?? 0),
+      0
+    );
+  }, [accountsQuery.data]);
+
   const [isDragOver, setIsDragOver] = useState(false);
+  const [redirecting, setRedirecting] = useState(false);
 
   const handleDragOver = (e: React.DragEvent) => {
     e.preventDefault();
@@ -159,10 +177,10 @@ export function Dashboard() {
           <div className="pointer-events-none absolute inset-0 z-50 flex flex-col items-center justify-center rounded-lg border-2 border-dashed border-blue-500/80 bg-[#0c0f17]/90 backdrop-blur-sm">
             <Upload className="mx-auto size-12 text-blue-400 animate-bounce" />
             <p className="mt-4 text-lg font-bold text-stone-100">
-              {t("excelMapping.dropFileHere", "Thả file Excel vào đây")}
+              {t("excelMapping.dropFileHere", "Drop Excel file here")}
             </p>
             <p className="mt-1 text-sm text-stone-400">
-              {t("excelMapping.pasteHint", "Hoặc copy ô từ Excel rồi nhấn Ctrl+V")}
+              {t("excelMapping.pasteHint", "Or copy cells from Excel and press Ctrl+V")}
             </p>
           </div>
         )}
@@ -178,93 +196,106 @@ export function Dashboard() {
             </div>
             <a
               href="/api/auth/google"
-              aria-disabled={!googleConfigured}
-              className={`inline-flex h-10 shrink-0 items-center justify-center gap-2 rounded-md px-4 text-sm font-semibold ${
-                googleConfigured
-                  ? "bg-accent text-accent-foreground hover:bg-accent-hover"
-                  : "pointer-events-none border border-border text-muted-foreground"
-              }`}
+              onClick={(e) => {
+                if (!googleConfigured || loading || redirecting) {
+                  e.preventDefault();
+                  return;
+                }
+                setRedirecting(true);
+              }}
+              aria-disabled={!googleConfigured || loading || redirecting}
+              className={`inline-flex h-10 shrink-0 items-center justify-center gap-2 rounded-md px-4 text-sm font-semibold ${googleConfigured && !loading && !redirecting
+                ? "bg-accent text-accent-foreground hover:bg-accent-hover cursor-pointer"
+                : "pointer-events-none border border-border text-muted-foreground opacity-50"
+                }`}
             >
-              <LogIn className="size-4" />
+              {redirecting ? (
+                <Loader2 className="size-4 animate-spin" />
+              ) : (
+                <LogIn className="size-4" />
+              )}
               {googleConfigured ? t("auth.loginGmail") : t("auth.missingOAuth")}
             </a>
           </div>
         ) : null}
 
         <div className="mb-4 flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
-          <div>
-            <h2 className="text-xl font-semibold text-foreground">
-              Portfolio
-            </h2>
-          </div>
-          <div className="flex flex-wrap items-center gap-2">
-            <Button
-              variant="outline"
-              onClick={() => report && exportPortfolioToExcel(report)}
-              disabled={!report || report.rows.length === 0}
-            >
-              <Download className="size-4 text-emerald-400" />
-              {t("dashboard.exportExcel")}
-            </Button>
-            <Button
-              variant="outline"
-              onClick={() => importInputRef.current?.click()}
-              disabled={importBusy}
-            >
-              {importBusy ? (
-                <Loader2 className="size-4 animate-spin text-blue-400" />
-              ) : (
-                <Upload className="size-4 text-blue-400" />
-              )}
-              {importStatus.phase === "reading"
-                ? t("dashboard.readingExcel")
-                : importMutation.isPending
-                  ? t("dashboard.importing")
-                  : t("dashboard.importExcel")}
-            </Button>
-            <RecentImportsPopover
-              recentImports={recentImports}
-              onRemove={removeRecentImport}
-            />
-            <input
-              ref={importInputRef}
-              type="file"
-              accept=".xlsx,.xls,.csv"
-              className="sr-only"
-              onChange={handleImportFile}
-            />
-            <Button
-              variant="primary"
-              onClick={() => setDialogOpen(true)}
-            >
-              <Plus className="size-4" />
-              {t("dashboard.addItem")}
-            </Button>
-          </div>
+          {user && (
+            <>
+              <div>
+                <h2 className="text-xl font-semibold text-foreground">
+                  Portfolio
+                </h2>
+              </div>
+              <div className="flex flex-wrap items-center gap-2">
+                <Button
+                  variant="outline"
+                  onClick={() => report && exportPortfolioToExcel(report)}
+                  disabled={!report || report.rows.length === 0}
+                >
+                  <Download className="size-4 text-emerald-400" />
+                  {t("dashboard.exportExcel")}
+                </Button>
+                <Button
+                  variant="outline"
+                  onClick={() => importInputRef.current?.click()}
+                  disabled={importBusy}
+                >
+                  {importBusy ? (
+                    <Loader2 className="size-4 animate-spin text-blue-400" />
+                  ) : (
+                    <Upload className="size-4 text-blue-400" />
+                  )}
+                  {importStatus.phase === "reading"
+                    ? t("dashboard.readingExcel")
+                    : importMutation.isPending
+                      ? t("dashboard.importing")
+                      : t("dashboard.importExcel")}
+                </Button>
+                <RecentImportsPopover
+                  recentImports={recentImports}
+                  onRemove={removeRecentImport}
+                />
+                <input
+                  ref={importInputRef}
+                  type="file"
+                  accept=".xlsx,.xls,.csv"
+                  className="sr-only"
+                  onChange={handleImportFile}
+                />
+                <Button
+                  variant="primary"
+                  onClick={() => setDialogOpen(true)}
+                  disabled={loading}
+                >
+                  <Plus className="size-4" />
+                  {t("dashboard.addItem")}
+                </Button>
+              </div>
+            </>
+          )}
         </div>
 
         {error || reportQuery.error ? (
           <div className="mb-4 rounded-lg border border-red-500/30 bg-red-950/30 px-4 py-3 text-sm text-red-200">
-            {error ?? (reportQuery.error instanceof Error ? reportQuery.error.message : "Có lỗi xảy ra.")}
+            {error
+              ? t(`auth.errors.${error}`, { defaultValue: error })
+              : (reportQuery.error instanceof Error
+                ? reportQuery.error.message
+                : t("bugReportsAdmin.occurredError"))}
           </div>
         ) : null}
 
-        {loading ? <DashboardSkeleton /> : null}
+        {user && loading ? <DashboardSkeleton /> : null}
 
-        {!loading && report ? (
+        {!loading && report && user ? (
           <div className="space-y-5">
             <SummaryCards
-              report={report}
               computedRows={filteredRows ?? computedTransactionRows}
-            >
-              <RateCards
-                rows={filteredRows ?? computedTransactionRows}
-                totalInvested={(filteredRows ?? computedTransactionRows).reduce(
-                  (sum, r) => sum + r.investedValue,
-                  0,
-                )}
-              />
-            </SummaryCards>
+              steamWalletTotal={steamWalletTotal}
+              buffCnyToVndRate={buffCnyToVndRate}
+              onUpdateBuffRate={handleUpdateBuffRate}
+            />
 
             <SteamAccountsCard
               reportQuery={reportQuery}
@@ -383,7 +414,39 @@ function DashboardSkeleton() {
           />
         ))}
       </div>
-      <div className="h-96 animate-pulse rounded-lg border border-stone-800 bg-stone-900/60" />
+      <div className="rounded-xl border border-stone-800 bg-stone-900/20 p-4 space-y-4">
+        {/* Table skeleton replica */}
+        <div className="overflow-x-auto rounded-lg border border-stone-850">
+          <div className="min-w-full divide-y divide-stone-850">
+            {/* Header */}
+            <div className="bg-stone-900/50 flex py-3.5 px-4">
+              <div className="h-4 w-8 bg-stone-800 animate-pulse rounded mr-6" />
+              <div className="h-4 w-40 bg-stone-800 animate-pulse rounded mr-auto" />
+              <div className="h-4 w-16 bg-stone-800 animate-pulse rounded mr-12" />
+              <div className="h-4 w-24 bg-stone-800 animate-pulse rounded mr-12" />
+              <div className="h-4 w-20 bg-stone-800 animate-pulse rounded" />
+            </div>
+            {/* Rows */}
+            <div className="divide-y divide-stone-850 bg-stone-955/20">
+              {Array.from({ length: 6 }).map((_, rowIndex) => (
+                <div key={rowIndex} className="flex items-center py-4 px-4">
+                  <div className="h-4 w-4 bg-stone-800 animate-pulse rounded mr-8" />
+                  <div className="flex items-center gap-3 mr-auto">
+                    <div className="size-10 bg-stone-800 animate-pulse rounded-lg" />
+                    <div className="space-y-1.5">
+                      <div className="h-4 w-48 bg-stone-800 animate-pulse rounded" />
+                      <div className="h-3 w-24 bg-stone-800 animate-pulse rounded" />
+                    </div>
+                  </div>
+                  <div className="h-4 w-12 bg-stone-800 animate-pulse rounded mr-16" />
+                  <div className="h-4.5 w-20 bg-stone-800 animate-pulse rounded mr-16" />
+                  <div className="h-4.5 w-24 bg-stone-800 animate-pulse rounded" />
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      </div>
     </div>
   );
 }

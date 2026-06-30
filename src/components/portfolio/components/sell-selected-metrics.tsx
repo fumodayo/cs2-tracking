@@ -24,7 +24,7 @@ export function SellSelectedMetrics({
           Thống kê phiên bán
         </h3>
 
-        <div className="space-y-4.5 rounded-[5px] border border-stone-800 bg-gradient-to-b from-stone-950/60 to-stone-950/20 p-4.5 shadow-[0_4px_24px_rgba(0,0,0,0.4)] backdrop-blur-md">
+        <div className="space-y-4.5 rounded-[5px] border border-stone-800 bg-gradient-to-b from-card/60 to-card/20 p-4.5 shadow-md dark:shadow-[0_4px_24px_rgba(0,0,0,0.4)] backdrop-blur-md">
           {/* Total Invested */}
           <div className="flex items-center justify-between text-xs">
             <span className="w-min break-words font-mono text-[10px] font-medium leading-tight tracking-wider text-stone-500 uppercase">
@@ -52,8 +52,8 @@ export function SellSelectedMetrics({
           <div
             className={`rounded-[5px] border p-5 transition-all duration-300 ${
               metrics.profitAmount >= 0
-                ? "border-emerald-500/20 bg-emerald-950/10 shadow-[0_0_15px_rgba(16,185,129,0.02)] hover:border-emerald-500/30"
-                : "border-red-500/20 bg-red-950/10 shadow-[0_0_15px_rgba(239,68,68,0.02)] hover:border-red-500/30"
+                ? "border-emerald-500/20 bg-emerald-500/[0.04] dark:bg-emerald-500/10 shadow-[0_0_15px_rgba(16,185,129,0.02)] hover:border-emerald-500/30"
+                : "border-red-500/20 bg-red-500/[0.04] dark:bg-red-500/10 shadow-[0_0_15px_rgba(239,68,68,0.02)] hover:border-red-500/30"
             }`}
           >
             <span className="block w-32 font-mono text-[9px] font-bold leading-normal tracking-widest text-stone-500 uppercase">

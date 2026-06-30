@@ -1,3 +1,5 @@
+import type { PatternInfo } from "@/domain/pattern-info";
+
 export type PortfolioItem = {
   id: string;
   caseId: string;
@@ -17,6 +19,15 @@ export type PortfolioItem = {
     quantity: number;
     steamId64?: string;
   }>;
+  dopplerPhase?: string;
+  inspectLink?: string;
+  patternInfo?: PatternInfo;
+  stickerPriceRate?: number;
+  stickerPriceAdd?: number;
+  stickerBuyPriceRate?: number;
+  stickerBuyPriceAdd?: number;
+  stickerScanTotalPrice?: number;
+  stickerScanPriceCapturedAt?: Date;
   createdAt: Date;
   updatedAt: Date;
 };
@@ -32,6 +43,7 @@ export type PortfolioSourceAccount = {
     holdDetails?: Array<{
       quantity: number;
       holdDays: number;
+      tradeHoldUntil?: string;
     }>;
   };
 };
@@ -46,6 +58,14 @@ export type CreatePortfolioItemInput = {
   tradeHoldUntil?: Date;
   isTemporaryPrice?: boolean;
   storageUnitId?: string;
+  dopplerPhase?: string;
+  inspectLink?: string;
+  patternInfo?: PatternInfo;
+  stickerPriceRate?: number;
+  stickerBuyPriceRate?: number;
+  stickerBuyPriceAdd?: number;
+  stickerScanTotalPrice?: number;
+  stickerScanPriceCapturedAt?: Date;
 };
 
 export type UpdatePortfolioItemInput = Partial<
@@ -59,5 +79,13 @@ export type UpdatePortfolioItemInput = Partial<
     | "isTemporaryPrice"
     | "sourceAccounts"
     | "storageUnitId"
+    | "dopplerPhase"
+    | "inspectLink"
+    | "patternInfo"
+    | "stickerPriceRate"
+    | "stickerBuyPriceRate"
+    | "stickerBuyPriceAdd"
+    | "stickerScanTotalPrice"
+    | "stickerScanPriceCapturedAt"
   >
 >;

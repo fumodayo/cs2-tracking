@@ -5,6 +5,9 @@ import { serializeReport } from "@/services/dto";
 import { getDatabase } from "@/infrastructure/db/mongo-client";
 import { ObjectId } from "mongodb";
 import { getErrorMessage } from "@/utils/error";
+import { portfolioItemSchema } from "@/utils/validation";
+import { STORAGE_UNIT_MAX_CAPACITY } from "@/domain/storage-unit";
+import { getOwnerFilter } from "@/infrastructure/db/owner-filter";
 
 export const dynamic = "force-dynamic";
 
@@ -19,7 +22,7 @@ export async function GET() {
     return NextResponse.json(serializeReport(report));
   } catch (error) {
     return NextResponse.json(
-      { message: getErrorMessage(error, "Không thể xử lý portfolio.") },
+      { message: getErrorMessage(error, "cannotProcessPortfolio") },
       { status: 500 },
     );
   }
@@ -28,14 +31,22 @@ export async function GET() {
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
+    const parsed = portfolioItemSchema.safeParse(body);
+    if (!parsed.success) {
+      return NextResponse.json(
+        { message: parsed.error.issues[0].message },
+        { status: 400 },
+      );
+    }
+    const ownerId = await getPortfolioOwnerId();
     const {
       portfolioService,
       portfolioReportService,
       caseRepository,
       priceService,
-    } = createServices({ ownerId: await getPortfolioOwnerId() });
+    } = createServices({ ownerId });
 
-    let caseId = String(body.caseId ?? "");
+    let caseId = parsed.data.caseId;
     let caseItem = null;
     if (caseId.startsWith("ext_")) {
       const marketHashName = caseId.substring(4);
@@ -46,8 +57,8 @@ export async function POST(request: NextRequest) {
       caseItem = await caseRepository.findById(caseId);
     }
 
-    let buyPrice = Number(body.buyPrice);
-    let isTemporaryPrice = body.isTemporaryPrice === true;
+    let buyPrice = parsed.data.buyPrice ?? 0;
+    let isTemporaryPrice = parsed.data.isTemporaryPrice === true;
 
     if ((!buyPrice || buyPrice <= 0) && caseItem) {
       const priceSnapshot = await priceService.getCurrentPrice(caseItem);
@@ -60,19 +71,80 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    const storageUnitId = body.storageUnitId
-      ? String(body.storageUnitId)
-      : undefined;
-    const finalQuantity = Number(body.quantity);
-    let note = body.note ? String(body.note) : undefined;
+    const storageUnitId = parsed.data.storageUnitId;
+    const finalQuantity = parsed.data.quantity;
+    let note = parsed.data.note;
 
     const db = await getDatabase();
-    if (storageUnitId && ObjectId.isValid(storageUnitId)) {
+    const ownerFilter = getOwnerFilter(ownerId);
+    let storageUnitUpdate:
+      | { id: string; items: Array<Record<string, unknown>> }
+      | null = null;
+
+    if (storageUnitId) {
+      if (!ObjectId.isValid(storageUnitId)) {
+        return NextResponse.json(
+          { message: "storageUnitNotFound" },
+          { status: 404 },
+        );
+      }
+
       const suDoc = await db.collection("storage_units").findOne({
         _id: new ObjectId(storageUnitId),
+        ...ownerFilter,
       });
+      if (!suDoc) {
+        return NextResponse.json(
+          { message: "storageUnitNotFound" },
+          { status: 404 },
+        );
+      }
+
       if (suDoc && !note) {
-        note = `Cất trong Storage Unit: ${suDoc.name}`;
+        note = `Stored in Storage Unit: ${suDoc.name}`;
+      }
+
+      if (caseItem) {
+        const existingItems = Array.isArray(suDoc.items) ? suDoc.items : [];
+        const currentCount = existingItems.reduce(
+          (sum: number, item: { quantity?: unknown }) =>
+            sum + (Number(item.quantity) || 0),
+          0,
+        );
+
+        if (currentCount + finalQuantity > STORAGE_UNIT_MAX_CAPACITY) {
+          return NextResponse.json(
+            {
+              message: `storageUnitCapacityExceeded:name=${suDoc.name},currentCount=${currentCount},addingCount=${finalQuantity},maxCapacity=${STORAGE_UNIT_MAX_CAPACITY}`,
+              currentCount,
+              addingCount: finalQuantity,
+              maxCapacity: STORAGE_UNIT_MAX_CAPACITY,
+            },
+            { status: 400 },
+          );
+        }
+
+        const updatedItems = [...existingItems];
+        const existingIdx = updatedItems.findIndex(
+          (ei: { caseId: string }) => String(ei.caseId) === caseId,
+        );
+
+        if (existingIdx >= 0) {
+          updatedItems[existingIdx] = {
+            ...updatedItems[existingIdx],
+            quantity:
+              Number(updatedItems[existingIdx].quantity || 0) + finalQuantity,
+          };
+        } else {
+          updatedItems.push({
+            caseId,
+            marketHashName: caseItem.marketHashName,
+            quantity: finalQuantity,
+            addedAt: new Date(),
+          });
+        }
+
+        storageUnitUpdate = { id: storageUnitId, items: updatedItems };
       }
     }
 
@@ -80,7 +152,7 @@ export async function POST(request: NextRequest) {
       caseId,
       quantity: finalQuantity,
       buyPrice,
-      buyDate: new Date(body.buyDate ?? Date.now()),
+      buyDate: parsed.data.buyDate ?? new Date(),
       note,
       sourceAccounts: body.sourceAccounts ? body.sourceAccounts : undefined,
       tradeHoldUntil: body.tradeHoldUntil
@@ -88,40 +160,17 @@ export async function POST(request: NextRequest) {
         : undefined,
       isTemporaryPrice,
       storageUnitId,
+      stickerPriceRate: parsed.data.stickerPriceRate,
+      stickerBuyPriceRate: parsed.data.stickerBuyPriceRate,
+      stickerScanTotalPrice: parsed.data.stickerScanTotalPrice,
+      stickerScanPriceCapturedAt: parsed.data.stickerScanPriceCapturedAt,
     });
 
-    if (storageUnitId && ObjectId.isValid(storageUnitId) && caseItem) {
-      const suCollection = db.collection("storage_units");
-      const suDoc = await suCollection.findOne({
-        _id: new ObjectId(storageUnitId),
-        ownerId: await getPortfolioOwnerId(),
-      });
-      if (suDoc) {
-        const existingItems = Array.isArray(suDoc.items) ? suDoc.items : [];
-        const updatedItems = [...existingItems];
-        const existingIdx = updatedItems.findIndex(
-          (ei: { caseId: string }) => ei.caseId === caseId,
-        );
-
-        if (existingIdx >= 0) {
-          updatedItems[existingIdx] = {
-            ...updatedItems[existingIdx],
-            quantity:
-              updatedItems[existingIdx].quantity + Number(body.quantity),
-          };
-        } else {
-          updatedItems.push({
-            caseId,
-            marketHashName: caseItem.marketHashName,
-            quantity: Number(body.quantity),
-            addedAt: new Date(),
-          });
-        }
-        await suCollection.updateOne(
-          { _id: new ObjectId(storageUnitId) },
-          { $set: { items: updatedItems, updatedAt: new Date() } },
-        );
-      }
+    if (storageUnitUpdate) {
+      await db.collection("storage_units").updateOne(
+        { _id: new ObjectId(storageUnitUpdate.id), ...ownerFilter },
+        { $set: { items: storageUnitUpdate.items, updatedAt: new Date() } },
+      );
     }
 
     const report = await portfolioReportService.buildReport({
@@ -130,7 +179,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json(serializeReport(report), { status: 201 });
   } catch (error) {
     return NextResponse.json(
-      { message: getErrorMessage(error, "Không thể xử lý portfolio.") },
+      { message: getErrorMessage(error, "cannotProcessPortfolio") },
       { status: 400 },
     );
   }
@@ -141,7 +190,7 @@ export async function DELETE(request: NextRequest) {
     const { ids } = await request.json();
     if (!Array.isArray(ids) || ids.length === 0) {
       return NextResponse.json(
-        { message: "Vui lòng chọn các item cần xóa." },
+        { message: "selectItemsToDelete" },
         { status: 400 },
       );
     }
@@ -215,7 +264,7 @@ export async function DELETE(request: NextRequest) {
                 };
               }
               await suCollection.updateOne(
-                { _id: new ObjectId(suId) },
+                { _id: new ObjectId(suId), ...ownerFilter },
                 { $set: { items: updatedItems, updatedAt: new Date() } },
               );
             }
@@ -245,7 +294,7 @@ export async function DELETE(request: NextRequest) {
 
         if (hasChanges) {
           await suCollection.updateOne(
-            { _id: su._id },
+            { _id: su._id, ...ownerFilter },
             { $set: { items: updatedItems, updatedAt: new Date() } },
           );
         }
@@ -258,7 +307,7 @@ export async function DELETE(request: NextRequest) {
     return NextResponse.json(serializeReport(report));
   } catch (error) {
     return NextResponse.json(
-      { message: getErrorMessage(error, "Không thể xử lý portfolio.") },
+      { message: getErrorMessage(error, "cannotProcessPortfolio") },
       { status: 400 },
     );
   }

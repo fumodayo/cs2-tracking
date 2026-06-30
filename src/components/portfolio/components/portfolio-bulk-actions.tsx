@@ -26,7 +26,7 @@ export function PortfolioBulkActions({
           {selectedCount}
         </span>
         <span className="text-xs font-semibold text-stone-300">
-          {t("portfolio.selected", "đã chọn")}
+          {t("portfolio.selected", "selected")}
         </span>
       </div>
       <div className="flex items-center gap-2">
@@ -35,7 +35,7 @@ export function PortfolioBulkActions({
           onClick={onClearSelection}
           className="inline-flex h-8 items-center justify-center rounded-md border border-stone-850 bg-stone-900/60 hover:bg-stone-900 px-3 text-xs font-semibold text-stone-400 hover:text-stone-200 transition-all cursor-pointer"
         >
-          {t("portfolio.deselectAll", "Hủy chọn")}
+          {t("portfolio.deselectAll", "Deselect")}
         </button>
         <button
           type="button"
@@ -43,7 +43,7 @@ export function PortfolioBulkActions({
           className="inline-flex h-8 items-center justify-center gap-1.5 rounded-md bg-accent hover:bg-accent-hover px-3.5 text-xs font-bold text-slate-950 transition-all cursor-pointer shadow-md shadow-accent/20"
         >
           <ShoppingBag className="size-3 text-slate-950" />
-          <span>{t("portfolio.sellSelected", "Bán đã chọn")}</span>
+          <span>{t("portfolio.sellSelected", "Sell Selected")}</span>
         </button>
         <button
           type="button"
@@ -56,7 +56,7 @@ export function PortfolioBulkActions({
           ) : (
             <Trash2 className="size-3 text-red-200" />
           )}
-          <span>{t("portfolio.deleteSelected", "Xóa đã chọn")}</span>
+          <span>{t("portfolio.deleteSelected", "Delete Selected")}</span>
         </button>
       </div>
     </div>

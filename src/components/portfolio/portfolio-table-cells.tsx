@@ -1,13 +1,15 @@
 "use client";
 
-import { useState } from "react";
+import { memo, useState, useEffect, useRef } from "react";
+import { useTranslation } from "react-i18next";
 import { ArrowRight, Check, Loader2, X } from "lucide-react";
 import { useCurrency } from "@/components/currency-provider";
 import type { PortfolioTableRow } from "./portfolio-table-model";
 import { calculateRatedValue, toInputNumber } from "./portfolio-table-utils";
 
 import { Button } from "@/components/ui/button";
-export function RatedValueCell({
+
+export const RatedValueCell = memo(function RatedValueCell({
   item,
   ratePercent,
   label,
@@ -40,9 +42,10 @@ export function RatedValueCell({
       </span>
     </div>
   );
-}
+});
+RatedValueCell.displayName = "RatedValueCell";
 
-export function BuyPriceCell({
+export const BuyPriceCell = memo(function BuyPriceCell({
   item,
   buffCnyToVndRate,
   disabled,
@@ -55,6 +58,7 @@ export function BuyPriceCell({
   saving: boolean;
   onUpdateBuyPrice?: (id: string, buyPrice: number) => Promise<void> | void;
 }) {
+  const { t } = useTranslation();
   const { formatCurrency } = useCurrency();
   const [editing, setEditing] = useState(false);
   const [priceCny, setPriceCny] = useState(() =>
@@ -113,24 +117,24 @@ export function BuyPriceCell({
         onDoubleClick={startEditing}
         disabled={disabled}
         className="inline-flex min-h-9 flex-col items-end justify-center rounded-md px-2 py-1 text-right transition hover:bg-surface-hover disabled:cursor-default"
-        title="Double-click để nhập theo CNY x tỷ giá BUFF"
+        title={t("portfolio.doubleClickEditCny", "Double-click to enter CNY × BUFF rate")}
       >
         <span className="flex items-center justify-end gap-1 font-medium text-foreground">
           {formatCurrency(item.buyPrice)}
           {item.isTemporaryPrice && (
             <span
               className="inline-block size-1.5 shrink-0 animate-pulse rounded-full bg-amber-500"
-              title="Giá mua tạm tính theo Steam Market (Tự động sync)."
+              title={t("portfolio.temporaryPriceTooltip", "Temporary buy price based on Steam Market (Auto sync).")}
             />
           )}
         </span>
         {item.isTemporaryPrice ? (
           <span className="text-[8px] font-semibold text-amber-500 select-none">
-            Tạm tính (Double-click sửa)
+            {t("portfolio.temporaryPriceBadgeWithAction", "Temporary (Double-click to edit)")}
           </span>
         ) : (
           <span className="text-[10px] text-muted-foreground">
-            double-click để sửa
+            {t("portfolio.doubleClickToEdit", "double-click to edit")}
           </span>
         )}
       </Button>
@@ -141,25 +145,25 @@ export function BuyPriceCell({
     <div className="ml-auto flex min-w-[21rem] flex-col items-end gap-2 rounded-md border border-border bg-surface p-2 shadow-sm">
       <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
         <MoneyInput
-          ariaLabel="Giá CNY"
+          ariaLabel={t("portfolio.priceCny", "CNY Price")}
           value={priceCny}
           onChange={updateCny}
           className="w-20"
         />
         <span>×</span>
         <MoneyInput
-          ariaLabel="Tỷ giá CNY"
+          ariaLabel={t("portfolio.buyRate", "Buy Rate")}
           value={rate}
           onChange={updateRate}
           className="w-20"
         />
         <span>=</span>
         <MoneyInput
-          ariaLabel="Giá VND"
+          ariaLabel={t("portfolio.buyPriceVnd", "Buy Price VND")}
           value={priceVnd}
           onChange={updateVnd}
           className="w-28"
-          autoFocus
+          autoFocusEnabled
           onEnter={save}
         />
       </div>
@@ -168,7 +172,7 @@ export function BuyPriceCell({
           type="button"
           onClick={() => setEditing(false)}
           className="inline-grid size-7 place-items-center rounded border border-border text-muted-foreground hover:bg-surface-hover"
-          aria-label="Hủy"
+          aria-label={t("common.cancel", "Cancel")}
         >
           <X className="size-3.5" />
         </Button>
@@ -177,7 +181,7 @@ export function BuyPriceCell({
           onClick={() => void save()}
           disabled={saving}
           className="inline-grid size-7 place-items-center rounded bg-accent text-accent-foreground hover:bg-accent-hover disabled:cursor-wait disabled:opacity-60"
-          aria-label="Lưu giá mua"
+          aria-label={t("portfolio.saveBuyPrice", "Save buy price")}
         >
           {saving ? (
             <Loader2 className="size-3.5 animate-spin" />
@@ -188,30 +192,38 @@ export function BuyPriceCell({
       </div>
     </div>
   );
-}
+});
+BuyPriceCell.displayName = "BuyPriceCell";
 
-export function MoneyInput({
+export const MoneyInput = memo(function MoneyInput({
   ariaLabel,
   value,
   onChange,
   onEnter,
   className,
-  autoFocus,
+  autoFocusEnabled,
 }: {
   ariaLabel: string;
   value: string;
   onChange: (value: string) => void;
   onEnter?: () => void;
   className?: string;
-  autoFocus?: boolean;
+  autoFocusEnabled?: boolean;
 }) {
+  const inputRef = useRef<HTMLInputElement>(null);
+  useEffect(() => {
+    if (autoFocusEnabled) {
+      inputRef.current?.focus();
+    }
+  }, [autoFocusEnabled]);
+
   return (
     <input
+      ref={inputRef}
       aria-label={ariaLabel}
       type="number"
       min="0"
       value={value}
-      autoFocus={autoFocus}
       onChange={(event) => onChange(event.target.value)}
       onKeyDown={(event) => {
         if (event.key === "Enter") {
@@ -221,9 +233,10 @@ export function MoneyInput({
       className={`h-8 rounded border border-input-border bg-input px-2 text-right text-xs font-semibold text-foreground outline-none focus:border-ring ${className ?? ""}`}
     />
   );
-}
+});
+MoneyInput.displayName = "MoneyInput";
 
-export function QuantityCell({
+export const QuantityCell = memo(function QuantityCell({
   item,
   disabled,
   saving,
@@ -234,8 +247,16 @@ export function QuantityCell({
   saving: boolean;
   onUpdateQuantity?: (id: string, quantity: number) => Promise<void> | void;
 }) {
+  const { t } = useTranslation();
   const [editing, setEditing] = useState(false);
   const [quantity, setQuantity] = useState(() => String(item.quantity));
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    if (editing) {
+      inputRef.current?.focus();
+    }
+  }, [editing]);
 
   function startEditing() {
     if (disabled) return;
@@ -261,7 +282,7 @@ export function QuantityCell({
         type="button"
         onDoubleClick={startEditing}
         disabled={disabled}
-        title={disabled ? undefined : "Nháy đúp để sửa số lượng"}
+        title={disabled ? undefined : t("portfolio.doubleClickEditQty", "Double-click to edit quantity")}
         className="group relative inline-flex min-w-16 items-center justify-end rounded border border-transparent px-1.5 py-1 text-right font-medium hover:border-border hover:bg-surface-muted disabled:cursor-not-allowed disabled:hover:border-transparent disabled:hover:bg-transparent"
       >
         <span className="text-foreground">{item.quantity}</span>
@@ -277,6 +298,7 @@ export function QuantityCell({
   return (
     <div className="inline-flex min-w-16 flex-col items-end gap-1.5">
       <input
+        ref={inputRef}
         type="number"
         value={quantity}
         onChange={(e) => setQuantity(e.target.value)}
@@ -284,7 +306,6 @@ export function QuantityCell({
           if (e.key === "Enter") void save();
           if (e.key === "Escape") setEditing(false);
         }}
-        autoFocus
         min={1}
         className="w-16 [appearance:textfield] rounded border border-ring bg-input px-1.5 py-1 text-right text-sm font-medium text-foreground outline-none [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
       />
@@ -306,4 +327,5 @@ export function QuantityCell({
       </div>
     </div>
   );
-}
+});
+QuantityCell.displayName = "QuantityCell";
