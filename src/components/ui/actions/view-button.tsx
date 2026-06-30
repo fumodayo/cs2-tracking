@@ -7,32 +7,7 @@ import { Table } from "@tanstack/react-table";
 import { cn } from "@/utils/cn";
 import { Button } from "@/components/ui/button";
 
-const DEFAULT_COLUMN_LABELS: Record<string, string> = {
-  // Common/Control columns
-  select: "Chọn",
-  actions: "Hành động",
-
-  // Inventory Scanner columns
-  case: "Vật phẩm",
-  quantity: "Số lượng",
-  price: "Đơn giá",
-  total: "Tổng trị giá",
-  rateAll: "Giá sỉ",
-  rateLe: "Giá lẻ",
-
-  // Portfolio Table columns
-  buyPrice: "Giá mua",
-  investedValue: "Tổng vốn",
-  currentPrice: "Giá hiện tại",
-  wholesaleValue: "Giá sỉ",
-  retailValue: "Giá lẻ",
-  profitAmount: "Lãi/lỗ",
-  profitPercent: "% Lãi/lỗ",
-  updatedAt: "Ngày cập nhật",
-  buyDate: "Ngày mua",
-  buffActualProfit: "Lợi nhuận (Buff)",
-  steamActualProfit: "Lợi nhuận (Steam)",
-};
+import { useTranslation } from "react-i18next";
 
 interface ViewButtonProps<TData> {
   table: Table<TData>;
@@ -46,10 +21,32 @@ export function ViewButton<TData>({
   className,
 }: ViewButtonProps<TData>) {
   const [open, setOpen] = React.useState(false);
+  const { t } = useTranslation();
 
   const labels = React.useMemo(() => {
-    return { ...DEFAULT_COLUMN_LABELS, ...columnLabels };
-  }, [columnLabels]);
+    const defaultLabels: Record<string, string> = {
+      select: t("columns.select", "Select"),
+      actions: t("columns.actions", "Actions"),
+      case: t("columns.case", "Item"),
+      quantity: t("columns.quantity", "Quantity"),
+      price: t("columns.price", "Unit Price"),
+      total: t("columns.total", "Total Value"),
+      rateAll: t("columns.rateAll", "Wholesale Price"),
+      rateLe: t("columns.rateLe", "Retail Price"),
+      buyPrice: t("columns.buyPrice", "Buy Price"),
+      investedValue: t("columns.investedValue", "Total Cost"),
+      currentPrice: t("columns.currentPrice", "Current Price"),
+      wholesaleValue: t("columns.wholesaleValue", "Wholesale Value"),
+      retailValue: t("columns.retailValue", "Retail Value"),
+      profitAmount: t("columns.profitAmount", "Profit/Loss"),
+      profitPercent: t("columns.profitPercent", "% Profit/Loss"),
+      updatedAt: t("columns.updatedAt", "Updated At"),
+      buyDate: t("columns.buyDate", "Buy Date"),
+      buffActualProfit: t("columns.buffActualProfit", "Profit (Buff)"),
+      steamActualProfit: t("columns.steamActualProfit", "Profit (Steam)"),
+    };
+    return { ...defaultLabels, ...columnLabels };
+  }, [columnLabels, t]);
 
   const hideableColumns = React.useMemo(() => {
     return table.getAllLeafColumns().filter((column) => column.getCanHide());
@@ -63,12 +60,12 @@ export function ViewButton<TData>({
         <Button
           variant="outline"
           className={cn(
-            "hover:bg-stone-850 h-8 cursor-pointer border-stone-800 bg-stone-900/40 px-3 text-xs font-semibold text-stone-300 shadow-sm transition-all hover:text-stone-100",
+            "h-8 cursor-pointer gap-1.5 rounded-lg border border-stone-800 bg-stone-900/40 px-3 text-xs font-semibold text-stone-300 shadow-sm transition-all duration-200 hover:border-stone-700 hover:bg-stone-850 hover:text-stone-100 hover:scale-[1.02] active:scale-[0.98]",
             className,
           )}
         >
-          <SlidersHorizontal className="size-3.5 text-stone-500 transition-colors group-hover:text-stone-300" />
-          <span>Hiển thị cột</span>
+          <SlidersHorizontal className="size-3.5 text-stone-500 transition-colors group-hover:text-stone-300 shrink-0" />
+          <span>{t("columns.showHide", "Show/Hide Columns")}</span>
         </Button>
       </Popover.Trigger>
 
@@ -76,11 +73,11 @@ export function ViewButton<TData>({
         <Popover.Content
           align="end"
           sideOffset={6}
-          className="animate-fade-slide-in z-50 w-52 overflow-hidden rounded-xl border border-stone-800 bg-stone-950/95 p-0 text-stone-200 shadow-2xl backdrop-blur-md"
+          className="animate-fade-slide-in z-50 w-72 overflow-hidden rounded-xl border border-stone-800 bg-stone-950/95 p-0 text-stone-200 shadow-2xl backdrop-blur-md"
         >
           <div className="flex h-full w-full flex-col overflow-hidden">
             <h3 className="border-b border-stone-900 px-3.5 py-2.5 text-xs font-bold text-stone-400">
-              Ẩn / Hiện các cột
+              {t("columns.toggleTitle", "Toggle Columns")}
             </h3>
 
             {/* Column toggles list */}
@@ -100,19 +97,10 @@ export function ViewButton<TData>({
                     key={column.id}
                     variant="ghost"
                     onClick={() => column.toggleVisibility(!isVisible)}
-                    className={cn(
-                      "relative flex w-full cursor-pointer items-center justify-start gap-2 rounded-lg px-2 py-2 text-start text-xs font-semibold text-stone-300 transition-colors outline-none select-none hover:bg-stone-900 hover:text-stone-100",
-                      isVisible &&
-                        "bg-blue-500/[0.04] text-blue-400 hover:bg-blue-500/[0.08] hover:text-blue-300",
-                    )}
+                    className="relative flex w-full cursor-pointer items-center justify-start gap-2 rounded-lg px-2.5 py-2 text-start text-xs font-semibold text-stone-300 transition-all outline-none select-none hover:bg-stone-900 hover:text-stone-100"
                   >
-                    <span
-                      className={cn(
-                        "inline-flex size-4 items-center justify-center rounded border border-stone-800 bg-stone-950 transition-all",
-                        isVisible && "border-blue-500/40 bg-blue-500/10",
-                      )}
-                    >
-                      {isVisible && <Check className="size-3 text-blue-400" />}
+                    <span className="inline-flex size-4 shrink-0 items-center justify-center">
+                      {isVisible && <Check className="size-3.5 text-accent" />}
                     </span>
                     <span className="truncate">{label}</span>
                   </Button>

@@ -72,11 +72,11 @@ export function StatCard({
 }: StatCardProps) {
   // Resolve card tone (allow tone or variant fallback)
   const resolvedTone = tone || variant || "neutral";
-  
+
   // Normalize tone for mapping styles
-  const mappedTone = 
-    resolvedTone === "violet" || resolvedTone === "amber" 
-      ? "amber" 
+  const mappedTone =
+    resolvedTone === "violet" || resolvedTone === "amber"
+      ? "amber"
       : resolvedTone;
 
   const displayTitle = title ?? label ?? "";
@@ -129,7 +129,7 @@ export function StatCard({
   return (
     <Card
       className={cn(
-        "h-full p-4 transition-all duration-300 hover:scale-[1.015] hover:shadow-[0_8px_30px_rgb(0,0,0,0.04)] dark:hover:shadow-[0_8px_30px_rgb(0,0,0,0.12)] border",
+        "h-full p-4 transition-all duration-300 hover:shadow-[0_8px_30px_rgb(0,0,0,0.04)] dark:hover:shadow-[0_8px_30px_rgb(0,0,0,0.12)] border",
         customClass
       )}
     >
@@ -153,7 +153,7 @@ export function StatCard({
               </TooltipProvider>
             )}
           </div>
-          
+
           <div className="mt-2 flex items-baseline gap-2">
             <span className={cn(
               "text-2xl font-bold tracking-tight",

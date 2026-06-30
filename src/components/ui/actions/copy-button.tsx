@@ -5,6 +5,8 @@ import { Copy, Check } from "lucide-react";
 import { AnimatePresence, motion } from "framer-motion";
 import { cn } from "@/utils/cn";
 
+import { useTranslation } from "react-i18next";
+
 interface CopyButtonProps {
   value: string | number;
   className?: string;
@@ -12,6 +14,7 @@ interface CopyButtonProps {
 }
 
 export function CopyButton({ value, className, children }: CopyButtonProps) {
+  const { t } = useTranslation();
   const [copied, setCopied] = useState(false);
   const [showTooltip, setShowTooltip] = useState(false);
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -43,10 +46,11 @@ export function CopyButton({ value, className, children }: CopyButtonProps) {
   };
 
   return (
-    <div
+    <button
+      type="button"
       onClick={handleCopyToClipboard}
       className={cn(
-        "group relative inline-flex cursor-pointer items-center gap-1 transition-all select-none hover:text-foreground active:scale-95",
+        "group relative inline-flex cursor-pointer items-center gap-1 transition-all select-none hover:text-foreground active:scale-95 border-none bg-transparent p-0 font-normal text-stone-400 text-left",
         className,
       )}
       onMouseEnter={() => !copied && setShowTooltip(true)}
@@ -92,10 +96,10 @@ export function CopyButton({ value, className, children }: CopyButtonProps) {
               copied ? "border-emerald-500/20 text-emerald-400" : "",
             )}
           >
-            {copied ? "Đã sao chép!" : "Sao chép"}
+            {copied ? t("common.copied", "Copied") : t("common.copy", "Copy")}
           </motion.div>
         )}
       </AnimatePresence>
-    </div>
+    </button>
   );
 }

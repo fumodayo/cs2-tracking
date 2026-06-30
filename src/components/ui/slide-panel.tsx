@@ -20,6 +20,8 @@ interface SlidePanelContentProps extends Omit<
   footer?: ReactNode;
   hideHeader?: boolean;
   noPadding?: boolean;
+  side?: "left" | "right";
+  showOverlay?: boolean;
 }
 
 export function SlidePanelContent({
@@ -30,14 +32,21 @@ export function SlidePanelContent({
   footer,
   hideHeader = false,
   noPadding = false,
+  side = "right",
+  showOverlay = true,
   ...props
 }: SlidePanelContentProps) {
   return (
     <DialogPrimitive.Portal>
-      <DialogPrimitive.Overlay className="data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=open]:fade-in-0 data-[state=closed]:fade-out-0 fixed inset-0 z-50 bg-slate-950/70 backdrop-blur-sm" />
+      {showOverlay && (
+        <DialogPrimitive.Overlay className="data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=open]:fade-in-0 data-[state=closed]:fade-out-0 fixed inset-0 z-50 bg-slate-950/70 backdrop-blur-sm" />
+      )}
       <DialogPrimitive.Content
         className={cn(
-          "data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=open]:slide-in-from-right data-[state=closed]:slide-out-to-right fixed inset-y-0 right-0 z-50 flex h-full w-full max-w-lg flex-col border-l border-border bg-card shadow-2xl duration-250 outline-none",
+          "data-[state=open]:animate-in data-[state=closed]:animate-out fixed inset-y-0 z-50 flex h-full w-full max-w-lg flex-col bg-card shadow-2xl duration-250 outline-none",
+          side === "left"
+            ? "left-0 border-r border-border data-[state=open]:slide-in-from-left data-[state=closed]:slide-out-to-left"
+            : "right-0 border-l border-border data-[state=open]:slide-in-from-right data-[state=closed]:slide-out-to-right",
           className,
         )}
         aria-describedby={undefined}
@@ -66,7 +75,7 @@ export function SlidePanelContent({
               <Button
                 variant="ghost"
                 size="icon"
-                aria-label="Đóng"
+                aria-label="Close"
                 className="rounded-lg"
               >
                 <X className="size-4" />
@@ -80,7 +89,7 @@ export function SlidePanelContent({
             <Button
               variant="ghost"
               size="icon"
-              aria-label="Đóng"
+              aria-label="Close"
               className="border-stone-850 absolute top-4 right-4 z-50 cursor-pointer rounded-lg border bg-stone-900/60 text-stone-400 shadow-md hover:bg-stone-900/90 hover:text-stone-100"
             >
               <X className="size-4" />

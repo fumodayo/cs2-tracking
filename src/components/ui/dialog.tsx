@@ -33,7 +33,7 @@ export function DialogContent({
             className="absolute top-4 right-4"
             variant="ghost"
             size="icon"
-            aria-label="Đóng"
+            aria-label="Close"
           >
             <X className="size-4" />
           </Button>

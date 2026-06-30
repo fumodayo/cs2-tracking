@@ -14,14 +14,17 @@ interface TablePaginationProps<TData> {
   table: Table<TData>;
   pageSizeOptions?: number[];
   className?: string;
+  unit?: string;
 }
 
 export function TablePagination<TData>({
   table,
   pageSizeOptions = [5, 10, 20, 50, 100],
   className,
+  unit,
 }: TablePaginationProps<TData>) {
   const { t } = useTranslation();
+  const unitLabel = unit || t("common.rows") || "rows";
 
   return (
     <div className={cn("relative flex w-full flex-col items-center gap-4 border-t border-stone-850 bg-stone-900/50 px-4 py-4 text-xs text-stone-400 sm:flex-row sm:justify-between sm:py-3.5", className)}>
@@ -49,7 +52,7 @@ export function TablePagination<TData>({
 
       {/* CURRENT PAGE INFO - Absolute Centered on Desktop */}
       <span className="text-xs font-medium text-stone-400 sm:absolute sm:left-1/2 sm:top-1/2 sm:-translate-x-1/2 sm:-translate-y-1/2 sm:text-sm select-none">
-        {table.getFilteredRowModel().rows.length} {t("common.rows") || "rows"} • {t("common.page") || "Page"} {table.getState().pagination.pageIndex + 1} / {Math.max(table.getPageCount(), 1)}
+        {table.getFilteredRowModel().rows.length} {unitLabel} • {t("common.page") || "Page"} {table.getState().pagination.pageIndex + 1} / {Math.max(table.getPageCount(), 1)}
       </span>
 
       {/* ARROW & NUMBER BUTTONS - Right side */}
