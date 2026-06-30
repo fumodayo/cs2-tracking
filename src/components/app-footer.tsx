@@ -4,7 +4,7 @@ import { useState } from "react";
 import Link from "next/link";
 import { useTranslation } from "react-i18next";
 import { BugReportDialog } from "@/components/bug-report-dialog";
-import { AlertTriangle, ExternalLink } from "lucide-react";
+import { ExternalLink, Facebook, Github, Mail, Package, MessageSquare } from "lucide-react";
 
 // Premium Custom SVG Icons
 const DiscordIcon = (props: React.SVGProps<SVGSVGElement>) => (
@@ -13,9 +13,10 @@ const DiscordIcon = (props: React.SVGProps<SVGSVGElement>) => (
   </svg>
 );
 
-const TwitterIcon = (props: React.SVGProps<SVGSVGElement>) => (
-  <svg viewBox="0 0 24 24" fill="currentColor" {...props}>
-    <path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z"/>
+const ZaloIcon = (props: React.SVGProps<SVGSVGElement>) => (
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" {...props}>
+    <path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z" />
+    <path d="M9 9.5h6l-6 5h6" />
   </svg>
 );
 
@@ -25,19 +26,23 @@ export function AppFooter() {
   const currentYear = new Date().getFullYear();
 
   return (
-    <footer className="border-t border-border bg-surface/80 backdrop-blur-md">
+    <footer className="border-t border-stone-850 bg-stone-950/40 backdrop-blur-md">
       <div className="mx-auto max-w-7xl px-4 py-10 sm:px-6 lg:px-8">
-        <div className="grid grid-cols-1 gap-8 md:grid-cols-2">
-          {/* Logo & About */}
-          <div className="space-y-4">
+        <div className="grid grid-cols-1 gap-8 md:grid-cols-2 lg:gap-16">
+          {/* Cột Trái: Logo & About */}
+          <div className="space-y-4 text-left">
             <Link
               href="/portfolio"
-              className="flex items-center gap-2 text-base font-semibold tracking-[0.16em] text-foreground uppercase hover:text-accent transition-colors"
+              className="flex items-center gap-2 group w-fit"
             >
-              <img src="/favicon.svg" alt="CS2 Tracker Logo" className="size-6 object-contain" />
-              <span>CS2 Tracker</span>
+              <div className="flex size-6 shrink-0 items-center justify-center rounded bg-blue-600 text-white transition-transform group-hover:scale-105 duration-200">
+                <Package className="size-4" />
+              </div>
+              <span className="text-sm font-bold tracking-[0.16em] text-foreground uppercase group-hover:text-blue-400 transition-colors duration-200">
+                CS2 TRACKER
+              </span>
             </Link>
-            <p className="max-w-xs text-sm leading-relaxed text-muted-foreground">
+            <p className="max-w-md text-sm leading-relaxed text-stone-400">
               {t("footer.about")}
             </p>
             {/* Social Links */}
@@ -46,35 +51,60 @@ export function AppFooter() {
                 href="https://discord.gg/cs2-tracking"
                 target="_blank"
                 rel="noreferrer"
-                className="text-muted-foreground hover:text-accent transition-all duration-200 hover:scale-110"
-                aria-label="Discord"
+                className="text-stone-500 hover:text-stone-300 transition-all duration-200 hover:scale-110"
+                aria-label={t("footer.discord")}
               >
                 <DiscordIcon className="size-5" />
               </a>
               <a
-                href="https://x.com/cs2_tracking"
+                href="https://www.facebook.com/buisonthai.fumodayo/"
                 target="_blank"
                 rel="noreferrer"
-                className="text-muted-foreground hover:text-accent transition-all duration-200 hover:scale-110"
-                aria-label="Twitter / X"
+                className="text-stone-500 hover:text-stone-300 transition-all duration-200 hover:scale-110"
+                aria-label={t("footer.facebook")}
               >
-                <TwitterIcon className="size-4.5" />
+                <Facebook className="size-4.5" />
+              </a>
+              <a
+                href="https://fumodayo.vercel.app/en"
+                target="_blank"
+                rel="noreferrer"
+                className="text-stone-500 hover:text-stone-300 transition-all duration-200 hover:scale-110"
+                aria-label={t("footer.github")}
+              >
+                <Github className="size-4.5" />
+              </a>
+              <a
+                href="mailto:sonthai1310.works@gmail.com"
+                className="text-stone-500 hover:text-stone-300 transition-all duration-200 hover:scale-110"
+                aria-label={t("footer.gmail")}
+              >
+                <Mail className="size-4.5" />
+              </a>
+              <a
+                href="https://zalo.me/"
+                target="_blank"
+                rel="noreferrer"
+                className="text-stone-500 hover:text-stone-300 transition-all duration-200 hover:scale-110"
+                aria-label={t("footer.zalo")}
+              >
+                <ZaloIcon className="size-5" />
               </a>
             </div>
           </div>
 
-          {/* Support Actions */}
-          <div className="space-y-4">
-            <h3 className="text-sm font-semibold tracking-wider text-foreground uppercase">
-              Support
+          {/* Cột Phải: Hỗ trợ */}
+          <div className="space-y-4 text-left">
+            <h3 className="text-sm font-bold tracking-[0.16em] text-foreground uppercase">
+              {t("footer.supportTitle", "HỖ TRỢ")}
             </h3>
             <div className="space-y-3">
               <button
                 type="button"
                 onClick={() => setBugDialogOpen(true)}
-                className="inline-flex items-center gap-2 rounded-md border border-danger-border bg-danger-muted px-3.5 py-1.5 text-xs font-semibold text-danger transition-all duration-200 hover:bg-danger/18 hover:scale-[1.02] active:scale-[0.98]"
+                className="inline-flex items-center gap-2 rounded-md border border-stone-800 bg-stone-900/40 px-3.5 py-1.5 text-xs font-semibold text-stone-300 transition-all duration-200 hover:bg-stone-850 hover:text-stone-100 hover:border-stone-700 active:scale-[0.98]"
               >
-                <AlertTriangle className="size-3.5" />
+                <MessageSquare className="size-3.5 text-stone-400" />
                 {t("footer.reportBug")}
               </button>
 
@@ -83,10 +113,10 @@ export function AppFooter() {
                   href="https://www.exchangerate-api.com"
                   target="_blank"
                   rel="noreferrer"
-                  className="inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors"
+                  className="inline-flex items-center gap-1 text-xs text-stone-500 hover:text-stone-300 transition-colors"
                 >
                   {t("footer.rateApi")}
-                  <ExternalLink className="size-3" />
+                  <ExternalLink className="size-3 text-stone-500" />
                 </a>
               </div>
             </div>
@@ -94,7 +124,7 @@ export function AppFooter() {
         </div>
 
         {/* Bottom copyright */}
-        <div className="mt-8 border-t border-border pt-6 flex flex-col sm:flex-row items-center justify-between gap-4 text-xs text-muted-foreground">
+        <div className="mt-8 border-t border-stone-850 pt-6 text-left text-xs text-stone-500">
           <p>{t("footer.copyright", { year: currentYear })}</p>
         </div>
       </div>

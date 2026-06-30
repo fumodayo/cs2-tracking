@@ -1,433 +1,301 @@
-# Kiến Trúc Hệ Thống & Cấu Trúc Cơ Sở Dữ Liệu 🏛️
+# Kiến Trúc Dự Án
 
-Tài liệu này mô tả chi tiết kiến trúc phần mềm, luồng dữ liệu, cấu trúc cơ sở dữ liệu (MongoDB) và các tích hợp API bên ngoài của dự án **CS2 Case Tracker**.
+Tài liệu này giải thích cách dự án CS2 Tracking được tổ chức, các layer chính, luồng dữ liệu và những quy ước cần giữ khi phát triển tiếp.
 
----
+## Tổng Quan
 
-## 1. Kiến Trúc Tổng Quan (System Architecture)
+Dự án là một ứng dụng Next.js App Router có frontend React và API routes chạy trong cùng repo. Kiến trúc hiện tại là **hybrid Clean Architecture**:
 
-Dự án được thiết kế theo mô hình **Clean Architecture lai Domain-Driven Design (DDD)** nhằm cô lập logic nghiệp vụ cốt lõi khỏi các chi tiết công nghệ (Database, Web Framework, Third-party APIs).
-
-```mermaid
-graph TD
-    UI[Next.js Components / Pages] --> |Gọi API / Actions| API[Next.js API Routes /src/app/api]
-    API --> |Inject Dependencies| Container[Container /src/infrastructure/container.ts]
-    Container --> |Khởi tạo| Services[Application Services /src/services]
-    Services --> |Gọi Interface| RepoInterface[Repository Interfaces /src/domain]
-    RepoInterface --> |Triển khai cụ thể| RepoImpl[Mongo Repositories /src/infrastructure/repositories]
-    RepoImpl --> |Truy vấn| DB[(MongoDB database)]
-    Services --> |Lấy giá| PriceProvider[Price Provider /src/infrastructure/price]
-    PriceProvider --> |Fetch API| Steam[Steam Market API / CSGOTrader Fallback]
-    PriceProvider --> |Fetch API| CS2Cap[CS2Cap API for BUFF163]
-```
-
-### Các lớp Kiến trúc
-1. **Domain Layer (`src/domain`)**:
-   - Chứa các thực thể cốt lõi (`CaseItem`, `PortfolioItem`, `StorageUnit`, `PriceSnapshot`).
-   - Định nghĩa các interface cho repositories (`CaseRepository`, `PortfolioRepository`...).
-   - Lớp này hoàn toàn thuần khiết (Pure TypeScript), không phụ thuộc vào bất kỳ framework hay thư viện database nào.
-2. **Services Layer (`src/services`)**:
-   - Nơi xử lý các nghiệp vụ (Business Logic) chính của ứng dụng.
-   - Ví dụ: `PortfolioReportService` chịu trách nhiệm tính toán tổng giá trị đầu tư, tỷ lệ sinh lời, phân bổ danh mục; `PostAnalysisService` quản lý phân tích bài viết bằng AI.
-3. **Infrastructure Layer (`src/infrastructure`)**:
-   - Triển khai cụ thể các interface của Domain Layer (các class Repositories truy vấn MongoDB).
-   - Tích hợp với bên ngoài: Lấy giá từ Steam Market API, fallback từ file cache hoặc CSGOTrader API.
-4. **Presentation/API Layer (`src/app` & `src/components`)**:
-   - Định nghĩa giao diện người dùng (React components) và các API endpoints của Next.js phục vụ cho Client.
-
----
-
-## 2. Cấu Trúc Cơ Sở Dữ Liệu (MongoDB Schemas)
-
-Mặc dù MongoDB là cơ sở dữ liệu phi quan hệ (NoSQL), dự án vẫn định nghĩa các cấu trúc tài liệu (Documents) rõ ràng thông qua TypeScript Types và Mappers (`src/infrastructure/db/mappers.ts`).
-
-### Sơ đồ Thực thể (Entity Relationship Diagram - ERD)
+- `domain` giữ model và interface cốt lõi.
+- `services` giữ business logic và orchestration server-side.
+- `infrastructure` giữ MongoDB, repository implementation và external drivers.
+- `app/api` là HTTP boundary.
+- `components` là UI.
+- `lib/api-client` là client-side wrapper để UI gọi API nội bộ.
 
 ```mermaid
-erDiagram
-    USERS ||--o{ PORTFOLIO_ACCOUNTS : "ownerId (google:id)"
-    USERS ||--o{ PORTFOLIO_ITEMS : "ownerId (google:id / guest)"
-    USERS ||--o{ STORAGE_UNITS : "ownerId (google:id / guest)"
-    CASES ||--o{ PORTFOLIO_ITEMS : "caseId"
-    CASES ||--o{ PRICE_SNAPSHOTS : "caseId"
-    STORAGE_UNITS ||--o{ PORTFOLIO_ITEMS : "storageUnitId"
-    PORTFOLIO_ACCOUNTS ||--o| INVENTORY_SCAN_CACHE : "steamId64"
-    
-    USERS {
-        string _id PK
-        string provider "google"
-        string providerAccountId
-        string email
-        string name
-        string image
-        date createdAt
-        date updatedAt
-    }
-
-    PORTFOLIO_ACCOUNTS {
-        string _id PK
-        string ownerId FK "Index"
-        string steamId64
-        string name
-        string avatarUrl
-        string steamUrl
-        string steamCookie "AES Encrypted"
-        string cookieError
-        date createdAt
-        date updatedAt
-    }
-
-    INVENTORY_SCAN_CACHE {
-        string _id PK
-        string steamId64 "Index"
-        object profile "name, avatarUrl"
-        array items "caseItem, quantity, holdDays, tradeHoldUntil..."
-        number totalPrice
-        number totalQuantity
-        number totalInventoryCount
-        date scannedAt
-        date expiresAt "TTL Index"
-        boolean marketScanWarning
-        array storageUnits
-        boolean hasCookie
-    }
-
-    CASES {
-        string _id PK
-        string name
-        string marketHashName "UK, Unique Index"
-        string imageUrl
-        object rarity "name, color"
-        boolean isActive
-    }
-
-    PORTFOLIO_ITEMS {
-        string _id PK
-        string caseId FK
-        string ownerId "Index"
-        number quantity
-        number buyPrice
-        string buyCurrency "VND"
-        date buyDate
-        string note
-        array sourceAccounts "steamId64, name, breakdown"
-        string storageUnitId FK
-        date tradeHoldUntil
-        boolean isTemporaryPrice
-        date createdAt
-        date updatedAt
-    }
-
-    PRICE_SNAPSHOTS {
-        string _id PK
-        string caseId FK "Compound Index"
-        number price
-        string currency "VND"
-        string source "steam-market / csgotrader-fallback"
-        date capturedAt "Compound Index"
-    }
-
-    STORAGE_UNITS {
-        string _id PK
-        string ownerId "Index"
-        string steamId64
-        string assetId
-        string name
-        string iconUrl
-        number currentCount
-        array items "caseId, quantity, addedAt"
-    }
-    
-    POST_ANALYSIS_HISTORY {
-        string _id PK
-        string fingerprint "Unique Index"
-        string text
-        string imageCloudinaryUrl
-        object analysis "itemRate, totalQuantity, rows..."
-        date updatedAt "Index"
-    }
+flowchart TD
+    Browser["Browser / React UI"] --> ClientApi["src/lib/api-client"]
+    ClientApi --> ApiRoutes["src/app/api"]
+    ApiRoutes --> Services["src/services"]
+    Services --> Domain["src/domain"]
+    Services --> Infrastructure["src/infrastructure"]
+    Infrastructure --> Mongo[("MongoDB")]
+    Infrastructure --> External["Steam / CS2Cap / CSFloat / Gemini / Cloudinary"]
+    ApiRoutes --> Infrastructure
 ```
 
----
+Một số API route lớn vẫn còn thao tác MongoDB trực tiếp. Đó là nợ kỹ thuật cần trả dần, không phải mẫu lý tưởng nên copy cho code mới.
 
-### Chi tiết Các Collections
+## Bản Đồ Thư Mục
 
-#### 1. Collection: `cases`
-Lưu trữ danh mục các loại hòm CS2 được hỗ trợ theo dõi trong hệ thống.
-- **Cấu trúc Document:**
-  ```typescript
-  {
-    _id: ObjectId;
-    name: string;             // Tên hiển thị (ví dụ: "Recoil Case")
-    marketHashName: string;   // Tên định danh trên Steam Market (ví dụ: "Recoil Case")
-    imageUrl?: string;        // Link ảnh hòm từ Steam CDN
-    rarity?: {                // Độ hiếm của hòm
-      name: string;           // Tên độ hiếm (ví dụ: "Base Grade")
-      color: string;          // Mã màu hex (ví dụ: "#b0c3d9")
-    };
-    isActive: boolean;        // Trạng thái kích hoạt
-    createdAt?: Date;
-    updatedAt?: Date;
-  }
-  ```
-- **Indexes:**
-  - `{ marketHashName: 1 }` (Unique): Đảm bảo không trùng lặp hòm.
-  - `{ name: "text", marketHashName: "text" }` (Text Index): Phục vụ tìm kiếm nhanh (Search).
+| Thư mục | Vai trò | Ví dụ |
+| --- | --- | --- |
+| `src/app` | Next.js routes, pages, layouts | `app/api/portfolio/route.ts`, `app/portfolio/page.tsx` |
+| `src/components` | UI theo feature | `portfolio`, `inventory-scanner`, `steam-accounts` |
+| `src/lib/api-client` | Hàm `fetch` dùng trong browser | `portfolio-api.ts`, `steam-accounts-api.ts` |
+| `src/services` | Application services/server logic | `portfolio-service.ts`, `scan-service.ts`, `auth-service.ts` |
+| `src/domain` | Model, type, repository interface | `portfolio-item.ts`, `repositories.ts` |
+| `src/infrastructure` | MongoDB, repository, external provider | `db`, `repositories`, `price`, `steam.ts` |
+| `src/stores` | Store nhỏ cho UI progress/toast | `import-store.ts`, `sync-store.ts` |
+| `src/types` | DTO/type dùng chung | `report.ts`, `portfolio-import.ts` |
+| `src/utils` | Helper không gắn feature | `format.ts`, `validation.ts`, `local-api-key.ts` |
+| `src/i18n` | Bản dịch | `vi.json`, `en.json` |
+| `src/data` | Dữ liệu tĩnh | tier, multiplier, sticker map |
 
-#### 2. Collection: `portfolio_items`
-Lưu trữ danh sách hòm mà người dùng đang theo dõi trong danh mục đầu tư của họ.
-- **Cấu trúc Document:**
-  ```typescript
-  {
-    _id: ObjectId;
-    caseId: string;           // Liên kết tới _id của collection 'cases'
-    ownerId: string;          // ID người sở hữu danh mục (mặc định: "guest" nếu chưa đăng nhập)
-    quantity: number;         // Số lượng hòm sở hữu
-    buyPrice: number;         // Giá mua vào
-    buyCurrency: string;      // Tiền tệ khi mua (Mặc định: "VND")
-    buyDate: Date;            // Ngày mua
-    note?: string;            // Ghi chú thêm
-    sourceAccounts: Array<{   // Breakdown số lượng hòm từ các tài khoản Steam
-      steamId64: string;
-      name: string;
-      breakdown?: {
-        tradeable: number;    // Số lượng có thể giao dịch ngay
-        onMarket: number;     // Số lượng đang treo bán trên chợ
-        tradeProtected: number;
-        hold: number;         // Số lượng đang bị hold
-        holdDetails?: Array<{
-          quantity: number;
-          holdDays: number;
-        }>;
-      };
-    }>;
-    tradeHoldUntil?: Date;    // Ngày hết hạn hold giao dịch (nếu có)
-    isTemporaryPrice?: boolean;
-    storageUnitId?: string;   // Liên kết tới _id của 'storage_units' (nếu hòm nằm trong Storage Unit)
-    createdAt: Date;
-    updatedAt: Date;
-  }
-  ```
-- **Indexes:**
-  - Mặc định tìm kiếm và sắp xếp theo `{ ownerId: 1 }` và `{ createdAt: -1 }`.
+## Quy Tắc Dependency
 
-#### 3. Collection: `price_snapshots`
-Lưu lịch sử biến động giá của từng hòm để vẽ biểu đồ và phân tích giá.
-- **Cấu trúc Document:**
-  ```typescript
-  {
-    _id: ObjectId;
-    caseId: string;           // Liên kết tới _id của 'cases'
-    price: number;            // Mức giá ghi nhận được (VND)
-    currency: string;         // Tiền tệ ("VND")
-    source: string;           // Nguồn lấy giá (ví dụ: "steam-market", "csgotrader-fallback")
-    capturedAt: Date;         // Thời gian ghi nhận giá
-  }
-  ```
-- **Indexes:**
-  - Compound Index: `{ caseId: 1, capturedAt: -1 }` giúp tối ưu việc lấy giá mới nhất hoặc giá gần nhất trước một thời điểm cụ thể của hòm.
+### Hướng phụ thuộc nên giữ
 
-#### 4. Collection: `storage_units`
-Lưu trữ thông tin chi tiết các hòm lưu trữ (Storage Units) chứa đồ của người dùng từ Steam.
-- **Cấu trúc Document:**
-  ```typescript
-  {
-    _id: ObjectId;
-    ownerId: string;          // Mặc định: "guest"
-    steamId64: string;        // SteamID của tài khoản sở hữu
-    assetId: string;          // ID vật phẩm Storage Unit trên Steam
-    name: string;             // Tên hòm lưu trữ (do người dùng đặt)
-    iconUrl: string | null;
-    currentCount: number;     // Tổng số lượng item trong hòm (tối đa 1000)
-    items: Array<{            // Danh sách các hòm CS2 bên trong Storage Unit
-      caseId: string;
-      marketHashName: string;
-      quantity: number;
-      addedAt: Date;
-    }>;
-    createdAt: Date;
-    updatedAt: Date;
-  }
-  ```
+```text
+components -> lib/api-client -> app/api
+app/api -> services -> domain
+services -> infrastructure khi cần truy cập driver cụ thể
+infrastructure -> domain
+utils/types -> được dùng bởi nhiều layer
+```
 
-#### 5. Collection: `post_analysis_history`
-Lưu trữ lịch sử phân tích các bài đăng rao vặt mua bán hoặc hình ảnh chụp kho đồ của người dùng.
-- **Cấu trúc Document:**
-  ```typescript
-  {
-    _id: ObjectId;
-    fingerprint: string;      // Mã MD5 hash/fingerprint của nội dung text/ảnh để tránh phân tích trùng lặp
-    text: string;             // Nội dung text phân tích
-    imageFileName?: string;
-    imageCloudinaryUrl?: string; // Link ảnh upload lên Cloudinary
-    analysis: {               // Kết quả phân tích trích xuất từ Gemini AI
-      itemSource: "text" | "image";
-      cacheStatus?: "hit" | "miss";
-      itemRate: number;
-      allRate: number;
-      totalQuantity: number;
-      totalSteamValue: number;
-      totalItemRateValue: number;
-      totalAllRateValue: number;
-      rows: Array<{
-        inputName: string;
-        marketHashName: string;
-        name: string;
-        imageUrl?: string;
-        quantity: number;
-        steamUnitPrice: number | null;
-        itemRateUnitPrice: number | null;
-        allRateTotalPrice: number | null;
-      }>;
-      unknownItems: Array<{ inputName: string; quantity: number }>;
-    };
-    createdAt: Date;
-    updatedAt: Date;
-  }
-  ```
-- **Indexes:**
-  - `{ fingerprint: 1 }` (Unique): Ngăn ngừa việc trùng lặp lượt phân tích.
-  - `{ updatedAt: -1 }`: Hỗ trợ sắp xếp nhật ký gần đây.
+### Không nên làm
 
-#### 6. Collection: `portfolio_accounts`
-Lưu trữ thông tin liên kết tài khoản Steam và cookie của người dùng.
-- **Cấu trúc Document:**
-  ```typescript
-  {
-    _id: ObjectId;
-    ownerId: string;          // ID người dùng sở hữu (google:id hoặc "guest")
-    steamId64: string;        // SteamID64 (17 chữ số) của tài khoản
-    name: string;             // Tên hiển thị Steam
-    avatarUrl: string | null; // Đường dẫn ảnh đại diện Steam
-    steamUrl: string;         // Link profile Steam
-    steamCookie?: string;     // Cookie steamLoginSecure (được mã hóa AES-256)
-    cookieError?: string | null; // Thông báo lỗi nếu cookie hết hạn/không hợp lệ
-    createdAt: Date;
-    updatedAt: Date;
-  }
-  ```
-- **Indexes:**
-  - `{ ownerId: 1, steamId64: 1 }` (Unique): Đảm bảo tính duy nhất.
+- `services` import từ `components`.
+- `lib/api-client` import từ `components` hoặc `stores`.
+- `domain` import framework, database, React, Next.js.
+- API route mới chứa nhiều logic nghiệp vụ dài hàng trăm dòng.
+- Type dùng chung nằm trong barrel UI rồi bị server/service import ngược.
 
-#### 7. Collection: `inventory_scan_cache`
-Lưu cache quét hòm đồ Steam theo tài khoản nhằm tối ưu hóa số lượt gọi API của Steam.
-- **Cấu trúc Document:**
-  ```typescript
-  {
-    _id: ObjectId;
-    steamId64: string;        // SteamID64 của tài khoản
-    profile: {
-      name: string;
-      avatarUrl: string | null;
-    };
-    items: Array<{            // Danh sách các vật phẩm quét được
-      caseItem: {
-        id: string;
-        name: string;
-        marketHashName: string;
-        imageUrl: string | null;
-        isActive: boolean;
-      };
-      type: "Case" | "Capsule" | "Sticker" | "Skin";
-      quantity: number;
-      price: number;          // Giá VND thời điểm quét
-      total: number;
-      holdDays?: number;      // Số ngày bị hold
-      tradeHoldUntil?: string; // Thời điểm hết hold (ISO String)
-      onMarket?: boolean;
-      tradeProtected?: boolean;
-    }>;
-    totalPrice: number;
-    totalQuantity: number;
-    totalInventoryCount: number;
-    scannedAt: Date;
-    expiresAt: Date;          // Ngày hết hạn cache (hết hạn vào lúc 14:00 hàng ngày)
-    marketScanWarning?: boolean;
-    storageUnits?: Array<{
-      assetId: string;
-      name: string;
-      iconUrl: string | null;
-    }>;
-    hasCookie?: boolean;
-  }
-  ```
-- **Indexes:**
-  - `{ steamId64: 1 }`: Phục vụ tìm kiếm nhanh.
-  - `{ expiresAt: 1 }` (TTL Index): Tự động xóa cache quá hạn.
+### Khi cần thêm code mới
 
-#### 8. Collection: `users`
-Lưu trữ thông tin người dùng được tạo thông qua đăng nhập Google OAuth.
-- **Cấu trúc Document:**
-  ```typescript
-  {
-    _id: ObjectId;
-    provider: "google";
-    providerAccountId: string;
-    email: string;
-    name: string;
-    image: string | null;
-    createdAt: Date;
-    updatedAt: Date;
-  }
-  ```
-- **Indexes:**
-  - `{ provider: 1, providerAccountId: 1 }` (Unique)
+| Nếu bạn đang thêm | Nên đặt ở đâu |
+| --- | --- |
+| UI feature | `src/components/<feature>` |
+| Hook riêng của feature | `src/components/<feature>/hooks` |
+| Fetch wrapper client-side | `src/lib/api-client` |
+| Route handler | `src/app/api/<feature>` |
+| Business logic server-side | `src/services` |
+| Entity hoặc repository interface | `src/domain` |
+| Mongo repository/mapper/driver | `src/infrastructure` |
+| DTO/type dùng chung | `src/types` |
+| Helper thuần | `src/utils` |
 
----
+## Layer Chi Tiết
 
-## 3. Tích Hợp API Bên Ngoài (External API Integrations)
+### Presentation: `src/components`
+
+UI được chia theo feature:
+
+- `dashboard`: màn portfolio tổng, cards, import Excel, mutations.
+- `portfolio`: bảng portfolio, dialog thêm/sửa, Storage Unit panel, item detail.
+- `inventory-scanner`: UI quét inventory, filter, column, price retry.
+- `steam-accounts`: liên kết account, cookie, wallet, sync, Storage Unit.
+- `post-analyzer`: nhập bài đăng/HTML/ảnh và hiện kết quả AI.
+- `auth`: session, Google login status, CS2Cap API key modal.
+- `ui`: primitive UI dùng chung.
+
+Nguyên tắc: component nên gọi `src/lib/api-client` hoặc hook feature, không nên gọi MongoDB/secret/server service trực tiếp.
+
+### Client API: `src/lib/api-client`
+
+Đây là nơi đóng gói các request từ browser tới API routes:
+
+- `portfolio-api.ts`: CRUD portfolio, refresh price, import Excel streaming.
+- `steam-accounts-api.ts`: Steam account, cookie check, Storage Unit list.
+- `buff-api.ts`: refresh giá BUFF163 cho item.
+
+Layer này nên thuần `fetch`, trả data/error rõ ràng. Nếu cần cập nhật store UI, dùng callback hoặc xử lý trong hook component.
+
+### API Boundary: `src/app/api`
+
+Route handler nên làm 4 việc:
+
+1. Đọc session/owner/admin.
+2. Validate input.
+3. Gọi service/repository.
+4. Trả `NextResponse`.
+
+Một số route hiện vẫn có logic lớn, đặc biệt:
+
+- `portfolio/import-inventory`
+- `portfolio/accounts/sync`
+- `portfolio/accounts/sync/single`
+- `portfolio/[id]`
+
+Khi refactor, ưu tiên đưa orchestration sang service riêng để route mỏng hơn.
+
+### Services: `src/services`
+
+Đây là nơi chứa logic nghiệp vụ:
+
+- `portfolio-service.ts`: CRUD item có domain rule cơ bản.
+- `portfolio-report-service.ts`: tạo report, tính summary và row.
+- `portfolio-import-service.ts`: import row đã normalize.
+- `portfolio-sync.ts`: logic sync inventory vào portfolio.
+- `scan-service.ts`: scan Steam inventory, market listings, hold, pricing.
+- `scan-cache.ts`, `scan-job-store.ts`: cache và job state.
+- `auth-service.ts`: Google OAuth, session, admin check.
+- `post-analysis-service.ts`: Gemini analysis và history.
+- `crypto-service.ts`: mã hóa/giải mã dữ liệu nhạy cảm.
+
+Service mới nên tránh import UI. Nếu cần type từ UI, hãy đưa type đó sang `src/types` hoặc `src/domain`.
+
+### Domain: `src/domain`
+
+Layer domain giữ các type/contract cốt lõi:
+
+- `case-item.ts`
+- `portfolio-item.ts`
+- `portfolio-report.ts`
+- `price.ts`
+- `storage-unit.ts`
+- `repositories.ts`
+- `price-provider.ts`
+- `pattern-info.ts`
+
+Domain nên thuần TypeScript, không biết MongoDB, Next.js hay React.
+
+### Infrastructure: `src/infrastructure`
+
+Chứa chi tiết kỹ thuật:
+
+- `db/mongo-client.ts`: kết nối MongoDB, bootstrap index lazy.
+- `db/ensure-indexes.ts`: tạo index cần thiết.
+- `db/mappers.ts`: map Mongo document <-> domain.
+- `repositories/*`: repository MongoDB.
+- `price/steam-market-price-provider.ts`: Steam Market, CSGOTrader fallback, tỷ giá USD/VND.
+- `steam.ts`: Steam profile, cookie, wallet, eligibility.
+- `cloudinary.ts`: upload ảnh.
+- `rate-limiter.ts`: rate limit MongoDB-backed.
+- `gemini-retry.ts`: retry/backoff cho Gemini.
+
+## Luồng Dữ Liệu Chính
+
+### 1. Portfolio dashboard
 
 ```mermaid
 sequenceDiagram
-    participant App as CS2 Case Tracker
-    participant Steam as Steam Market API
-    participant CSGO as CSGOTrader Prices API
-    participant CS2Cap as CS2Cap API (BUFF163)
-    participant Gemini as Google Gemini AI API
-    
-    rect rgb(20, 20, 30)
-        note right of App: Luồng cập nhật giá hòm
-        App->>Steam: Request Price (AppID: 730, Currency: 15)
-        alt Steam trả về 200 OK
-            Steam-->>App: Trả về giá VND
-        else Steam bị Rate Limit (429) hoặc Lỗi (500)
-            App->>CSGO: Request latest prices (USD)
-            CSGO-->>App: Trả về JSON giá hòm (USD)
-            App->>App: Lấy tỷ giá USD/VND hiện tại & quy đổi thành VND
-        end
-        App->>CS2Cap: Request BUFF163 price (CNY)
-        CS2Cap-->>App: Trả về giá CNY & quy đổi thành VND theo tỷ giá tùy chỉnh
-    end
+    participant UI as Portfolio UI
+    participant Client as lib/api-client/portfolio-api
+    participant API as /api/portfolio
+    participant Service as PortfolioReportService
+    participant Repo as Mongo repositories
+    participant DB as MongoDB
 
-    rect rgb(30, 20, 20)
-        note right of App: Luồng phân tích bằng AI
-        App->>Gemini: Gửi text bài đăng hoặc ảnh kho đồ
-        Gemini-->>App: Trả về JSON danh sách hòm & số lượng trích xuất được
-    end
+    UI->>Client: fetchPortfolioReport()
+    Client->>API: GET /api/portfolio
+    API->>Service: build report for ownerId
+    Service->>Repo: load items, cases, prices
+    Repo->>DB: query collections
+    DB-->>Repo: documents
+    Repo-->>Service: domain models
+    Service-->>API: PortfolioReportDto
+    API-->>Client: JSON
+    Client-->>UI: report
 ```
 
-### 1. Steam Community Market API
-- **Endpoint:** `https://steamcommunity.com/market/priceoverview/`
-- **Chức năng:** Lấy giá hiện tại (lowest_price / median_price) của hòm theo `market_hash_name`.
-- **Hạn chế:** Steam chặn rate limit rất gắt (lỗi 429).
-- **Giải pháp:** Hệ thống sử dụng cơ chế retry thông minh và tự động chuyển sang sử dụng API của CSGOTrader làm fallback khi gặp lỗi 429.
+### 2. Inventory scan
 
-### 2. CSGOTrader Price API
-- **Endpoint:** `https://prices.csgotrader.app/latest/steam.json`
-- **Chức năng:** Tải file JSON chứa giá toàn bộ vật phẩm Steam (theo USD).
-- **Cơ chế cache:** Hệ thống tải file này và lưu cache thành file `steam_prices_fallback_cache.json` local (hết hạn sau 6 giờ) để tránh spam API bên ngoài. Khi quy đổi sang VND, hệ thống sẽ gọi API tỷ giá từ Exchange Rate API (`https://open.er-api.com/v6/latest/USD`) để cập nhật tỷ giá tự động theo thời gian thực.
+```mermaid
+sequenceDiagram
+    participant UI as Inventory Scanner
+    participant API as /api/inventory/scan
+    participant Jobs as ScanJobStore
+    participant Scan as ScanService
+    participant Steam as Steam
+    participant Price as Price Provider
 
-### 3. CS2Cap API (BUFF163 Prices)
-- **Endpoint:** `https://api.cs2c.app/v1/`
-- **Chức năng:** Lấy giá BUFF163 thực tế (nhà cung cấp `buff163`, đơn vị tệ CNY).
-- **Cách thức hoạt động:** 
-  1. Gửi request POST tới `/v1/items` với body `{ market_hash_names: [name] }` để lấy ID định danh (`item_id`) của vật phẩm trên CS2Cap.
-  2. Gửi request GET tới `/v1/prices` kèm tham số `item_id`, `providers=buff163`, `currency=CNY` để lấy mức giá chào bán thấp nhất (`lowest_ask`) quy đổi ra CNY (chia cho 100).
-- **Authentication:** Yêu cầu header `Authorization: Bearer <CS2CAP_API_KEY>`.
+    UI->>API: POST scan request
+    API->>Jobs: create job
+    API-->>UI: jobId
+    Jobs->>Scan: run in background
+    Scan->>Steam: fetch inventory/listings
+    Scan->>Price: resolve prices
+    UI->>API: GET scan?jobId=...
+    API-->>UI: progress or result
+```
 
-### 4. Google Gemini AI API
-- **Model:** `gemini-2.5-flash`
-- **Chức năng:** Nhận diện ký tự và ngôn ngữ tự nhiên từ ảnh chụp kho đồ hoặc văn bản bài đăng, sau đó phân tích thành cấu trúc dữ liệu JSON gồm: tên hòm, số lượng, tỷ giá bán mong muốn.
+### 3. Steam account sync
 
-### 5. Cloudinary API
-- **Chức năng:** Lưu trữ tạm thời các file ảnh kho đồ người dùng tải lên để Gemini AI xử lý, đảm bảo tốc độ và bảo mật đường truyền.
+```mermaid
+flowchart TD
+    A["User clicks sync"] --> B["/api/portfolio/accounts/sync"]
+    B --> C["Load linked accounts"]
+    C --> D["Scan each Steam inventory"]
+    D --> E["Match cases/items"]
+    E --> F["Update portfolio_items"]
+    E --> G["Update storage_units"]
+    F --> H["Return streaming progress"]
+    G --> H
+```
+
+### 4. Post analyzer
+
+```mermaid
+flowchart TD
+    A["Text / HTML / image input"] --> B["API post analyzer route"]
+    B --> C["Rate limit + validation"]
+    C --> D["Create fingerprint"]
+    D --> E{"Cache hit?"}
+    E -->|Yes| F["Return cached result"]
+    E -->|No| G["Upload image if needed"]
+    G --> H["Call Gemini"]
+    H --> I["Normalize result"]
+    I --> J["Save history"]
+    J --> K["Return analysis"]
+```
+
+## MongoDB Collections
+
+| Collection | Vai trò | Ghi chú |
+| --- | --- | --- |
+| `users` | User Google OAuth | unique theo provider/providerAccountId |
+| `portfolio_accounts` | Steam account liên kết | ownerId + steamId64 unique |
+| `portfolio_items` | Item trong portfolio | ownerId là filter quan trọng |
+| `cases` | Catalog case/item | search theo name/marketHashName |
+| `price_snapshots` | Lịch sử giá | caseId + capturedAt |
+| `storage_units` | Storage Unit của Steam | ownerId + steamId64 |
+| `inventory_scan_cache` | Cache scan inventory | TTL theo `expiresAt` |
+| `scan_jobs` | Job scan ngắn hạn | TTL 1 giờ |
+| `post_analysis_history` | Kết quả/cached AI analysis | fingerprint unique |
+| `rate_limits` | Rate limit theo key/IP | TTL theo `updatedAt` |
+| `bug_reports` | Bug report của user | admin đọc/đổi status |
+
+Index được tạo trong `src/infrastructure/db/ensure-indexes.ts`. Hàm này được gọi lazy trong `getDatabase()`.
+
+## Owner, Auth Và Admin
+
+- User đăng nhập qua Google OAuth.
+- User chưa đăng nhập có guest owner/session riêng.
+- Data user-facing cần filter bằng `ownerId`.
+- Helper owner filter nằm ở `src/infrastructure/db/owner-filter.ts`.
+- Admin được xác định qua `ADMIN_EMAILS`.
+- Trong production, admin route/API không nên fail-open nếu chưa cấu hình admin.
+
+## Bảo Mật Dữ Liệu
+
+- Steam cookie và CS2Cap key cần được mã hóa trước khi lưu.
+- Secret chỉ được đọc server-side từ env.
+- Image proxy cần giới hạn domain hợp lệ để tránh SSRF.
+- Rate limit áp dụng cho API tốn tài nguyên cao: Gemini, CS2Cap validate, price retry, bug report.
+- File upload cần validate mime type, kích thước và số lượng.
+- Khi thao tác Storage Unit/portfolio, luôn kèm owner filter.
+
+## External Integrations
+
+| Service | Dùng cho | Vị trí chính |
+| --- | --- | --- |
+| Steam Community | profile, inventory, market listings, wallet | `src/infrastructure/steam.ts`, `src/services/scan-service.ts` |
+| Steam Market | giá Steam | `src/infrastructure/price/steam-market-price-provider.ts` |
+| CSGOTrader | fallback giá khi Steam rate limit | `src/infrastructure/price/steam-market-price-provider.ts` |
+| CS2Cap | giá BUFF163 và validate key | `src/utils/api-client.ts`, `src/services/parser/buff-price-client.ts` |
+| CSFloat | inspect float/paint seed | `src/services/pattern/csfloat-client.ts` |
+| Gemini | phân tích text/HTML/ảnh | `src/services/parser/gemini-client.ts` |
+| Cloudinary | upload ảnh cho analyzer/bug report | `src/infrastructure/cloudinary.ts` |
+
+## Refactor Roadmap
+
+Những điểm nên ưu tiên khi có thời gian:
+
+1. Tách route import/sync lớn thành service nhỏ hơn.
+2. Chia component rất lớn thành subcomponent/hook theo domain UI.
+3. Giảm việc `services` phụ thuộc trực tiếp `infrastructure` nếu muốn đi theo Clean Architecture chặt hơn.
+4. Chuẩn hóa DTO cho request/response API.
+5. Bổ sung test cho service quan trọng trước khi refactor sync/import sâu hơn.

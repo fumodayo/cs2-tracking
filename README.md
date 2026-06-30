@@ -1,125 +1,208 @@
-# CS2 Case Tracker 📦
+# CS2 Tracking
 
-Ứng dụng theo dõi, quản lý kho hòm (Cases) Counter-Strike 2, tích hợp cập nhật giá tự động qua Steam Market API và phân tích bài viết/hình ảnh kho đồ (Post & Image Inventory Analysis) sử dụng AI.
+CS2 Tracking là ứng dụng Next.js dùng để theo dõi portfolio vật phẩm Counter-Strike 2, quét inventory Steam, đồng bộ nhiều tài khoản Steam, quản lý Storage Unit, lấy giá Steam/BUFF163 và phân tích bài đăng bằng AI.
 
----
+Tài liệu này là lối vào nhanh cho người mới mở repo. Nếu cần chi tiết hơn:
 
-## 🚀 Tính Năng Chính
+- [Kiến trúc hệ thống](./docs/ARCHITECTURE.md)
+- [API reference](./docs/api-reference.md)
+- [Hướng dẫn deploy](./docs/DEPLOYMENT.md)
 
-- **Quản lý Portfolio:** Theo dõi số lượng hòm, giá mua (VND), tính toán lợi nhuận/thua lỗ (Profit/Loss) thời gian thực.
-- **Định Giá Đa Nguồn (Steam & BUFF163):** 
-  - Tự động lấy giá trực tiếp từ Steam Market (VND).
-  - Tích hợp cổng API CS2Cap để lấy giá BUFF163 (CNY), tự động chuyển đổi sang VND theo tỷ giá tùy chỉnh.
-  - Cơ chế fallback thông minh sử dụng cơ sở dữ liệu giá của CSGOTrader khi bị rate limit (lỗi 429) kèm cache giá local 6 giờ.
-- **Quét Kho Đồ Chuyên Sâu (Inventory Scanner):**
-  - Quét trực tiếp kho đồ Steam qua SteamID64 (hỗ trợ cả kho đồ public và private/Family View qua cookie bảo mật `steamLoginSecure` và `steamparental`).
-  - Hỗ trợ nhập và tự động gộp số lượng hòm nằm bên trong các **Storage Units**.
-  - Phân tích chi tiết trạng thái hòm: tradeable (giao dịch được), hold (bị giữ giao dịch với chi tiết số ngày hold), trade-protected (được bảo vệ) và item đang treo trên Steam Market.
-  - Cơ chế lưu cache quét kho đồ thông minh, tự động hết hạn vào lúc 14:00 hàng ngày (giờ UTC+7) để giảm thiểu số lượt gọi Steam API.
-- **Trình Phân Tích Bài Đăng & Hình Ảnh (Post Analyzer):** 
-  - Sử dụng Google Gemini AI (`gemini-2.5-flash`) để phân tích danh sách hòm từ bài đăng Facebook (văn bản) hoặc ảnh chụp màn hình kho đồ để trích xuất số lượng và định giá nhanh.
-  - Cơ chế chống quá tải rate limit cho Gemini AI và cache kết quả phân tích theo MD5 fingerprint để tiết kiệm chi phí gọi API.
-- **Import/Export Excel:** Nhập hoặc xuất danh sách hòm theo dõi thông qua file Excel nhanh chóng.
-- **Hỗ trợ Đa ngôn ngữ (i18n) & Bảo mật:** Giao diện song ngữ Việt - Anh, hỗ trợ đăng nhập qua Google OAuth và mã hóa AES các thông tin cookie nhạy cảm của người dùng.
+## Chức Năng Chính
 
----
+- **Portfolio**: thêm, sửa, xóa, import/export Excel, tính tổng vốn, giá hiện tại, lợi nhuận và phân bổ vật phẩm.
+- **Inventory Scanner**: quét inventory Steam public/private, hỗ trợ cookie, Family View, item đang bán trên Market, trade hold và Storage Unit.
+- **Steam Accounts Sync**: liên kết nhiều tài khoản Steam, đồng bộ từng account hoặc tất cả account vào portfolio.
+- **Giá và pattern**: lấy giá Steam Market, BUFF163 qua CS2Cap, inspect float/paint seed qua CSFloat, tính overpay cho một số pattern.
+- **Post Analyzer**: dùng Gemini để phân tích bài đăng/HTML/ảnh và trích xuất danh sách vật phẩm.
+- **Auth và admin**: Google OAuth, session cookie, guest data, admin bug reports.
+- **i18n**: giao diện tiếng Việt và tiếng Anh.
 
-## 📁 Cấu Trúc Thư Mục Dự Án (`src/`)
+## Tech Stack
 
-Dự án áp dụng mô hình **Clean Architecture / Domain-Driven Design (DDD) lai** tối ưu hóa các module tính năng (Feature-based Modular UI):
+| Phần | Công nghệ |
+| --- | --- |
+| Framework | Next.js App Router, React 19, TypeScript |
+| UI | Tailwind CSS, Radix UI, lucide-react, framer-motion |
+| Data fetching | TanStack Query, fetch API |
+| Database | MongoDB |
+| Validation | Zod |
+| AI | Google Gemini |
+| External CS2 | Steam Community/Market, CS2Cap, CSFloat, CSGOTrader fallback |
+| Tooling | ESLint, Prettier, Vitest |
 
-```
-src/
-├── app/                  # Next.js App Router (Pages, API Endpoints)
-├── components/           # UI Components chia theo các Feature Modules riêng biệt
-│   ├── dashboard/        # Dashboard chính & điều phối (Dashboard Orchestrator, cards...)
-│   ├── portfolio/        # Module Portfolio (bảng danh mục, cột, import/export Excel...)
-│   ├── post-analyzer/    # Module phân tích bài viết & hình ảnh AI (Facebook, Manual...)
-│   ├── steam-accounts/   # Module liên kết & quản lý các tài khoản Steam (Storage Units...)
-│   ├── inventory-scanner/# Module quét kho đồ qua Steam API
-│   ├── ui/               # Các UI components nguyên bản dùng chung (Button, Dialog...)
-│   └── auth/             # Các thành phần xác thực (Session Provider...)
-├── domain/               # Core Business Models & Repository Interfaces (Purity)
-│   ├── case-item.ts      # Mô hình hòm CS2
-│   ├── portfolio-item.ts # Mô hình vật phẩm theo dõi trong danh mục
-│   ├── storage-unit.ts   # Mô hình hòm lưu trữ (Storage Unit) của Steam
-│   ├── price.ts          # Mô hình giá và lịch sử giá (Price Snapshot)
-│   └── repositories.ts   # Định nghĩa Interface cho các Repository
-├── infrastructure/       # Triển khai kỹ thuật (Database, Steam Driver, Gemini Client...)
-│   ├── db/               # Kết nối MongoDB (mongo-client.ts) và mappers dữ liệu
-│   ├── price/            # Steam Market API Client & CSGOTrader Price Fallback
-│   ├── repositories/     # Triển khai cụ thể các Repository với MongoDB
-│   ├── steam.ts          # Steam Integration Driver (fetch API, parse cookies)
-│   └── gemini-retry.ts   # Cơ chế retry & chống quá tải (rate limit) khi gọi Gemini AI
-├── services/             # Application Services (Xử lý logic nghiệp vụ chính)
-│   ├── parser/           # Engine phân tích dữ liệu Facebook (parser, image-extractor)
-│   ├── portfolio-service.ts        # Quản lý thêm/sửa/xóa portfolio
-│   ├── portfolio-report-service.ts # Tính toán tổng quan, thống kê, phân phối hòm
-│   ├── price-service.ts            # Quản lý cập nhật giá hòm
-│   ├── post-analysis-service.ts    # Logic gọi Gemini AI phân tích bài đăng/hình ảnh
-│   └── auth-service.ts             # Xử lý xác thực người dùng
-├── stores/               # Các micro-state store (import-store, sync-store, toast-store)
-├── types/                # TypeScript type definitions chung
-└── utils/                # Các hàm tiện ích định dạng (format.ts) và css (cn.ts)
+## Chạy Local
+
+### 1. Yêu cầu
+
+- Node.js 20+
+- npm
+- MongoDB local hoặc MongoDB Atlas
+
+### 2. Cài dependencies
+
+```bash
+npm install
 ```
 
----
+### 3. Tạo file môi trường
 
-## 🗄️ Cấu Trúc Database (MongoDB)
+Copy `.env.example` thành `.env.local` hoặc `.env`, rồi điền các biến cần thiết.
 
-Dự án sử dụng cơ sở dữ liệu MongoDB để lưu trữ dữ liệu. Cấu trúc chi tiết các Collection và mối quan hệ được trình bày chi tiết tại:  
-👉 [Tài liệu Kiến trúc & Database (docs/ARCHITECTURE.md)](./docs/ARCHITECTURE.md)
+Tối thiểu để app khởi động:
 
-Các Collection chính:
-1. `cases`: Danh mục các loại hòm CS2 được hỗ trợ (ID, tên hiển thị, tên market_hash_name, ảnh, độ hiếm...).
-2. `portfolio_items`: Danh sách các hòm người dùng đang theo dõi (số lượng, giá mua, tài khoản nguồn, storage unit, ngày hết hold, trạng thái...).
-3. `price_snapshots`: Lịch sử biến động giá của hòm theo thời gian để vẽ biểu đồ (VND, nguồn: steam-market hoặc csgotrader-fallback).
-4. `storage_units`: Thông tin các hòm lưu trữ (Storage Units) được import từ Steam (ID, tên, tổng số lượng, danh sách item bên trong).
-5. `post_analysis_history`: Nhật ký và cache kết quả phân tích bài đăng/hình ảnh kho đồ qua Gemini AI, sử dụng fingerprint MD5 để tránh trùng lặp.
-6. `portfolio_accounts`: Danh sách tài khoản Steam được người dùng liên kết (SteamID64, profile name, avatar, steamCookie mã hóa...).
-7. `inventory_scan_cache`: Cache lưu trữ dữ liệu quét kho đồ của từng tài khoản Steam, tự động hết hạn hàng ngày.
-8. `users`: Thông tin tài khoản người dùng đăng nhập bằng Google OAuth.
-
----
-
-## 🛠️ Hướng Dẫn Cài Đặt & Chạy Dự Án
-
-### 1. Yêu Cầu Hệ Thống
-- Node.js 18+ hoặc 20+
-- MongoDB instance (đang chạy local hoặc MongoDB Atlas)
-
-### 2. Thiết Lập Biến Môi Trường (`.env`)
-Tạo file `.env` từ file `.env.example` và điền đầy đủ thông tin:
 ```bash
 MONGODB_URI=mongodb://127.0.0.1:27017
 MONGODB_DB=cs2_case_tracker
-
-# API Key của Gemini cho tính năng Post Analyzer
-GEMINI_API_KEY=your_gemini_api_key
-GEMINI_MODEL=gemini-2.5-flash
-
-# API Key của CS2Cap cho tính năng lấy giá BUFF163
-CS2CAP_API_KEY=your_cs2cap_api_key
-
-# Cấu hình Google OAuth (Xác thực)
-GOOGLE_CLIENT_ID=your_google_client_id
-GOOGLE_CLIENT_SECRET=your_google_client_secret
-AUTH_SECRET=your_auth_secret
-
-# Cấu hình lưu trữ ảnh Cloudinary
-CLOUDINARY_CLOUD_NAME=your_cloud_name
-CLOUDINARY_API_KEY=your_cloudinary_key
-CLOUDINARY_API_SECRET=your_cloudinary_secret
-
+AUTH_SECRET=replace-with-a-long-random-secret
 NEXT_PUBLIC_APP_URL=http://localhost:3000
 ```
 
-### 3. Cài Đặt và Chạy Dev Mode
-```bash
-# Cài đặt các thư viện phụ thuộc
-npm install
+Bật thêm tính năng theo nhu cầu:
 
-# Chạy server ở chế độ phát triển
+```bash
+GOOGLE_CLIENT_ID=
+GOOGLE_CLIENT_SECRET=
+ADMIN_EMAILS=
+
+GEMINI_API_KEY=
+GEMINI_MODEL=gemini-2.5-flash
+
+CS2CAP_API_KEY=
+CSFLOAT_API_KEY=
+
+CLOUDINARY_CLOUD_NAME=
+CLOUDINARY_API_KEY=
+CLOUDINARY_API_SECRET=
+```
+
+### 4. Chạy dev server
+
+```bash
 npm run dev
 ```
-Ứng dụng sẽ hoạt động tại địa chỉ: [http://localhost:3000](http://localhost:3000)
+
+Mở `http://localhost:3000`.
+
+## Scripts
+
+| Lệnh | Mục đích |
+| --- | --- |
+| `npm run dev` | Chạy Next.js dev server |
+| `npm run build` | Build production |
+| `npm run start` | Chạy build production |
+| `npm run typecheck` | Kiểm tra TypeScript |
+| `npm run lint` | Kiểm tra ESLint |
+| `npm run lint:fix` | Tự động sửa một phần lỗi lint |
+| `npm run format` | Format bằng Prettier |
+| `npm run test` | Chạy Vitest watch mode |
+| `npm run test:run` | Chạy Vitest một lần |
+
+## Bản Đồ Thư Mục
+
+```text
+src/
+  app/                  Next.js pages, layouts và API routes
+  components/           UI theo từng feature
+  data/                 Dữ liệu tĩnh như tier/pattern/sticker map
+  domain/               Entity, domain type, repository interface
+  hooks/                React hooks dùng chung
+  i18n/                 Bản dịch vi/en
+  infrastructure/       MongoDB, repository implementation, Steam, price provider
+  lib/api-client/       Client-side fetch wrappers cho UI
+  services/             Application services và server-side business logic
+  stores/               Micro stores cho toast, import progress, sync progress
+  types/                TypeScript types dùng chung
+  utils/                Format, validation, error, cookie, URL, local helpers
+```
+
+### Hướng phụ thuộc mong muốn
+
+```text
+components -> lib/api-client -> app/api
+app/api -> services -> domain
+services -> infrastructure khi cần gọi DB/driver cụ thể
+domain -> không phụ thuộc layer khác
+```
+
+Quy ước quan trọng: `services` và `lib/api-client` không import từ `components`. Type/helper dùng chung nên đặt trong `src/types`, `src/utils`, `src/domain` hoặc module riêng phù hợp.
+
+## Các Luồng Chính
+
+### Portfolio
+
+1. UI trong `src/components/dashboard` và `src/components/portfolio`.
+2. UI gọi client API trong `src/lib/api-client/portfolio-api.ts`.
+3. API route ở `src/app/api/portfolio`.
+4. Route gọi service/repository để đọc MongoDB và tính report.
+5. Kết quả trả về `PortfolioReportDto` cho UI hiển thị bảng, card và chart.
+
+### Inventory scan
+
+1. UI trong `src/components/inventory-scanner`.
+2. `POST /api/inventory/scan` tạo scan job.
+3. Client poll `GET /api/inventory/scan?jobId=...`.
+4. `scan-service` gọi Steam inventory, price provider và cache.
+5. Người dùng có thể import kết quả scan vào portfolio qua `/api/portfolio/import-inventory`.
+
+### Steam account sync
+
+1. UI trong `src/components/steam-accounts`.
+2. Account/cookie được lưu trong `portfolio_accounts`.
+3. Sync gọi `/api/portfolio/accounts/sync` hoặc `/sync/single`.
+4. Route scan inventory, đối chiếu portfolio, cập nhật item, Storage Unit và last synced.
+
+### Post analyzer
+
+1. UI trong `src/components/post-analyzer`.
+2. API `/api/post/analyze`, `/api/post/analyze-html`, `/api/post/analyze-chatgpt`.
+3. Service tạo fingerprint, kiểm tra cache, gọi Gemini nếu cần.
+4. Kết quả lưu vào `post_analysis_history`.
+
+## Database Chính
+
+| Collection | Nội dung |
+| --- | --- |
+| `users` | User Google OAuth |
+| `portfolio_accounts` | Steam account đã liên kết và cookie mã hóa |
+| `portfolio_items` | Item trong portfolio |
+| `cases` | Catalog item/case CS2 |
+| `storage_units` | Storage Unit và item bên trong |
+| `price_snapshots` | Lịch sử giá |
+| `inventory_scan_cache` | Cache kết quả scan Steam |
+| `scan_jobs` | Trạng thái job scan ngắn hạn |
+| `post_analysis_history` | Lịch sử/cache phân tích bài đăng |
+| `rate_limits` | Rate limit theo key/IP |
+| `bug_reports` | Bug report từ người dùng |
+
+Index MongoDB được bootstrap lazy trong `src/infrastructure/db/ensure-indexes.ts` khi app lấy database lần đầu.
+
+## Quy Ước Làm Việc
+
+- UI feature đặt trong `src/components/<feature>`.
+- Logic nghiệp vụ server đặt trong `src/services`.
+- Client-side fetch wrapper đặt trong `src/lib/api-client`.
+- Database driver, Mongo repository và external provider đặt trong `src/infrastructure`.
+- Type dùng chung đặt trong `src/types` hoặc `src/domain`.
+- Không đưa secret vào client. Route server phải đọc secret từ env.
+- Khi thêm API mới, cập nhật [API reference](./docs/api-reference.md).
+- Khi thêm collection/index/env mới, cập nhật [Architecture](./docs/ARCHITECTURE.md) và [Deployment](./docs/DEPLOYMENT.md).
+
+## Trang Chính Của App
+
+| Path | Mục đích |
+| --- | --- |
+| `/` | Trang tổng quan/home |
+| `/portfolio` | Dashboard portfolio và Steam accounts |
+| `/inventory-scanner` | Quét inventory Steam |
+| `/post-analysis` | Phân tích bài đăng/ảnh bằng AI |
+| `/admin/bug-reports` | Quản lý bug report cho admin |
+
+## Troubleshooting Nhanh
+
+- **Missing `MONGODB_URI`**: kiểm tra `.env.local` hoặc `.env`.
+- **Không login Google được**: kiểm tra `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, redirect URI và `NEXT_PUBLIC_APP_URL`.
+- **Post Analyzer không chạy**: cần `GEMINI_API_KEY`.
+- **Ảnh upload không có URL**: cần Cloudinary env.
+- **CSFloat bị rate limit**: thêm `CSFLOAT_API_KEY`.
+- **BUFF163 không có giá**: cần API key CS2Cap server-side hoặc user key trong UI.

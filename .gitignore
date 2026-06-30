@@ -16,3 +16,4 @@ steam_prices_fallback_cache.json
 .agent
 scratch
 scratch_lint.txt
+scripts/

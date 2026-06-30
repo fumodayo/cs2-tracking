@@ -57,7 +57,7 @@ const isValueEqual = (a: unknown, b: unknown) => {
  */
 export function useQueryParamsState<T extends QueryParamsConfig>(
   config: T,
-): [QueryParamsState<T>, QueryParamsSetters<T>] {
+): [QueryParamsState<T>, QueryParamsSetters<T>, QueryParamsState<T>] {
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
@@ -81,17 +81,29 @@ export function useQueryParamsState<T extends QueryParamsConfig>(
     return initial;
   });
 
+  // 2. Debounce states changes (for search inputs and fast typers)
+  const [debouncedStates, setDebouncedStates] =
+    useState<QueryParamsState<T>>(states);
+
+  // Keep a ref to debouncedStates to check if URL updates are just catching up with our own debounces
+  const debouncedStatesRef = useRef<QueryParamsState<T>>(debouncedStates);
+  useEffect(() => {
+    debouncedStatesRef.current = debouncedStates;
+  }, [debouncedStates]);
+
   // 1. Sync URL searchParams updates (e.g. back/forward navigation) back to local state
   useEffect(() => {
     setStates((prev) => {
       let changed = false;
       const next = { ...prev };
       const currentConfig = configRef.current;
+      const currentDebounced = debouncedStatesRef.current;
 
       for (const key in currentConfig) {
         const urlValue = searchParams.get(key);
         const parsed = currentConfig[key].parse(urlValue);
-        if (!isValueEqual(next[key], parsed)) {
+        // Only update local state if the URL value differs from both the current state AND the debounced state
+        if (!isValueEqual(next[key], parsed) && !isValueEqual(currentDebounced[key], parsed)) {
           (next as Record<string, unknown>)[key] = parsed;
           changed = true;
         }
@@ -99,10 +111,6 @@ export function useQueryParamsState<T extends QueryParamsConfig>(
       return changed ? next : prev;
     });
   }, [searchParams, configKeysStr]);
-
-  // 2. Debounce states changes (for search inputs and fast typers)
-  const [debouncedStates, setDebouncedStates] =
-    useState<QueryParamsState<T>>(states);
 
   useEffect(() => {
     const timers: NodeJS.Timeout[] = [];
@@ -190,5 +198,5 @@ export function useQueryParamsState<T extends QueryParamsConfig>(
     return s;
   }, [configKeysStr]);
 
-  return [states, setters];
+  return [states, setters, debouncedStates];
 }

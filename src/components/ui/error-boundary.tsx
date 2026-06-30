@@ -3,6 +3,7 @@
 import React, { Component, type ErrorInfo, type ReactNode } from "react";
 import { AlertTriangle, RotateCcw } from "lucide-react";
 import { Button } from "./button";
+import i18n from "i18next";
 
 interface Props {
   children?: ReactNode;
@@ -48,10 +49,10 @@ export class ErrorBoundary extends Component<Props, State> {
             <AlertTriangle className="w-6 h-6" />
           </div>
           <h3 className="text-lg font-semibold text-red-900 dark:text-red-200 mb-2">
-            Đã xảy ra lỗi hệ thống
+            {i18n.t("common.systemError", "A system error occurred")}
           </h3>
           <p className="text-sm text-red-700/80 dark:text-red-400/80 mb-6 max-h-24 overflow-y-auto font-mono text-left w-full p-3 bg-red-100/50 dark:bg-red-950/20 rounded border border-red-200/20">
-            {this.state.error?.message || "Lỗi không xác định trong component."}
+            {this.state.error?.message || i18n.t("common.unknownComponentError", "Unknown error in component.")}
           </p>
           <Button
             onClick={this.handleReset}
@@ -59,7 +60,7 @@ export class ErrorBoundary extends Component<Props, State> {
             className="flex items-center gap-2 border-red-200 hover:bg-red-100/50 dark:border-red-900/40 dark:hover:bg-red-950/30 text-red-700 dark:text-red-300"
           >
             <RotateCcw className="w-4 h-4" />
-            Thử lại
+            {i18n.t("common.retry", "Retry")}
           </Button>
         </div>
       );

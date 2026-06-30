@@ -12,12 +12,14 @@ export type ClientSessionUser = {
 type SessionResponse = {
   user: ClientSessionUser | null;
   googleConfigured: boolean;
+  isAdmin: boolean;
 };
 
 export function useSession() {
   const [session, setSession] = useState<SessionResponse>({
     user: null,
     googleConfigured: true,
+    isAdmin: false,
   });
   const [loading, setLoading] = useState(true);
 
@@ -30,7 +32,7 @@ export function useSession() {
       }
       setSession((await response.json()) as SessionResponse);
     } catch {
-      setSession({ user: null, googleConfigured: false });
+      setSession({ user: null, googleConfigured: false, isAdmin: false });
     } finally {
       setLoading(false);
     }
@@ -53,7 +55,7 @@ export function useSession() {
         }
       } catch {
         if (!cancelled) {
-          setSession({ user: null, googleConfigured: false });
+          setSession({ user: null, googleConfigured: false, isAdmin: false });
         }
       } finally {
         if (!cancelled) {

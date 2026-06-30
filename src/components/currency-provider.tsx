@@ -40,7 +40,7 @@ export function CurrencyProvider({ children }: { children: React.ReactNode }) {
   const formatCurrency = useMemo(() => {
     return (value: number | null | undefined): string => {
       if (value === null || value === undefined || Number.isNaN(value)) {
-        return "Chưa có";
+        return "--";
       }
 
       if (currency === "USD") {

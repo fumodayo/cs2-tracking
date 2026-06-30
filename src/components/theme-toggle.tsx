@@ -2,10 +2,12 @@
 
 import * as ToggleGroup from "@radix-ui/react-toggle-group";
 import { Moon, Sun } from "lucide-react";
+import { useTranslation } from "react-i18next";
 import { useTheme } from "@/components/theme-provider";
 import { cn } from "@/utils/cn";
 
 export function ThemeToggle() {
+  const { t } = useTranslation();
   const { theme, setTheme } = useTheme();
 
   return (
@@ -18,7 +20,7 @@ export function ThemeToggle() {
         }
       }}
       className="inline-flex h-9 items-center rounded-md border border-border bg-surface-muted p-1"
-      aria-label="Chọn giao diện"
+      aria-label={t("auth.changeTheme", "Change theme")}
     >
       <ToggleGroup.Item
         value="light"

@@ -16,17 +16,43 @@ const springTransition = {
   damping: 26,
 } as const;
 
-// Custom high-quality circular SVG flags
-export const UKFlag = () => (
-  <span className="fi fi-gb fis size-5 rounded-full inline-block overflow-hidden shrink-0 border border-border shadow-sm" />
+// Custom high-quality circular SVG flags using inline SVGs for offline capability & CDN-independence
+export const UKFlag = ({ className = "size-5" }: { className?: string }) => (
+  <svg
+    viewBox="0 0 30 30"
+    className={cn("inline-block shrink-0 rounded-full border border-stone-800/10 dark:border-stone-700/30 shadow-sm overflow-hidden", className)}
+  >
+    <rect width="30" height="30" fill="#012169" />
+    <path d="M0,0 L30,30 M30,0 L0,30" stroke="#fff" strokeWidth="4" />
+    <path d="M0,0 L15,15 M30,0 L15,15 M15,15 L0,30 M15,15 L30,30" stroke="#C8102E" strokeWidth="1.5" />
+    <path d="M15,0 v30 M0,15 h30" stroke="#fff" strokeWidth="6" />
+    <path d="M15,0 v30 M0,15 h30" stroke="#C8102E" strokeWidth="3.6" />
+  </svg>
 );
 
-export const VietnamFlag = () => (
-  <span className="fi fi-vn fis size-5 rounded-full inline-block overflow-hidden shrink-0 border border-border shadow-sm" />
+export const VietnamFlag = ({ className = "size-5" }: { className?: string }) => (
+  <svg
+    viewBox="0 0 30 30"
+    className={cn("inline-block shrink-0 rounded-full border border-stone-800/10 dark:border-stone-700/30 shadow-sm overflow-hidden", className)}
+  >
+    <rect width="30" height="30" fill="#da251d" />
+    <path
+      d="M15,6 L20.29,22.28 L6.44,12.22 L23.56,12.22 L9.71,22.28 Z"
+      fill="#ffff00"
+    />
+  </svg>
 );
 
-export const USFlag = () => (
-  <span className="fi fi-us fis size-5 rounded-full inline-block overflow-hidden shrink-0 border border-border shadow-sm" />
+export const USFlag = ({ className = "size-5" }: { className?: string }) => (
+  <svg
+    viewBox="0 0 30 30"
+    className={cn("inline-block shrink-0 rounded-full border border-stone-800/10 dark:border-stone-700/30 shadow-sm overflow-hidden", className)}
+  >
+    <rect width="30" height="30" fill="#fff" />
+    <path d="M0,2.3h30 M0,6.9h30 M0,11.5h30 M0,16.1h30 M0,20.7h30 M0,25.3h30 M0,30h30" stroke="#B22234" strokeWidth="2.3" />
+    <rect width="14" height="16.1" fill="#3C3B6E" />
+    <polygon points="7,8 7.5,9.5 9,9.5 7.8,10.5 8.2,12 7,11 5.8,12 6.2,10.5 5,9.5 6.5,9.5" fill="#fff" />
+  </svg>
 );
 
 export function ThemeSelector() {
@@ -40,8 +66,7 @@ export function ThemeSelector() {
         <Button
           type="button"
           variant="outline"
-          size="icon"
-          className="flex h-9 w-9 cursor-pointer items-center justify-center rounded-lg border border-border bg-surface text-foreground transition-all duration-300 outline-none hover:border-accent hover:shadow-[0_0_12px_rgba(59,130,246,0.15)] active:scale-95"
+          className="flex h-10 w-10 shrink-0 cursor-pointer items-center justify-center rounded-xl border border-border bg-surface text-foreground transition-all duration-300 outline-none hover:border-accent hover:shadow-[0_0_12px_rgba(59,130,246,0.15)] active:scale-95 p-0"
           aria-label="Toggle Theme Options"
         >
           {theme === "dark" ? (
@@ -73,7 +98,7 @@ export function ThemeSelector() {
                 <div className="px-3 pb-2 pt-1 text-[13px] font-bold text-foreground">
                   {t("auth.changeTheme", "Change Theme")}
                 </div>
-                <div className="flex flex-col gap-1">
+                <div className="flex flex-col gap-1.5">
                   <Button
                     type="button"
                     variant="ghost"
@@ -125,7 +150,7 @@ export function LanguageSelector() {
   }, [i18n.language]);
 
   const activeFlag = lang === "vi" ? <VietnamFlag /> : <UKFlag />;
-  const langLabel = lang === "vi" ? "Tiếng Việt" : "English";
+  const langLabel = lang === "vi" ? "Ti\u1ebfng Vi\u1ec7t" : "English";
 
   const handleLangChange = (newLang: "vi" | "en") => {
     setLang(newLang);
@@ -139,11 +164,10 @@ export function LanguageSelector() {
         <Button
           type="button"
           variant="outline"
-          size="sm"
-          className="flex h-9 cursor-pointer items-center gap-0 sm:gap-2 rounded-lg border border-border bg-surface px-2.5 sm:px-3 text-xs font-semibold text-foreground transition-all duration-300 outline-none hover:border-accent hover:shadow-[0_0_12px_rgba(59,130,246,0.15)] active:scale-95"
+          className="flex h-10 shrink-0 cursor-pointer items-center gap-1.5 rounded-xl border border-border bg-surface px-3 text-xs font-bold text-foreground transition-all duration-300 outline-none hover:border-accent hover:shadow-[0_0_12px_rgba(59,130,246,0.15)] active:scale-95"
         >
           {activeFlag}
-          <span className="hidden sm:inline">{langLabel}</span>
+          <span className="hidden md:inline">{langLabel}</span>
         </Button>
       </Popover.Trigger>
 
@@ -168,7 +192,7 @@ export function LanguageSelector() {
                 <div className="px-3 pb-2 pt-1 text-[13px] font-bold text-foreground">
                   {t("auth.changeLanguage", "Change Language")}
                 </div>
-                <div className="flex flex-col gap-1">
+                <div className="flex flex-col gap-1.5">
                   <Button
                     type="button"
                     variant="ghost"
@@ -191,7 +215,7 @@ export function LanguageSelector() {
                     )}
                   >
                     <VietnamFlag />
-                    <span>{lang === "en" ? "Vietnamese" : "Tiếng Việt"}</span>
+                    <span>{lang === "en" ? "Vietnamese" : "Ti\u1ebfng Vi\u1ec7t"}</span>
                   </Button>
                 </div>
               </motion.div>

@@ -15,15 +15,15 @@ import "./globals.css";
 
 export const metadata: Metadata = {
   title: {
-    default: "CS2 Case Tracker",
-    template: "%s | CS2 Case Tracker",
+    default: "CS2 Tracker",
+    template: "%s | CS2 Tracker",
   },
   description:
     "Theo dõi lời lỗ, số lượng, giá trị đầu tư các hòm, capsule, sticker và skin CS2 theo thời gian thực (giá Steam & Buff163).",
   keywords: ["CS2", "Case Tracker", "Steam", "Buff163", "Đầu tư CS2", "CS:GO", "Theo dõi hòm CS2", "Lời lỗ CS2"],
-  authors: [{ name: "CS2 Case Tracker Team" }],
-  creator: "CS2 Case Tracker",
-  publisher: "CS2 Case Tracker",
+  authors: [{ name: "CS2 Tracker Team" }],
+  creator: "CS2 Tracker",
+  publisher: "CS2 Tracker",
   robots: {
     index: true,
     follow: true,
@@ -36,16 +36,16 @@ export const metadata: Metadata = {
     },
   },
   openGraph: {
-    title: "CS2 Case Tracker - Công Cụ Theo Dõi Đầu Tư CS2",
+    title: "CS2 Tracker - Công Cụ Theo Dõi Đầu Tư CS2",
     description:
       "Theo dõi lời lỗ, số lượng, giá trị đầu tư các hòm, capsule, sticker và skin CS2 theo thời gian thực (giá Steam & Buff163).",
-    siteName: "CS2 Case Tracker",
+    siteName: "CS2 Tracker",
     locale: "vi_VN",
     type: "website",
   },
   twitter: {
     card: "summary_large_image",
-    title: "CS2 Case Tracker - Công Cụ Theo Dõi Đầu Tư CS2",
+    title: "CS2 Tracker - Công Cụ Theo Dõi Đầu Tư CS2",
     description:
       "Theo dõi lời lỗ, số lượng, giá trị đầu tư các hòm, capsule, sticker và skin CS2 theo thời gian thực (giá Steam & Buff163).",
   },
@@ -71,9 +71,15 @@ export default function RootLayout({
             <CurrencyProvider>
               <QueryProvider>
                 <TooltipProvider>
+                  <a
+                    href="#main-content"
+                    className="sr-only focus:not-sr-only focus:absolute focus:top-4 focus:left-4 focus:z-50 focus:rounded-md focus:bg-accent focus:px-4 focus:py-2 focus:text-accent-foreground focus:font-bold focus:outline-none"
+                  >
+                    Skip to content
+                  </a>
                   <div className="flex min-h-screen flex-col">
                     <AppNav />
-                    <main className="flex-1">{children}</main>
+                    <main id="main-content" className="flex-1">{children}</main>
                     <AppFooter />
                   </div>
                   <GlobalImportProgress />
