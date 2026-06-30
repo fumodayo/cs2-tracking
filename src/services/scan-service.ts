@@ -496,7 +496,7 @@ export async function runScanJob(
     const itemCounts: Record<string, { count: number; onMarket: boolean }> = {};
     const assetsByDescKey = new Map<string, Array<(typeof allAssets)[number]>>();
     const assetsByDescStatusKey = new Map<string, Array<(typeof allAssets)[number]>>();
-    for (const asset of allAssets) {
+    for (const [assetIndex, asset] of allAssets.entries()) {
       const statusSuffix = asset.onMarket ? '_onMarket' : '_normal';
       const descKey = `${asset.classid}_${asset.instanceid}`;
       const key = `${asset.classid}_${asset.instanceid}${statusSuffix}`;
@@ -520,6 +520,14 @@ export async function runScanJob(
         itemCounts[key] = { count: 0, onMarket: !!asset.onMarket };
       }
       itemCounts[key].count += amount;
+
+      if ((assetIndex + 1) % 1000 === 0) {
+        updateScanJob(jobId, {
+          percent: 56,
+          message: 'analyzingItems',
+          detail: { count: assetIndex + 1, total: allAssets.length },
+        });
+      }
     }
 
     const descMap = new Map<string, (typeof allDescriptions)[0]>();
@@ -563,8 +571,27 @@ export async function runScanJob(
     > = {};
 
     const storageUnits: StorageUnitInfo[] = [];
+    const itemCountEntries = Object.entries(itemCounts);
+    let analyzedGroupCount = 0;
+    let analyzedTargetCount = 0;
+    const updateAnalyzeProgress = () => {
+      updateScanJob(jobId, {
+        percent: 56 + Math.round((analyzedGroupCount / Math.max(itemCountEntries.length, 1)) * 8),
+        message: 'analyzingItems',
+        detail: {
+          count: analyzedGroupCount,
+          total: itemCountEntries.length,
+          assets: analyzedTargetCount,
+        },
+      });
+    };
 
-    for (const [key, info] of Object.entries(itemCounts)) {
+    for (const [key, info] of itemCountEntries) {
+      analyzedGroupCount += 1;
+      if (analyzedGroupCount === 1 || analyzedGroupCount % 25 === 0) {
+        updateAnalyzeProgress();
+      }
+
       const parts = key.split('_');
       const classid = parts[0];
       const instanceid = parts[1];
@@ -686,6 +713,11 @@ export async function runScanJob(
           : [{ asset: firstAsset, count: info.count }];
 
       for (const [targetIndex, target] of scanTargets.entries()) {
+        analyzedTargetCount += 1;
+        if (analyzedTargetCount % 100 === 0) {
+          updateAnalyzeProgress();
+        }
+
         const targetAsset = target.asset;
         const props = targetAsset ? assetPropertiesMap.get(targetAsset.assetid) : undefined;
         const itemCert = props?.find((p) => p.propertyid === 6)?.string_value;
