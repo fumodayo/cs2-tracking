@@ -4,6 +4,7 @@ import { getSteamCaseImageUrl } from '@/infrastructure/cases/steam-case-image-pr
 import { resolveSteamId, fetchSteamWalletBalance } from '@/infrastructure/steam';
 import { parseSteamCookies } from '@/utils/steam-cookies';
 import { USER_AGENTS } from '@/utils/api-client';
+import { fetchWithTimeout } from '@/utils/fetch-with-timeout';
 import type { StorageUnitInfo } from '@/domain/storage-unit';
 
 import { updateScanJob } from '@/services/scan-job-store';
@@ -26,6 +27,9 @@ import type { PatternInfo } from '@/domain/pattern-info';
 
 const STEAM_IMAGE_CDN = 'https://community.cloudflare.steamstatic.com/economy/image';
 const INVENTORY_PRICE_CONCURRENCY = 4;
+const STEAM_COOKIE_VALIDATE_TIMEOUT_MS = 12_000;
+const STEAM_INVENTORY_FETCH_TIMEOUT_MS = 25_000;
+const STEAM_MARKET_LISTINGS_TIMEOUT_MS = 20_000;
 
 type SteamDescription = {
   type: string;
@@ -146,35 +150,49 @@ export async function runScanJob(
         fullCookieHeader += `; sessionid=${sessionidCookie}`;
       }
 
-      const validateRes = await fetch('https://steamcommunity.com/my/inventory', {
-        headers: {
-          'User-Agent': USER_AGENTS.steamBrowser,
-          Cookie: fullCookieHeader,
-        },
-        redirect: 'manual',
-      });
-
-      if (validateRes.status === 302) {
-        const location = validateRes.headers.get('location') || '';
-        if (location.includes('/login/')) {
-          if (ownerId) {
-            const db = await getDatabase();
-            await db.collection('portfolio_accounts').updateOne(
-              { steamId64, ownerId },
-              {
-                $set: {
-                  steamCookie: '',
-                  cookieError: 'cookieExpired',
-                },
-              }
-            );
-          }
-          throw new Error('cookieExpired');
-        }
-      } else if (validateRes.status === 403) {
-        console.warn(
-          `[InventoryScanner] /my/inventory returned 403 (Family View). Proceeding to actual fetch...`
+      let validateRes: Response | null = null;
+      try {
+        validateRes = await fetchWithTimeout(
+          'https://steamcommunity.com/my/inventory',
+          {
+            headers: {
+              'User-Agent': USER_AGENTS.steamBrowser,
+              Cookie: fullCookieHeader,
+            },
+            redirect: 'manual',
+          },
+          STEAM_COOKIE_VALIDATE_TIMEOUT_MS
         );
+      } catch (err) {
+        console.warn(
+          '[InventoryScanner] Cookie preflight timed out/failed. Proceeding to actual fetch...',
+          err
+        );
+      }
+
+      if (validateRes) {
+        if (validateRes.status === 302) {
+          const location = validateRes.headers.get('location') || '';
+          if (location.includes('/login/')) {
+            if (ownerId) {
+              const db = await getDatabase();
+              await db.collection('portfolio_accounts').updateOne(
+                { steamId64, ownerId },
+                {
+                  $set: {
+                    steamCookie: '',
+                    cookieError: 'cookieExpired',
+                  },
+                }
+              );
+            }
+            throw new Error('cookieExpired');
+          }
+        } else if (validateRes.status === 403) {
+          console.warn(
+            `[InventoryScanner] /my/inventory returned 403 (Family View). Proceeding to actual fetch...`
+          );
+        }
       }
 
       hasCookie = true;
@@ -273,7 +291,27 @@ export async function runScanJob(
           inventoryUrl += `&start_assetid=${startAssetId}`;
         }
 
-        const response = await fetch(inventoryUrl, { headers: steamHeaders });
+        let response: Response;
+        try {
+          response = await fetchWithTimeout(
+            inventoryUrl,
+            { headers: steamHeaders },
+            STEAM_INVENTORY_FETCH_TIMEOUT_MS
+          );
+        } catch (err) {
+          if (contextId === 16) {
+            console.error('Context 16 timed out/failed. Skipping trade-protected items.', err);
+            break;
+          }
+          if (allAssets.length > 0) {
+            console.error(
+              'Inventory page timed out/failed after partial results. Continuing.',
+              err
+            );
+            break;
+          }
+          throw err;
+        }
 
         if (response.status === 403) {
           if (contextId === 16) {
@@ -283,9 +321,11 @@ export async function runScanJob(
           if (hasCookie) {
             const fallbackHeaders = { ...steamHeaders };
             delete fallbackHeaders['Cookie'];
-            const fallbackRes = await fetch(inventoryUrl, {
-              headers: fallbackHeaders,
-            });
+            const fallbackRes = await fetchWithTimeout(
+              inventoryUrl,
+              { headers: fallbackHeaders },
+              STEAM_INVENTORY_FETCH_TIMEOUT_MS
+            );
 
             if (ownerId) {
               const db = await getDatabase();
@@ -350,6 +390,9 @@ export async function runScanJob(
     }
 
     // Step 4.5: Scan items currently listed for sale on Steam Market
+    const descriptionKeys = new Set(
+      allDescriptions.map((desc) => `${desc.classid}_${desc.instanceid}`)
+    );
     let marketScanWarning = !hasCookie;
     if (hasCookie) {
       try {
@@ -357,9 +400,9 @@ export async function runScanJob(
         const count = 100;
         let hasMoreListings = true;
         let success = true;
+        let marketScanCount = allAssets.filter((a) => a.onMarket).length;
 
         while (hasMoreListings) {
-          const marketScanCount = allAssets.filter((a) => a.onMarket).length;
           updateScanJob(jobId, {
             percent: 52,
             message: 'scanningMarketListings',
@@ -367,7 +410,11 @@ export async function runScanJob(
           });
 
           const marketUrl = `https://steamcommunity.com/market/mylistings?norender=1&start=${start}&count=${count}`;
-          const marketRes = await fetch(marketUrl, { headers: steamHeaders });
+          const marketRes = await fetchWithTimeout(
+            marketUrl,
+            { headers: steamHeaders },
+            STEAM_MARKET_LISTINGS_TIMEOUT_MS
+          );
           if (!marketRes.ok) {
             console.error(`Steam Market listings error: HTTP ${marketRes.status}`);
             success = false;
@@ -399,9 +446,10 @@ export async function runScanJob(
                   assetid: assetId,
                   onMarket: true,
                 });
+                marketScanCount += 1;
 
                 const key = `${assetDetail.classid}_${assetDetail.instanceid}`;
-                if (!allDescriptions.some((d) => `${d.classid}_${d.instanceid}` === key)) {
+                if (!descriptionKeys.has(key)) {
                   allDescriptions.push({
                     classid: assetDetail.classid,
                     instanceid: assetDetail.instanceid,
@@ -412,6 +460,7 @@ export async function runScanJob(
                     icon_url: assetDetail.icon_url,
                     tags: assetDetail.tags,
                   });
+                  descriptionKeys.add(key);
                 }
               }
             }
@@ -445,10 +494,27 @@ export async function runScanJob(
     });
 
     const itemCounts: Record<string, { count: number; onMarket: boolean }> = {};
+    const assetsByDescKey = new Map<string, Array<(typeof allAssets)[number]>>();
+    const assetsByDescStatusKey = new Map<string, Array<(typeof allAssets)[number]>>();
     for (const asset of allAssets) {
       const statusSuffix = asset.onMarket ? '_onMarket' : '_normal';
+      const descKey = `${asset.classid}_${asset.instanceid}`;
       const key = `${asset.classid}_${asset.instanceid}${statusSuffix}`;
       const amount = parseInt(asset.amount, 10) || 1;
+
+      const descAssets = assetsByDescKey.get(descKey);
+      if (descAssets) {
+        descAssets.push(asset);
+      } else {
+        assetsByDescKey.set(descKey, [asset]);
+      }
+
+      const statusAssets = assetsByDescStatusKey.get(key);
+      if (statusAssets) {
+        statusAssets.push(asset);
+      } else {
+        assetsByDescStatusKey.set(key, [asset]);
+      }
 
       if (!itemCounts[key]) {
         itemCounts[key] = { count: 0, onMarket: !!asset.onMarket };
@@ -534,9 +600,7 @@ export async function runScanJob(
       })();
 
       if (isStorageUnit) {
-        const relatedAssets = allAssets.filter(
-          (a) => a.classid === classid && a.instanceid === instanceid
-        );
+        const relatedAssets = assetsByDescKey.get(descKey) ?? [];
         for (const asset of relatedAssets) {
           storageUnits.push({
             assetId: asset.assetid,
@@ -606,10 +670,7 @@ export async function runScanJob(
         }
       }
 
-      const relatedAssets = allAssets.filter(
-        (a) =>
-          a.classid === classid && a.instanceid === instanceid && !!a.onMarket === !!info.onMarket
-      );
+      const relatedAssets = assetsByDescStatusKey.get(key) ?? [];
       const firstAsset = relatedAssets[0];
       const inspectAction = desc.actions?.find((a) => a.link?.includes('csgo_econ_action_preview'));
       const accessoryDescriptions = parseAccessoryDescriptions([
@@ -754,45 +815,50 @@ export async function runScanJob(
         iconUrlByMarketHashName.set(item.marketHashName, item.iconUrl);
       }
     }
+    const caseItemsByMarketHashName =
+      await caseRepository.findByMarketHashNames(uniqueMarketHashNames);
+    const priceLookupItems: CaseItem[] = uniqueMarketHashNames.map(
+      (marketHashName) =>
+        caseItemsByMarketHashName.get(getMarketHashNameLookupKey(marketHashName)) ?? {
+          id: `ext_${marketHashName}`,
+          name: marketHashName,
+          marketHashName,
+          isActive: false,
+        }
+    );
+    const priceLookupItemByMarketHashName = new Map(
+      uniqueMarketHashNames.map((marketHashName, index) => [
+        marketHashName,
+        priceLookupItems[index],
+      ])
+    );
     let completedPricingCount = 0;
-
-    const priceEntries = await mapWithConcurrency(
-      uniqueMarketHashNames,
-      INVENTORY_PRICE_CONCURRENCY,
-      async (marketHashName): Promise<[string, InventoryPriceInfo]> => {
+    const priceSnapshotsByItemId = await priceService.getCurrentPrices(priceLookupItems, {
+      preferFallback: true,
+      concurrency: INVENTORY_PRICE_CONCURRENCY,
+      onProgress: (caseItem) => {
+        completedPricingCount += 1;
         updateScanJob(jobId, {
           percent:
             65 +
             Math.round((completedPricingCount / Math.max(uniqueMarketHashNames.length, 1)) * 30),
           message: 'pricingItem',
-          detail: { name: marketHashName },
+          detail: { name: caseItem.marketHashName },
         });
+      },
+    });
 
-        const caseItem = await caseRepository.findByMarketHashName(marketHashName);
-        let price = 0;
+    const priceEntries = await mapWithConcurrency(
+      uniqueMarketHashNames,
+      INVENTORY_PRICE_CONCURRENCY,
+      async (marketHashName): Promise<[string, InventoryPriceInfo]> => {
+        const caseItem =
+          caseItemsByMarketHashName.get(getMarketHashNameLookupKey(marketHashName)) ?? null;
+        const priceItem = caseItem ?? priceLookupItemByMarketHashName.get(marketHashName);
+        const price = priceItem ? (priceSnapshotsByItemId.get(priceItem.id)?.price ?? 0) : 0;
         let imageUrl: string | null = caseItem?.imageUrl ?? null;
 
-        if (caseItem) {
-          const priceSnapshot = await priceService.getCurrentPrice(caseItem, {
-            preferFallback: true,
-          });
-          price = priceSnapshot?.price || 0;
-        } else {
-          const virtualItem = {
-            id: `ext_${marketHashName}`,
-            name: marketHashName,
-            marketHashName,
-            isActive: false,
-          };
-          try {
-            const priceSnapshot = await priceService.getCurrentPrice(virtualItem, {
-              preferFallback: true,
-            });
-            price = priceSnapshot?.price || 0;
-          } catch {
-            price = 0;
-          }
-
+        if (!caseItem) {
           const itemIconUrl = iconUrlByMarketHashName.get(marketHashName);
           if (itemIconUrl) {
             imageUrl = `${STEAM_IMAGE_CDN}/${itemIconUrl}/360fx360f`;
@@ -804,15 +870,6 @@ export async function runScanJob(
             }
           }
         }
-
-        completedPricingCount += 1;
-        updateScanJob(jobId, {
-          percent:
-            65 +
-            Math.round((completedPricingCount / Math.max(uniqueMarketHashNames.length, 1)) * 30),
-          message: 'pricingItem',
-          detail: { name: marketHashName },
-        });
 
         return [marketHashName, { caseItem, imageUrl, price }];
       }
@@ -1205,6 +1262,15 @@ function decodeHtmlEntities(value: string): string {
     .replace(/&#39;/g, "'")
     .replace(/&lt;/g, '<')
     .replace(/&gt;/g, '>');
+}
+
+function getMarketHashNameLookupKey(value: string): string {
+  const trimmed = value.trim();
+  try {
+    return decodeURIComponent(trimmed).trim().toLowerCase();
+  } catch {
+    return trimmed.toLowerCase();
+  }
 }
 
 function normalizeSteamImageUrl(url: string): string {

@@ -1,32 +1,23 @@
-import type {
-  PortfolioSourceAccount,
-  CreatePortfolioItemInput,
-} from "@/domain/portfolio-item";
+import type { PortfolioSourceAccount, CreatePortfolioItemInput } from '@/domain/portfolio-item';
 
-export type {
-  PortfolioSourceAccount,
-  CreatePortfolioItemInput,
-};
-import { isRecord } from "@/utils/type-guards";
-import { calculateTradeHoldUntil } from "@/utils/date";
-import type { Db } from "mongodb";
-import crypto from "node:crypto";
-import type { PatternInfo } from "@/domain/pattern-info";
+export type { PortfolioSourceAccount, CreatePortfolioItemInput };
+import { isRecord } from '@/utils/type-guards';
+import { calculateTradeHoldUntil } from '@/utils/date';
+import type { Db } from 'mongodb';
+import crypto from 'node:crypto';
+import type { PatternInfo } from '@/domain/pattern-info';
 import {
   buildItemIdentityKey,
   buildItemVariantKey,
   type ItemIdentityInput,
-} from "@/utils/item-identity";
-export { isRecord } from "@/utils/type-guards";
+} from '@/utils/item-identity';
+export { isRecord } from '@/utils/type-guards';
 
 const DEFAULT_ACCESSORY_PRICE_RATE = 0;
-export const SCANNER_IMPORT_NOTE = "Import từ inventory scanner";
-export const SCANNER_MANUAL_NOTE = "Thủ công từ inventory scanner";
-export const LEGACY_SCANNER_IMPORT_NOTE = "Import tá»« inventory scanner";
-export const SCANNER_IMPORT_NOTES = [
-  SCANNER_IMPORT_NOTE,
-  LEGACY_SCANNER_IMPORT_NOTE,
-] as const;
+export const SCANNER_IMPORT_NOTE = 'Import từ inventory scanner';
+export const SCANNER_MANUAL_NOTE = 'Thủ công từ inventory scanner';
+export const LEGACY_SCANNER_IMPORT_NOTE = 'Import tá»« inventory scanner';
+export const SCANNER_IMPORT_NOTES = [SCANNER_IMPORT_NOTE, LEGACY_SCANNER_IMPORT_NOTE] as const;
 export const SCANNER_PORTFOLIO_NOTES = [
   SCANNER_IMPORT_NOTE,
   SCANNER_MANUAL_NOTE,
@@ -52,34 +43,28 @@ export interface ExistingPortfolioItem {
   stickerScanPriceCapturedAt?: Date;
 }
 
-
 export function normalizeHexColor(value: unknown): string | undefined {
-  if (typeof value !== "string") {
+  if (typeof value !== 'string') {
     return undefined;
   }
 
-  const normalized = value.trim().replace(/^#/, "");
+  const normalized = value.trim().replace(/^#/, '');
   return /^[0-9a-f]{6}$/i.test(normalized) ? `#${normalized}` : undefined;
 }
 
-export function normalizeRarity(
-  value: unknown,
-): { name: string; color: string } | undefined {
+export function normalizeRarity(value: unknown): { name: string; color: string } | undefined {
   if (!isRecord(value)) {
     return undefined;
   }
 
-  const name =
-    typeof value.name === "string" && value.name.trim()
-      ? value.name.trim()
-      : undefined;
+  const name = typeof value.name === 'string' && value.name.trim() ? value.name.trim() : undefined;
   const color = normalizeHexColor(value.color);
   return name && color ? { name, color } : undefined;
 }
 
 export function mergeSourceAccounts(
   first: PortfolioSourceAccount[],
-  second: PortfolioSourceAccount[],
+  second: PortfolioSourceAccount[]
 ): PortfolioSourceAccount[] {
   const map = new Map<string, PortfolioSourceAccount>();
   for (const account of [...first, ...second]) {
@@ -88,18 +73,12 @@ export function mergeSourceAccounts(
       const mergedBreakdown =
         existing.breakdown || account.breakdown
           ? {
-              tradeable:
-                (existing.breakdown?.tradeable ?? 0) +
-                (account.breakdown?.tradeable ?? 0),
-              onMarket:
-                (existing.breakdown?.onMarket ?? 0) +
-                (account.breakdown?.onMarket ?? 0),
+              tradeable: (existing.breakdown?.tradeable ?? 0) + (account.breakdown?.tradeable ?? 0),
+              onMarket: (existing.breakdown?.onMarket ?? 0) + (account.breakdown?.onMarket ?? 0),
               tradeProtected:
                 (existing.breakdown?.tradeProtected ?? 0) +
                 (account.breakdown?.tradeProtected ?? 0),
-              hold:
-                (existing.breakdown?.hold ?? 0) +
-                (account.breakdown?.hold ?? 0),
+              hold: (existing.breakdown?.hold ?? 0) + (account.breakdown?.hold ?? 0),
               holdDetails: [
                 ...(existing.breakdown?.holdDetails ?? []),
                 ...(account.breakdown?.holdDetails ?? []),
@@ -119,7 +98,7 @@ export function mergeSourceAccounts(
 
 export function updateSourceAccounts(
   existing: PortfolioSourceAccount[],
-  newScan: PortfolioSourceAccount[],
+  newScan: PortfolioSourceAccount[]
 ): PortfolioSourceAccount[] {
   const map = new Map<string, PortfolioSourceAccount>();
   for (const acc of existing) {
@@ -146,18 +125,18 @@ export async function buildAccessoryPriceFields(
         marketHashName: string;
         isActive: boolean;
       },
-      options?: { preferFallback?: boolean },
+      options?: { preferFallback?: boolean }
     ) => Promise<{ price: number } | null>;
   },
-  capturedAt = new Date(),
+  capturedAt = new Date()
 ): Promise<
   Pick<
     CreatePortfolioItemInput,
-    | "stickerPriceRate"
-    | "stickerBuyPriceRate"
-    | "stickerBuyPriceAdd"
-    | "stickerScanTotalPrice"
-    | "stickerScanPriceCapturedAt"
+    | 'stickerPriceRate'
+    | 'stickerBuyPriceRate'
+    | 'stickerBuyPriceAdd'
+    | 'stickerScanTotalPrice'
+    | 'stickerScanPriceCapturedAt'
   >
 > {
   const info = isRecord(patternInfo) ? (patternInfo as PatternInfo) : undefined;
@@ -167,10 +146,7 @@ export async function buildAccessoryPriceFields(
   ];
   const marketHashNames = accessories
     .map((accessory) => accessory.marketHashName)
-    .filter(
-      (value): value is string =>
-        typeof value === "string" && value.trim().length > 0,
-    );
+    .filter((value): value is string => typeof value === 'string' && value.trim().length > 0);
 
   if (marketHashNames.length === 0) {
     return {};
@@ -193,12 +169,12 @@ export async function buildAccessoryPriceFields(
       } catch {
         return [marketHashName, 0] as const;
       }
-    }),
+    })
   );
   const priceMap = new Map(entries);
   const total = marketHashNames.reduce(
     (sum, marketHashName) => sum + (priceMap.get(marketHashName) ?? 0),
-    0,
+    0
   );
 
   if (total <= 0) {
@@ -239,11 +215,11 @@ export function resolveSyncTransactions(
   patternInfo?: any,
   stickerFields?: Pick<
     CreatePortfolioItemInput,
-    | "stickerPriceRate"
-    | "stickerBuyPriceRate"
-    | "stickerScanTotalPrice"
-    | "stickerScanPriceCapturedAt"
-  >,
+    | 'stickerPriceRate'
+    | 'stickerBuyPriceRate'
+    | 'stickerScanTotalPrice'
+    | 'stickerScanPriceCapturedAt'
+  >
 ): CreatePortfolioItemInput[] {
   const scannedVariantKey = buildItemVariantKey({
     caseId,
@@ -260,22 +236,16 @@ export function resolveSyncTransactions(
           dopplerPhase: item.dopplerPhase,
           inspectLink: item.inspectLink,
           patternInfo: item.patternInfo,
-        }) === scannedVariantKey,
+        }) === scannedVariantKey
     )
-    .sort(
-      (a, b) => new Date(a.buyDate).getTime() - new Date(b.buyDate).getTime(),
-    );
+    .sort((a, b) => new Date(a.buyDate).getTime() - new Date(b.buyDate).getTime());
 
   const totalExistingQty = existingForCase.reduce(
     (sum, item) => sum + (Number(item.quantity) || 0),
-    0,
+    0
   );
   const tradeHoldUntil =
-    tradeHoldUntilParam ?? (
-      holdDays > 0
-        ? calculateTradeHoldUntil(buyDate, holdDays)
-        : undefined
-    );
+    tradeHoldUntilParam ?? (holdDays > 0 ? calculateTradeHoldUntil(buyDate, holdDays) : undefined);
 
   // Initialize pool of available account quantities to distribute accurately
   const pool: AccountBreakdownPool[] = sourceAccounts.map((sa) => ({
@@ -404,13 +374,10 @@ export function resolveSyncTransactions(
       inspectLink,
       patternInfo,
       stickerPriceRate: item.stickerPriceRate ?? stickerFields?.stickerPriceRate,
-      stickerBuyPriceRate:
-        item.stickerBuyPriceRate ?? stickerFields?.stickerBuyPriceRate,
-      stickerScanTotalPrice:
-        item.stickerScanTotalPrice ?? stickerFields?.stickerScanTotalPrice,
+      stickerBuyPriceRate: item.stickerBuyPriceRate ?? stickerFields?.stickerBuyPriceRate,
+      stickerScanTotalPrice: item.stickerScanTotalPrice ?? stickerFields?.stickerScanTotalPrice,
       stickerScanPriceCapturedAt:
-        item.stickerScanPriceCapturedAt ??
-        stickerFields?.stickerScanPriceCapturedAt,
+        item.stickerScanPriceCapturedAt ?? stickerFields?.stickerScanPriceCapturedAt,
     }));
   }
 
@@ -428,13 +395,10 @@ export function resolveSyncTransactions(
       inspectLink,
       patternInfo,
       stickerPriceRate: item.stickerPriceRate ?? stickerFields?.stickerPriceRate,
-      stickerBuyPriceRate:
-        item.stickerBuyPriceRate ?? stickerFields?.stickerBuyPriceRate,
-      stickerScanTotalPrice:
-        item.stickerScanTotalPrice ?? stickerFields?.stickerScanTotalPrice,
+      stickerBuyPriceRate: item.stickerBuyPriceRate ?? stickerFields?.stickerBuyPriceRate,
+      stickerScanTotalPrice: item.stickerScanTotalPrice ?? stickerFields?.stickerScanTotalPrice,
       stickerScanPriceCapturedAt:
-        item.stickerScanPriceCapturedAt ??
-        stickerFields?.stickerScanPriceCapturedAt,
+        item.stickerScanPriceCapturedAt ?? stickerFields?.stickerScanPriceCapturedAt,
     }));
 
     resolved.push({
@@ -474,15 +438,11 @@ export function resolveSyncTransactions(
         dopplerPhase,
         inspectLink,
         patternInfo,
-        stickerPriceRate:
-          item.stickerPriceRate ?? stickerFields?.stickerPriceRate,
-        stickerBuyPriceRate:
-          item.stickerBuyPriceRate ?? stickerFields?.stickerBuyPriceRate,
-        stickerScanTotalPrice:
-          item.stickerScanTotalPrice ?? stickerFields?.stickerScanTotalPrice,
+        stickerPriceRate: item.stickerPriceRate ?? stickerFields?.stickerPriceRate,
+        stickerBuyPriceRate: item.stickerBuyPriceRate ?? stickerFields?.stickerBuyPriceRate,
+        stickerScanTotalPrice: item.stickerScanTotalPrice ?? stickerFields?.stickerScanTotalPrice,
         stickerScanPriceCapturedAt:
-          item.stickerScanPriceCapturedAt ??
-          stickerFields?.stickerScanPriceCapturedAt,
+          item.stickerScanPriceCapturedAt ?? stickerFields?.stickerScanPriceCapturedAt,
       });
       remainingToKeep -= qty;
     } else {
@@ -498,15 +458,11 @@ export function resolveSyncTransactions(
         dopplerPhase,
         inspectLink,
         patternInfo,
-        stickerPriceRate:
-          item.stickerPriceRate ?? stickerFields?.stickerPriceRate,
-        stickerBuyPriceRate:
-          item.stickerBuyPriceRate ?? stickerFields?.stickerBuyPriceRate,
-        stickerScanTotalPrice:
-          item.stickerScanTotalPrice ?? stickerFields?.stickerScanTotalPrice,
+        stickerPriceRate: item.stickerPriceRate ?? stickerFields?.stickerPriceRate,
+        stickerBuyPriceRate: item.stickerBuyPriceRate ?? stickerFields?.stickerBuyPriceRate,
+        stickerScanTotalPrice: item.stickerScanTotalPrice ?? stickerFields?.stickerScanTotalPrice,
         stickerScanPriceCapturedAt:
-          item.stickerScanPriceCapturedAt ??
-          stickerFields?.stickerScanPriceCapturedAt,
+          item.stickerScanPriceCapturedAt ?? stickerFields?.stickerScanPriceCapturedAt,
       });
       remainingToKeep = 0;
     }
@@ -566,7 +522,7 @@ export function buildSyncGroupKey(input: {
   dopplerPhase?: string;
   inspectLink?: string;
   patternInfo?: unknown;
-  sourceAccounts?: ItemIdentityInput["sourceAccounts"];
+  sourceAccounts?: ItemIdentityInput['sourceAccounts'];
   holdDays?: number;
   tradeHoldUntil?: string | Date;
   onMarket?: boolean;
@@ -577,14 +533,14 @@ export function buildSyncGroupKey(input: {
 
 export type SyncProgressEvent = {
   type:
-    | "account_start"
-    | "account_progress"
-    | "account_done"
-    | "account_error"
-    | "import_start"
-    | "import_done"
-    | "complete"
-    | "error";
+    | 'account_start'
+    | 'account_progress'
+    | 'account_done'
+    | 'account_error'
+    | 'import_start'
+    | 'import_done'
+    | 'complete'
+    | 'error';
   accountIndex?: number;
   totalAccounts?: number;
   accountName?: string;
@@ -689,13 +645,13 @@ export function processScanResult(
     iconUrl: string | null;
   }>
 ) {
-  const accountName = String(account.name || "Unknown");
+  const accountName = String(account.name || 'Unknown');
   const steamId64 = String(account.steamId64);
 
   if (scanResult.items && Array.isArray(scanResult.items)) {
     for (const item of scanResult.items) {
       const quantity = Number(item.quantity);
-      const holdDays = typeof item.holdDays === "number" && item.holdDays > 0 ? item.holdDays : 0;
+      const holdDays = typeof item.holdDays === 'number' && item.holdDays > 0 ? item.holdDays : 0;
       const onMarket = item.onMarket === true;
       const tradeProtected = item.tradeProtected === true;
 
@@ -714,9 +670,9 @@ export function processScanResult(
 
       allScannedItems.push({
         caseItem: {
-          id: String(item.caseItem?.id || ""),
-          name: String(item.caseItem?.name || ""),
-          marketHashName: String(item.caseItem?.marketHashName || ""),
+          id: String(item.caseItem?.id || ''),
+          name: String(item.caseItem?.name || ''),
+          marketHashName: String(item.caseItem?.marketHashName || ''),
           imageUrl: item.caseItem?.imageUrl ? String(item.caseItem.imageUrl) : null,
         },
         rarity: normalizeRarity(item.rarity),
@@ -738,8 +694,8 @@ export function processScanResult(
     for (const su of scanResult.storageUnits) {
       allScannedStorageUnits.push({
         steamId64,
-        assetId: String(su.assetId || ""),
-        name: String(su.name || "Storage Unit"),
+        assetId: String(su.assetId || ''),
+        name: String(su.name || 'Storage Unit'),
         iconUrl: su.iconUrl ? String(su.iconUrl) : null,
       });
     }
@@ -756,39 +712,53 @@ export async function pollJobProgress(
     detail?: Record<string, number | string>;
   }) => void
 ): Promise<Record<string, unknown>> {
-  const TIMEOUT_MS = 5 * 60 * 1000;
+  const TIMEOUT_MS = 20 * 60 * 1000;
+  const IDLE_TIMEOUT_MS = 8 * 60 * 1000;
   const startedAt = Date.now();
+  let lastProgressAt = startedAt;
+  let lastProgressSignature = '';
 
-  while (Date.now() - startedAt < TIMEOUT_MS) {
+  while (Date.now() - startedAt < TIMEOUT_MS && Date.now() - lastProgressAt < IDLE_TIMEOUT_MS) {
     const res = await fetch(`${origin}/api/inventory/scan?jobId=${encodeURIComponent(jobId)}`, {
-      cache: "no-store",
+      cache: 'no-store',
     });
 
     if (!res.ok) {
-      throw new Error("cannotReadScanProgress");
+      throw new Error('cannotReadScanProgress');
     }
 
     const progress = await res.json();
 
     onProgress({
-      stage: progress.stage ?? "running",
-      message: progress.message ?? "scanning",
+      stage: progress.stage ?? 'running',
+      message: progress.message ?? 'scanning',
       percent: progress.percent ?? 0,
       detail: progress.detail,
     });
 
-    if (progress.status === "done") {
+    if (progress.status === 'done') {
       return (progress.result ?? {}) as Record<string, unknown>;
     }
 
-    if (progress.status === "error") {
-      throw new Error(progress.error ?? progress.message ?? "scanFailed");
+    if (progress.status === 'error') {
+      throw new Error(progress.error ?? progress.message ?? 'scanFailed');
+    }
+
+    const progressSignature = JSON.stringify({
+      percent: progress.percent,
+      message: progress.message,
+      detail: progress.detail,
+      updatedAt: progress.updatedAt,
+    });
+    if (progressSignature !== lastProgressSignature) {
+      lastProgressSignature = progressSignature;
+      lastProgressAt = Date.now();
     }
 
     await new Promise((resolve) => setTimeout(resolve, 800));
   }
 
-  throw new Error("scanTimeout");
+  throw new Error('scanTimeout');
 }
 
 export async function startInventoryScanJob(input: {
@@ -798,16 +768,16 @@ export async function startInventoryScanJob(input: {
   ownerId: string;
 }): Promise<string> {
   const [{ createScanJob }, { runScanJob }] = await Promise.all([
-    import("@/services/scan-job-store"),
-    import("@/services/scan-service"),
+    import('@/services/scan-job-store'),
+    import('@/services/scan-service'),
   ]);
   const jobId = crypto.randomUUID();
   await createScanJob(jobId, {
     id: jobId,
     ownerId: input.ownerId,
-    status: "queued",
+    status: 'queued',
     percent: 0,
-    message: "waitingScan",
+    message: 'waitingScan',
     createdAt: new Date().toISOString(),
     updatedAt: new Date().toISOString(),
   });
@@ -826,7 +796,7 @@ export async function createImportedCase(
   }
 ) {
   const now = new Date();
-  const collection = db.collection("cases");
+  const collection = db.collection('cases');
   await collection.updateOne(
     { marketHashName: input.marketHashName },
     {
@@ -873,5 +843,5 @@ export async function updateImportedCaseMetadata(
     $set.rarity = input.rarity;
   }
 
-  await db.collection("cases").updateOne({ marketHashName: input.marketHashName }, { $set });
+  await db.collection('cases').updateOne({ marketHashName: input.marketHashName }, { $set });
 }

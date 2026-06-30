@@ -97,6 +97,32 @@ export class MongoCaseRepository implements CaseRepository {
     return caseItem;
   }
 
+  async findByMarketHashNames(marketHashNames: string[]): Promise<Map<string, CaseItem>> {
+    await this.ensureSeeded();
+
+    const normalizedMarketHashNames = Array.from(
+      new Set(marketHashNames.map(normalizeMarketHashName).filter((name) => name.length > 0))
+    );
+    if (normalizedMarketHashNames.length === 0) {
+      return new Map();
+    }
+
+    const db = await getDatabase();
+    const docs = await db
+      .collection('cases')
+      .find({
+        isActive: true,
+        marketHashName: { $in: normalizedMarketHashNames },
+      })
+      .collation({ locale: 'en', strength: 2 })
+      .toArray();
+
+    const cases = await this.enrichMissingMetadata(docs.map(mapCaseDocument));
+    return new Map(
+      cases.map((caseItem) => [getMarketHashNameLookupKey(caseItem.marketHashName), caseItem])
+    );
+  }
+
   async findOrCreateByMarketHashName(marketHashName: string): Promise<CaseItem> {
     const existing = await this.findByMarketHashName(marketHashName);
     if (existing) {
@@ -264,4 +290,8 @@ function normalizeMarketHashName(value: string): string {
   } catch {
     return trimmed;
   }
+}
+
+function getMarketHashNameLookupKey(value: string): string {
+  return normalizeMarketHashName(value).toLowerCase();
 }

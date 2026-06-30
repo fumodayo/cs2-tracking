@@ -5,9 +5,9 @@ export type CaseItemData = {
   imageUrl: string | null;
   isActive: boolean;
 };
-export type InventoryItemType = "Case" | "Capsule" | "Sticker" | "Skin";
+export type InventoryItemType = 'Case' | 'Capsule' | 'Sticker' | 'Skin';
 
-import type { PatternInfo } from "@/domain/pattern-info";
+import type { PatternInfo } from '@/domain/pattern-info';
 
 export type ScanResultItem = {
   caseItem: CaseItemData;
@@ -23,7 +23,7 @@ export type ScanResultItem = {
   isManual?: boolean;
   sourceAccounts?: SourceAccount[];
   buffPriceCny?: number;
-  priceSource?: "buff163" | "steam-market";
+  priceSource?: 'buff163' | 'steam-market';
   holdDays?: number;
   onMarket?: boolean;
   tradeProtected?: boolean;
@@ -88,13 +88,14 @@ export type ScanResponse = {
 };
 
 export type ScanProgress = {
-  status: "queued" | "running" | "done" | "error";
+  status: 'queued' | 'running' | 'done' | 'error';
   stage: string;
   message: string;
   percent: number;
   detail?: Record<string, number | string>;
   result?: ScanResponse;
   error?: string;
+  updatedAt?: string;
 };
 
 export type AccountEntry = {
@@ -102,7 +103,7 @@ export type AccountEntry = {
   url: string;
   steamCookie?: string;
   steamSessionId?: string;
-  status: "idle" | "scanning" | "done" | "error";
+  status: 'idle' | 'scanning' | 'done' | 'error';
   result: ScanResponse | null;
   error: string | null;
   progress: ScanProgress | null;
