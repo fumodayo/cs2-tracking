@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { fetchWithRetry } from "@/infrastructure/gemini-retry";
 import { extractPostImagesFromHtml } from "@/services/parser/facebook-image-extractor";
-import { checkAuth } from "@/services/auth-service";
+import { checkAuth, getCurrentUser, isAdminAccessAllowed } from "@/services/auth-service";
 import { geminiRateLimiter } from "@/infrastructure/rate-limiter";
 
 export const dynamic = "force-dynamic";
@@ -26,11 +26,17 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ message: "Unauthorized" }, { status: 401 });
     }
 
+    const user = await getCurrentUser();
+    const isAdmin = isAdminAccessAllowed(user);
+    if (!isAdmin) {
+      return NextResponse.json({ message: "adminOnlyAction" }, { status: 403 });
+    }
+
     const ip = request.headers.get("x-forwarded-for") || (request as NextRequest & { ip?: string }).ip || "unknown-ip";
-    const { allowed, retryAfter } = geminiRateLimiter.check(ip);
+    const { allowed, retryAfter } = await geminiRateLimiter.check(ip);
     if (!allowed) {
       return NextResponse.json(
-        { message: `Quá nhiều yêu cầu. Vui lòng thử lại sau ${retryAfter} giây.` },
+        { message: `tooManyRequestsWithRetryAfter:retryAfter=${retryAfter}` },
         { status: 429, headers: { "Retry-After": String(retryAfter) } }
       );
     }
@@ -40,7 +46,7 @@ export async function POST(request: NextRequest) {
 
     if (!rawHtml.trim()) {
       return NextResponse.json(
-        { message: "Mã nguồn HTML trống." },
+        { message: "htmlSourceEmpty" },
         { status: 400 },
       );
     }
@@ -60,8 +66,8 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json({
       text: text || "",
-      author: author || "Không rõ người đăng",
-      postTime: postTime || "Không rõ thời gian",
+      author: author || "unknownPoster",
+      postTime: postTime || "unknownTime",
       imageUrls: uniqueImages,
     });
   } catch (error) {
@@ -71,7 +77,7 @@ export async function POST(request: NextRequest) {
         message:
           error instanceof Error
             ? error.message
-            : "Không thể trích xuất thông tin từ mã nguồn.",
+            : "cannotExtractFromHtml",
       },
       { status: 500 },
     );
@@ -94,7 +100,7 @@ async function extractTextAndAuthorWithGemini(
 ): Promise<{ text: string; author: string; postTime: string }> {
   const apiKey = process.env.GEMINI_API_KEY?.trim();
   if (!apiKey) {
-    throw new Error("Cần cấu hình GEMINI_API_KEY để trích xuất bài viết.");
+    throw new Error("geminiApiKeyNotConfigured");
   }
 
   try {
@@ -218,7 +224,7 @@ function fallbackExtract(html: string): {
     "";
 
   // Extract author name from title (e.g. "Author Name - Posts | Facebook" or "Author Name | Facebook")
-  let author = "Không rõ người đăng";
+  let author = "unknownPoster";
   if (ogTitle) {
     const cleanTitle = ogTitle
       .replace(/\| Facebook/i, "")
@@ -268,7 +274,7 @@ function fallbackExtract(html: string): {
   return {
     text: ogDescription,
     author,
-    postTime: postTime || "Không rõ thời gian",
+    postTime: postTime || "unknownTime",
   };
 }
 

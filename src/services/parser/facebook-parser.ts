@@ -1,4 +1,6 @@
 import { formatDateTime } from "@/utils/format";
+import { formatRelative } from "@/utils/date";
+import i18n from "i18next";
 import {
   isLikelyAvatarOrRedundant,
   cleanFbcdnUrl,
@@ -59,31 +61,22 @@ export function unescapeHtmlEntities(str: string): string {
 export function buildChatGptPrompt(text: string, imageUrls: string[]): string {
   const imagesSection =
     imageUrls.length > 0
-      ? imageUrls.map((url, i) => `Ảnh ${i + 1}: ${url}`).join("\n")
-      : "Không có link ảnh trực tiếp (bạn có thể kéo thả hoặc paste ảnh trực tiếp vào ChatGPT).";
+      ? imageUrls
+          .map((url, i) =>
+            i18n.t("facebookParser.imageNumber", {
+              index: i + 1,
+              url,
+              interpolation: { escapeValue: false },
+            }),
+          )
+          .join("\n")
+      : i18n.t("facebookParser.noDirectImageLink");
 
-  return `Hãy đóng vai một chuyên gia định giá vật phẩm CS2.
-Tôi có một bài viết bán đồ CS2 và các ảnh đính kèm. Hãy nhận diện TẤT CẢ các vật phẩm CS2 (hòm case, skin súng, capsule, sticker, dao, găng tay...) từ bài viết và ảnh dưới đây, sau đó trích xuất ra định dạng JSON chính xác.
-
-Quy tắc:
-1. Đếm và liệt kê chính xác các vật phẩm và số lượng tương ứng.
-2. Chuẩn hóa tên viết tắt/tiếng Việt sang tên tiếng Anh chuẩn trên Steam Market (ví dụ: "hòm revo" -> "Revolution Case", "Dao Kukri" -> "★ Kukri Knife", "Lưu niệm" -> "Souvenir").
-3. Trả về định dạng JSON duy nhất như sau:
-{
-  "itemRate": null,
-  "allRate": null,
-  "items": [
-    { "name": "Tên vật phẩm chuẩn Steam", "quantity": số_lượng }
-  ]
-}
-
-Nội dung bài viết:
-"""
-${text}
-"""
-
-Các hình ảnh đính kèm:
-${imagesSection}`;
+  return i18n.t("facebookParser.chatGptPrompt", {
+    text,
+    imagesSection,
+    interpolation: { escapeValue: false },
+  });
 }
 
 export function parseFacebookHtmlSource(htmlSource: string): FacebookExtractedData {
@@ -143,25 +136,12 @@ export function parseFacebookHtmlSource(htmlSource: string): FacebookExtractedDa
     }
   };
 
-  const getRelativeTimeString = (timestampMs: number): string => {
-    const now = Date.now();
-    const diffMs = now - timestampMs;
-    if (diffMs < 0) return "";
-    const diffMins = Math.floor(diffMs / 60000);
-    if (diffMins < 1) return "vừa xong";
-    if (diffMins < 60) return `${diffMins} phút trước`;
-    const diffHours = Math.floor(diffMins / 60);
-    if (diffHours < 24) return `${diffHours} tiếng trước`;
-    const diffDays = Math.floor(diffHours / 24);
-    return `${diffDays} ngày trước`;
-  };
-
   const formatExtractedDate = (input: string | number): string => {
     try {
       const dateObj = new Date(input);
       if (isNaN(dateObj.getTime())) return String(input);
       const absolute = formatDateTime(dateObj.toISOString());
-      const relative = getRelativeTimeString(dateObj.getTime());
+      const relative = formatRelative(dateObj);
       return relative ? `${relative} (${absolute})` : absolute;
     } catch {
       return String(input);
@@ -218,7 +198,7 @@ export function parseFacebookHtmlSource(htmlSource: string): FacebookExtractedDa
   }
 
   if (!author) {
-    author = "Không rõ người đăng";
+    author = i18n.t("facebookParser.unknownAuthor");
   }
 
   let postTime = "";

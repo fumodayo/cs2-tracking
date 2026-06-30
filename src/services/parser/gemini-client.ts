@@ -74,7 +74,7 @@ export async function parseInventoryImagesWithGemini(
   const apiKey = process.env.GEMINI_API_KEY?.trim();
   if (!apiKey) {
     throw new GeminiImageRecognitionError(
-      "Cần cấu hình GEMINI_API_KEY để nhận diện ảnh inventory.",
+      "geminiApiKeyNotConfiguredImage",
       400,
     );
   }
@@ -128,7 +128,7 @@ export async function parseInventoryImagesWithGemini(
       .trim();
     if (!output) {
       throw new GeminiImageRecognitionError(
-        "Gemini không trả về kết quả nhận diện ảnh.",
+        "geminiNoResponse",
         502,
       );
     }
@@ -144,13 +144,13 @@ export async function parseInventoryImagesWithGemini(
       (error.name === "AbortError" || error.message === "Timeout");
     if (isTimeout) {
       throw new GeminiImageRecognitionError(
-        "Gemini nhận diện ảnh quá lâu. Hãy thử ảnh nhỏ/rõ hơn hoặc thử lại sau.",
+        "geminiTimeout",
         504,
       );
     }
 
     throw new GeminiImageRecognitionError(
-      "Không thể kết nối Gemini để nhận diện ảnh inventory.",
+      "geminiConnectionError",
       502,
     );
   }
@@ -164,23 +164,22 @@ export async function buildGeminiProviderErrorMessage(
 
   if (response.status === 429) {
     const retryDelay = extractRetryDelay(providerMessage);
-    const retryText = retryDelay ? ` Thử lại sau khoảng ${retryDelay}.` : "";
-    return `Gemini đã hết quota cho model ${GEMINI_MODEL}.${retryText} Hãy đổi GEMINI_MODEL/API key hoặc bật billing để nhận diện ảnh tiếp.`;
+    return `geminiQuotaExceeded:model=${GEMINI_MODEL},retryDelay=${retryDelay || ""}`;
   }
 
   if (response.status === 401 || response.status === 403) {
-    return "GEMINI_API_KEY không hợp lệ hoặc không có quyền gọi Gemini Vision.";
+    return "geminiInvalidApiKey";
   }
 
   if (response.status === 400) {
     return providerMessage
-      ? `Gemini từ chối payload ảnh: ${providerMessage}`
-      : "Gemini từ chối payload ảnh. Hãy thử ảnh PNG/JPG/WebP khác.";
+      ? `geminiPayloadRejectedWithReason:reason=${providerMessage}`
+      : "geminiPayloadRejected";
   }
 
   return providerMessage
-    ? `Gemini không nhận diện được ảnh inventory: ${providerMessage}`
-    : "Gemini không nhận diện được ảnh inventory.";
+    ? `geminiRecognitionFailedWithReason:reason=${providerMessage}`
+    : "geminiRecognitionFailed";
 }
 
 export function extractGeminiErrorMessage(rawText: string): string {

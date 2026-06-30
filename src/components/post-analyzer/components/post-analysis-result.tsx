@@ -1,5 +1,6 @@
 import { FileImage } from "lucide-react";
 import Image from "next/image";
+import { useTranslation } from "react-i18next";
 import { useCurrency } from "@/components/currency-provider";
 import { CaseThumbnail } from "@/components/portfolio";
 import type { PostAnalysisDto } from "@/types/post-analysis";
@@ -38,6 +39,7 @@ export function Metric({
 }
 
 export function AnalysisResult({ analysis }: { analysis: PostAnalysisDto }) {
+  const { t } = useTranslation();
   const { formatCurrency } = useCurrency();
   return (
     <div className="mt-5 space-y-5">
@@ -47,7 +49,7 @@ export function AnalysisResult({ analysis }: { analysis: PostAnalysisDto }) {
           <div className="border-stone-850/80 flex flex-col justify-between gap-2 border-b pb-2.5 sm:flex-row sm:items-center">
             <h3 className="flex items-center gap-2 text-sm font-semibold text-stone-200">
               <span className="size-2 animate-pulse rounded-full bg-blue-400" />
-              Thông tin bài viết đã phân tích
+              {t("postAnalyzer.analysisInfo")}
             </h3>
             {analysis.postUrl && (
               <a
@@ -56,7 +58,7 @@ export function AnalysisResult({ analysis }: { analysis: PostAnalysisDto }) {
                 rel="noopener noreferrer"
                 className="flex items-center gap-1 text-xs font-semibold text-blue-400 hover:text-blue-300 transition-colors"
               >
-                Xem bài viết gốc trên Facebook ↗
+                {t("postAnalyzer.viewOriginalOnFacebook")}
               </a>
             )}
           </div>
@@ -64,7 +66,7 @@ export function AnalysisResult({ analysis }: { analysis: PostAnalysisDto }) {
             {analysis.author && (
               <div className="min-w-0">
                 <span className="mb-0.5 block text-[10px] font-semibold tracking-wider text-stone-500 uppercase">
-                  Người đăng bài
+                  {t("postAnalyzer.author")}
                 </span>
                 {analysis.authorUrl ? (
                   <a
@@ -85,7 +87,7 @@ export function AnalysisResult({ analysis }: { analysis: PostAnalysisDto }) {
             {analysis.postTime && (
               <div>
                 <span className="mb-0.5 block text-[10px] font-semibold tracking-wider text-stone-400 uppercase">
-                  Thời gian đăng
+                  {t("postAnalyzer.postTime")}
                 </span>
                 <span className="block truncate font-medium text-stone-300">
                   {analysis.postTime}
@@ -95,7 +97,7 @@ export function AnalysisResult({ analysis }: { analysis: PostAnalysisDto }) {
             {analysis.steamUrl && (
               <div className="min-w-0 sm:col-span-2 md:col-span-1">
                 <span className="mb-0.5 block text-[10px] font-semibold tracking-wider text-stone-405 uppercase">
-                  Steam Inventory Link
+                  {t("postAnalyzer.steamInventoryLink")}
                 </span>
                 <a
                   href={analysis.steamUrl}
@@ -113,28 +115,28 @@ export function AnalysisResult({ analysis }: { analysis: PostAnalysisDto }) {
 
       {/* Top Level Rates & bulk Sell Payout */}
       <div className="grid gap-3 sm:grid-cols-2 md:grid-cols-4">
-        <Metric label="Rate lẻ" value={analysis.itemRate.toFixed(2)} variant="accent" />
-        <Metric label="Rate all" value={analysis.allRate.toFixed(2)} variant="accent" />
+        <Metric label={t("postAnalyzer.retailRate")} value={analysis.itemRate.toFixed(2)} variant="accent" />
+        <Metric label={t("postAnalyzer.bulkRate")} value={analysis.allRate.toFixed(2)} variant="accent" />
         <Metric
-          label="Tổng vật phẩm"
+          label={t("postAnalyzer.totalItems")}
           value={new Intl.NumberFormat("vi-VN").format(analysis.totalQuantity)}
           variant="default"
         />
         <Metric
-          label="Tổng lấy all"
+          label={t("postAnalyzer.totalBulkValue")}
           value={formatCurrency(analysis.totalAllRateValue)}
           variant="success"
         />
       </div>
 
-      <p className="text-xs text-stone-550 leading-relaxed">
-        * Nguồn số lượng:{" "}
+      <p className="text-xs text-stone-555 leading-relaxed">
+        {t("postAnalyzer.quantitySource")}
         <span className="font-semibold text-stone-300">
-          {analysis.itemSource === "image" ? "Ảnh inventory upload" : "Nội dung bài viết"}
+          {analysis.itemSource === "image" ? t("postAnalyzer.uploadedInventoryImage") : t("postAnalyzer.postContent")}
         </span>
         {analysis.cacheStatus === "hit" ? (
           <span className="ml-1.5 rounded bg-stone-900 px-1.5 py-0.5 font-medium text-stone-400">
-            Dùng lại kết quả đã lưu
+            {t("postAnalyzer.usedSavedResults")}
           </span>
         ) : null}
       </p>
@@ -143,7 +145,7 @@ export function AnalysisResult({ analysis }: { analysis: PostAnalysisDto }) {
         <div className="rounded-xl border border-stone-800 bg-stone-950/20 p-4">
           <h3 className="mb-3 flex items-center gap-2 text-xs font-semibold tracking-wider text-stone-400 uppercase">
             <FileImage className="size-4 text-blue-400" />
-            Ảnh kho đồ đã quét (Scanned Inventory Image)
+            {t("postAnalyzer.scannedInventoryImage")}
           </h3>
           <div className="group border-stone-850 relative aspect-[4/3] w-full max-w-sm overflow-hidden rounded-lg border bg-stone-900 sm:aspect-[16/10]">
             <a
@@ -151,11 +153,11 @@ export function AnalysisResult({ analysis }: { analysis: PostAnalysisDto }) {
               target="_blank"
               rel="noopener noreferrer"
               className="absolute inset-0 block cursor-zoom-in"
-              title="Bấm để xem ảnh gốc kích thước đầy đủ"
+              title={t("postAnalyzer.clickToViewOriginalImage")}
             >
               <Image
                 src={analysis.imageCloudinaryUrl}
-                alt="Scanned CS2 Inventory"
+                alt={t("postAnalyzer.scannedInventoryAlt", "Scanned CS2 Inventory")}
                 fill
                 sizes="(max-w-sm) 100vw, 384px"
                 className="object-cover transition-transform duration-300 group-hover:scale-105"
@@ -163,7 +165,7 @@ export function AnalysisResult({ analysis }: { analysis: PostAnalysisDto }) {
               />
               <div className="absolute inset-0 flex items-end bg-gradient-to-t from-stone-950/90 via-stone-950/20 to-transparent p-3 opacity-0 transition-opacity duration-205 group-hover:opacity-100">
                 <span className="flex items-center gap-1 text-xs font-medium text-blue-300">
-                  Xem ảnh kích thước đầy đủ ↗
+                  {t("postAnalyzer.viewFullSizeImage")}
                 </span>
               </div>
             </a>
@@ -177,11 +179,11 @@ export function AnalysisResult({ analysis }: { analysis: PostAnalysisDto }) {
           <table className="w-full min-w-[980px] border-collapse text-sm">
             <thead className="bg-stone-900/60 text-xs tracking-wider text-stone-400 uppercase">
               <tr>
-                <th className="px-5 py-3 text-left font-semibold">Vật phẩm</th>
-                <th className="px-5 py-3 text-right font-semibold">SL</th>
-                <th className="px-5 py-3 text-right font-semibold">Giá Steam</th>
-                <th className="px-5 py-3 text-right font-semibold">Giá lẻ x rate</th>
-                <th className="px-5 py-3 text-right font-semibold">Tổng all rate</th>
+                <th className="px-5 py-3 text-left font-semibold">{t("postAnalyzer.item")}</th>
+                <th className="px-5 py-3 text-right font-semibold">{t("postAnalyzer.qtyShort")}</th>
+                <th className="px-5 py-3 text-right font-semibold">{t("postAnalyzer.steamPrice")}</th>
+                <th className="px-5 py-3 text-right font-semibold">{t("postAnalyzer.retailPriceTimesRate")}</th>
+                <th className="px-5 py-3 text-right font-semibold">{t("postAnalyzer.totalBulkRate")}</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-stone-850">
@@ -199,7 +201,7 @@ export function AnalysisResult({ analysis }: { analysis: PostAnalysisDto }) {
                           {row.name}
                         </div>
                         <div className="truncate text-xs text-stone-500">
-                          Từ bài: {row.inputName}
+                          {t("postAnalyzer.fromPostPrefix", { name: row.inputName })}
                         </div>
                       </div>
                     </div>
@@ -226,17 +228,17 @@ export function AnalysisResult({ analysis }: { analysis: PostAnalysisDto }) {
       {/* Summary Financial Trade-offs */}
       <div className="grid gap-3 sm:grid-cols-3">
         <Metric
-          label="Tổng Steam"
+          label={t("postAnalyzer.totalSteam")}
           value={formatCurrency(analysis.totalSteamValue)}
           variant="default"
         />
         <Metric
-          label="Tổng nếu bán lẻ"
+          label={t("postAnalyzer.totalIfRetail")}
           value={formatCurrency(analysis.totalItemRateValue)}
           variant="warning"
         />
         <Metric
-          label="Tổng lấy all"
+          label={t("postAnalyzer.totalIfBulk")}
           value={formatCurrency(analysis.totalAllRateValue)}
           variant="success"
         />
@@ -244,7 +246,7 @@ export function AnalysisResult({ analysis }: { analysis: PostAnalysisDto }) {
 
       {analysis.unknownItems.length > 0 ? (
         <div className="rounded-xl border border-blue-500/10 bg-blue-500/[0.02] px-4 py-3 text-xs leading-relaxed text-blue-300">
-          <span className="font-semibold block mb-1">🔍 Vật phẩm không nhận diện được:</span>
+          <span className="font-semibold block mb-1">{t("postAnalyzer.unrecognizedItems")}</span>
           {analysis.unknownItems
             .map((item) => `${item.quantity}x ${item.inputName}`)
             .join(", ")}

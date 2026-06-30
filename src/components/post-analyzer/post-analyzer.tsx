@@ -1,5 +1,7 @@
 "use client";
 
+import { useSession } from "@/components/auth/use-session";
+import { useTranslation } from "react-i18next";
 import { Clock3, Loader2 } from "lucide-react";
 import { motion } from "framer-motion";
 import { usePostAnalyzer } from "./use-post-analyzer";
@@ -13,6 +15,9 @@ import { Button } from "@/components/ui/button";
 import { SlidePanel, SlidePanelContent, SlidePanelTrigger } from "@/components/ui/slide-panel";
 
 export function PostAnalyzer() {
+  const { t } = useTranslation();
+  const { isAdmin } = useSession();
+
   const {
     // States
     text,
@@ -68,6 +73,21 @@ export function PostAnalyzer() {
 
   return (
     <div className="space-y-6">
+      {!isAdmin && (
+        <div className="rounded-xl border border-amber-500/20 bg-amber-500/5 p-4 text-sm text-amber-400 shadow-sm flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+          <div className="flex items-center gap-2.5">
+            <span className="relative flex h-2 w-2 shrink-0">
+              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-400 opacity-75"></span>
+              <span className="relative inline-flex rounded-full h-2 w-2 bg-amber-500"></span>
+            </span>
+            <span className="font-medium text-xs sm:text-sm">{t("postAnalyzer.betaDesc")}</span>
+          </div>
+          <span className="text-[10px] uppercase font-black tracking-wider bg-amber-500/20 px-2.5 py-1 rounded text-amber-300 select-none">
+            {t("postAnalyzer.comingSoon")}
+          </span>
+        </div>
+      )}
+
       <div className="rounded-xl border border-stone-800 bg-stone-950/25 p-6 shadow-sm">
         {/* Top bar with tabs and history */}
         <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between border-b border-stone-850 pb-5 mb-6">
@@ -93,7 +113,7 @@ export function PostAnalyzer() {
                   transition={{ type: "spring", stiffness: 380, damping: 30 }}
                 />
               )}
-              <span className="relative z-10">Nhập thủ công</span>
+              <span className="relative z-10">{t("postAnalyzer.manualTab")}</span>
             </button>
             <button
               type="button"
@@ -115,7 +135,7 @@ export function PostAnalyzer() {
                   transition={{ type: "spring", stiffness: 380, damping: 30 }}
                 />
               )}
-              <span className="relative z-10">Trích xuất Facebook (Ctrl + U)</span>
+              <span className="relative z-10">{t("postAnalyzer.facebookTab")}</span>
             </button>
           </div>
 
@@ -127,21 +147,21 @@ export function PostAnalyzer() {
                 className="inline-flex h-10 items-center justify-center gap-2 px-4 text-xs font-semibold cursor-pointer shadow-sm hover:border-stone-700"
               >
                 <Clock3 className="size-4 text-blue-400" />
-                <span>Lịch sử phân tích ({history.length})</span>
+                <span>{t("postAnalyzer.analysisHistory", { count: history.length })}</span>
               </Button>
             </SlidePanelTrigger>
             <SlidePanelContent
-              title="Lịch sử phân tích"
-              description={`${history.length} bài viết đã được lưu trong MongoDB`}
+              title={t("postAnalyzer.analysisHistoryTitle")}
+              description={t("postAnalyzer.historySavedDesc", { count: history.length })}
             >
               {historyQuery.isLoading ? (
                 <div className="flex flex-col items-center justify-center py-12 text-stone-500">
                   <Loader2 className="size-6 animate-spin text-blue-400 mb-2" />
-                  <span>Đang tải lịch sử...</span>
+                  <span>{t("postAnalyzer.loadingHistory")}</span>
                 </div>
               ) : history.length === 0 ? (
                 <div className="rounded-md border border-dashed border-stone-800 px-4 py-8 text-center text-sm text-stone-500">
-                  Chưa có bài nào được lưu.
+                  {t("postAnalyzer.noHistorySaved")}
                 </div>
               ) : (
                 <div className="space-y-3 pr-1">
@@ -151,7 +171,7 @@ export function PostAnalyzer() {
                       item={item}
                       selected={item.id === selectedHistoryId}
                       onLoad={() => loadHistoryItem(item)}
-                      onDelete={() => deleteHistoryItem(item.id)}
+                      onDelete={isAdmin ? () => deleteHistoryItem(item.id) : undefined}
                     />
                   ))}
                 </div>
@@ -175,6 +195,7 @@ export function PostAnalyzer() {
             handleImageDrop={handleImageDrop}
             handleImageChange={handleImageChange}
             clearImage={clearImage}
+            isAdmin={isAdmin}
           />
         ) : (
           <FacebookTab
@@ -193,6 +214,7 @@ export function PostAnalyzer() {
             handleExtractHtml={handleExtractHtml}
             handleAnalyzeHtml={handleAnalyzeHtml}
             toggleImageSelection={toggleImageSelection}
+            isAdmin={isAdmin}
           />
         )}
 
@@ -238,7 +260,7 @@ export function PostAnalyzer() {
         <div className="rounded-xl border border-stone-800 bg-stone-950/25 p-6 shadow-sm animate-fade-slide-in">
           <h2 className="text-lg font-bold text-stone-50 mb-4 flex items-center gap-2.5">
             <span className="size-2 rounded-full bg-emerald-500 animate-pulse" />
-            Kết quả phân tích chi tiết
+            {t("postAnalyzer.detailAnalysisResult")}
           </h2>
           <AnalysisResult analysis={analysis} />
         </div>

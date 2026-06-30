@@ -64,8 +64,8 @@ export class PostAnalysisService {
     if (resolvedItems.length === 0 && unknownItems.length === 0) {
       throw new Error(
         images.length > 0
-          ? "Không nhận diện được case trong bài viết hoặc các ảnh. Hãy thử ảnh inventory rõ hơn, hoặc thêm dạng `x6 dream`, `584 hòm revo`."
-          : "Không tìm thấy case trong bài viết. Hãy thử dạng `x6 dream`, `584 hòm revo`, hoặc `Hòm Dream`.",
+          ? "noCaseDetectedInPostOrImages"
+          : "noCaseDetectedInPost",
       );
     }
 
@@ -100,9 +100,7 @@ export class PostAnalysisService {
     const { resolvedItems, unknownItems } = itemResolution;
 
     if (resolvedItems.length === 0 && unknownItems.length === 0) {
-      throw new Error(
-        "Không nhận diện được vật phẩm nào từ kết quả JSON ChatGPT. Vui lòng kiểm tra lại định dạng JSON.",
-      );
+      throw new Error("invalidChatGptJson");
     }
 
     const rows = await this.buildPricedRows(resolvedItems, itemRate, allRate);

@@ -3,12 +3,14 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useMemo, useState } from "react";
 import type React from "react";
+import { useTranslation } from "react-i18next";
 import type {
   PostAnalysisDto,
   PostAnalysisHistoryItemDto,
 } from "@/types/post-analysis";
 import { formatDateTimeVi as formatHistoryDate } from "@/utils/date";
 import { parseFacebookHtmlSource, extractSteamUrl } from "@/services/parser/facebook-parser";
+import { translateAccountError } from "@/components/inventory-scanner/utils";
 
 export type UploadedPostImage = {
   fileName: string;
@@ -27,6 +29,7 @@ x3 revo
 x2 fracture`;
 
 export function usePostAnalyzer() {
+  const { t } = useTranslation();
   const queryClient = useQueryClient();
   const [text, setText] = useState(SAMPLE_POST);
   const [analysis, setAnalysis] = useState<PostAnalysisDto | null>(null);
@@ -60,27 +63,32 @@ export function usePostAnalyzer() {
   } | null>(null);
   const [chatGptJsonInput, setChatGptJsonInput] = useState("");
   const [isImportingChatGpt, setIsImportingChatGpt] = useState(false);
+  const [deletedMockIds, setDeletedMockIds] = useState<string[]>([]);
   const [historyOpen, setHistoryOpen] = useState(false);
 
   const historyQuery = useQuery({
     queryKey: ["post-analysis-history"],
-    queryFn: fetchPostAnalysisHistory,
+    queryFn: () => fetchPostAnalysisHistory(t),
+    staleTime: 5 * 60 * 1000,
   });
 
-  const history = useMemo(() => historyQuery.data ?? [], [historyQuery.data]);
+  const history = useMemo(() => {
+    const dbHistory = historyQuery.data ?? [];
+    return dbHistory.filter(item => !deletedMockIds.includes(item.id));
+  }, [historyQuery.data, deletedMockIds]);
   const historyErrorMessage = historyQuery.error
     ? historyQuery.error instanceof Error
       ? historyQuery.error.message
-      : "Không thể tải lịch sử phân tích."
+      : t("postAnalyzer.unableToLoadHistory")
     : null;
 
   const analyzeMutation = useMutation({
-    mutationFn: analyzePost,
+    mutationFn: (args: { text: string; image: UploadedPostImage | null; force?: boolean }) => analyzePost({ ...args, t }),
     onSuccess: async (nextAnalysis) => {
       await queryClient.invalidateQueries({
         queryKey: ["post-analysis-history"],
       });
-      const nextHistory = await fetchPostAnalysisHistory();
+      const nextHistory = await fetchPostAnalysisHistory(t);
 
       setAnalysis(nextAnalysis);
       setSelectedHistoryId(nextHistory[0]?.id ?? null);
@@ -93,7 +101,7 @@ export function usePostAnalyzer() {
             h.text === text,
         );
         setCacheNotification({
-          message: `Bài viết trùng khớp với lịch sử phân tích. Đã tự động tải nhanh kết quả từ cơ sở dữ liệu!`,
+          message: t("postAnalyzer.matchingPostFoundAutoLoad"),
           item: matchingItem,
           isManualMatch: true,
         });
@@ -106,15 +114,15 @@ export function usePostAnalyzer() {
       setSelectedHistoryId(null);
       setError(
         analyzeError instanceof Error
-          ? analyzeError.message
-          : "Không thể phân tích bài viết.",
+          ? translateAccountError(analyzeError.message, t)
+          : t("postAnalyzer.unableToAnalyzePost"),
       );
       setCacheNotification(null);
     },
   });
 
   const deleteHistoryMutation = useMutation({
-    mutationFn: deletePostAnalysisHistoryItem,
+    mutationFn: (id: string) => deletePostAnalysisHistoryItem(id, t),
     onSuccess: async (_result, id) => {
       await queryClient.invalidateQueries({
         queryKey: ["post-analysis-history"],
@@ -127,8 +135,8 @@ export function usePostAnalyzer() {
     onError: (deleteError) => {
       setError(
         deleteError instanceof Error
-          ? deleteError.message
-          : "Không thể xóa lịch sử phân tích.",
+          ? translateAccountError(deleteError.message, t)
+          : t("postAnalyzer.unableToDeleteHistory"),
       );
     },
   });
@@ -161,13 +169,13 @@ export function usePostAnalyzer() {
 
     if (!/^image\/(?:png|jpe?g|webp)$/.test(file.type)) {
       setImage(null);
-      setError("Ảnh inventory phải là PNG, JPG hoặc WebP.");
+      setError(t("postAnalyzer.invalidImageFormat"));
       return;
     }
 
     if (file.size > 6 * 1024 * 1024) {
       setImage(null);
-      setError("Ảnh quá lớn. Hãy dùng ảnh dưới khoảng 6MB.");
+      setError(t("postAnalyzer.imageTooLarge"));
       return;
     }
 
@@ -182,7 +190,7 @@ export function usePostAnalyzer() {
       });
     } catch {
       setImage(null);
-      setError("Không thể đọc ảnh inventory.");
+      setError(t("postAnalyzer.unableToReadImage"));
     }
   }
 
@@ -244,6 +252,14 @@ export function usePostAnalyzer() {
   }
 
   function deleteHistoryItem(id: string) {
+    if (id === "sample-history-item") {
+      setDeletedMockIds((prev) => [...prev, id]);
+      if (selectedHistoryId === id) {
+        setSelectedHistoryId(null);
+        setAnalysis(null);
+      }
+      return;
+    }
     deleteHistoryMutation.mutate(id);
   }
 
@@ -284,7 +300,7 @@ export function usePostAnalyzer() {
                 });
                 setSelectedHistoryId(historyItem.id);
                 setCacheNotification({
-                  message: `Bài viết này đã được phân tích trước đó vào lúc ${formatHistoryDate(historyItem.updatedAt)}. Kết quả cũ đã được tự động hiển thị để tối ưu hóa!`,
+                  message: t("postAnalyzer.historyDuplicateAutoLoad", { date: formatHistoryDate(historyItem.updatedAt) }),
                   item: historyItem,
                 });
               }
@@ -298,7 +314,7 @@ export function usePostAnalyzer() {
         setError(
           err instanceof Error
             ? err.message
-            : "Đã xảy ra lỗi khi trích xuất mã nguồn.",
+            : t("postAnalyzer.failedToExtractHtml"),
         );
       } finally {
         setIsExtracting(false);
@@ -338,13 +354,13 @@ export function usePostAnalyzer() {
 
       const nextAnalysis = await response.json();
       if (!response.ok) {
-        throw new Error(nextAnalysis.message ?? "Không thể phân tích giá.");
+        throw new Error(nextAnalysis.message ?? t("postAnalyzer.failedToAnalyzePrice"));
       }
 
       await queryClient.invalidateQueries({
         queryKey: ["post-analysis-history"],
       });
-      const nextHistory = await fetchPostAnalysisHistory();
+      const nextHistory = await fetchPostAnalysisHistory(t);
 
       setAnalysis(nextAnalysis);
       setSelectedHistoryId(nextHistory[0]?.id ?? null);
@@ -356,7 +372,7 @@ export function usePostAnalyzer() {
             h.analysis.totalSteamValue === nextAnalysis.totalSteamValue,
         );
         setCacheNotification({
-          message: `Bài viết đã được phân tích trước đó. Đã tự động tải nhanh kết quả từ cơ sở dữ liệu!`,
+          message: t("postAnalyzer.matchingPostFoundAutoLoad"),
           item: matchingItem,
         });
       } else {
@@ -368,7 +384,7 @@ export function usePostAnalyzer() {
       setError(null);
     } catch (err) {
       setError(
-        err instanceof Error ? err.message : "Đã xảy ra lỗi khi phân tích.",
+        err instanceof Error ? translateAccountError(err.message, t) : t("postAnalyzer.failedToAnalyzeGeneral"),
       );
     } finally {
       setIsAnalyzingHtml(false);
@@ -419,7 +435,7 @@ export function usePostAnalyzer() {
 
       if (!parsedJson || typeof parsedJson !== "object") {
         throw new Error(
-          "Không nhận dạng được dữ liệu JSON hợp lệ. Bạn hãy chắc chắn đã copy toàn bộ câu trả lời có định dạng JSON từ Gemini Web.",
+          t("postAnalyzer.invalidJsonFromGemini"),
         );
       }
 
@@ -443,14 +459,14 @@ export function usePostAnalyzer() {
       const nextAnalysis = await response.json();
       if (!response.ok) {
         throw new Error(
-          nextAnalysis.message ?? "Không thể phân tích dữ liệu từ Gemini.",
+          nextAnalysis.message ?? t("postAnalyzer.failedToAnalyzeGeminiData"),
         );
       }
 
       await queryClient.invalidateQueries({
         queryKey: ["post-analysis-history"],
       });
-      const nextHistory = await fetchPostAnalysisHistory();
+      const nextHistory = await fetchPostAnalysisHistory(t);
 
       setAnalysis(nextAnalysis);
       setSelectedHistoryId(nextHistory[0]?.id ?? null);
@@ -458,7 +474,7 @@ export function usePostAnalyzer() {
       setError(null);
     } catch (err) {
       setError(
-        err instanceof Error ? err.message : "Dữ liệu JSON không hợp lệ.",
+        err instanceof Error ? translateAccountError(err.message, t) : t("postAnalyzer.invalidJsonGeneral"),
       );
     } finally {
       setIsImportingChatGpt(false);
@@ -554,7 +570,7 @@ function readFileAsDataUrl(file: File): Promise<string> {
   });
 }
 
-async function fetchPostAnalysisHistory(): Promise<
+async function fetchPostAnalysisHistory(t?: (key: string) => string): Promise<
   PostAnalysisHistoryItemDto[]
 > {
   const response = await fetch("/api/post/history", { cache: "no-store" });
@@ -564,7 +580,7 @@ async function fetchPostAnalysisHistory(): Promise<
   };
 
   if (!response.ok) {
-    throw new Error(data.message ?? "Không thể tải lịch sử phân tích.");
+    throw new Error(data.message ?? (t ? t("postAnalyzer.unableToLoadHistory") : "Unable to load analysis history."));
   }
 
   return Array.isArray(data.items) ? data.items : [];
@@ -574,10 +590,12 @@ async function analyzePost({
   text,
   image,
   force,
+  t,
 }: {
   text: string;
   image: UploadedPostImage | null;
   force?: boolean;
+  t?: (key: string) => string;
 }): Promise<PostAnalysisDto> {
   const response = await fetch("/api/post/analyze", {
     method: "POST",
@@ -600,18 +618,18 @@ async function analyzePost({
 
   if (!response.ok) {
     throw new Error(
-      "message" in data ? data.message : "Không thể phân tích bài viết.",
+      "message" in data ? data.message : (t ? t("postAnalyzer.unableToAnalyzePost") : "Unable to analyze post."),
     );
   }
 
   return data as PostAnalysisDto;
 }
 
-async function deletePostAnalysisHistoryItem(id: string): Promise<void> {
+async function deletePostAnalysisHistoryItem(id: string, t?: (key: string) => string): Promise<void> {
   const response = await fetch(`/api/post/history/${id}`, { method: "DELETE" });
   const data = (await response.json()) as { message?: string };
 
   if (!response.ok) {
-    throw new Error(data.message ?? "Không thể xóa lịch sử phân tích.");
+    throw new Error(data.message ?? (t ? t("postAnalyzer.unableToDeleteHistory") : "Unable to delete analysis history."));
   }
 }

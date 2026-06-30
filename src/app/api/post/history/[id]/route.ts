@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { MongoPostAnalysisHistoryRepository } from "@/infrastructure/repositories/mongo-post-analysis-history-repository";
 import { getErrorMessage } from "@/utils/error";
-import { checkAuth } from "@/services/auth-service";
+import { checkAuth, getCurrentUser, isAdminAccessAllowed } from "@/services/auth-service";
 
 export const dynamic = "force-dynamic";
 
@@ -18,13 +18,19 @@ export async function DELETE(_request: NextRequest, context: RouteContext) {
       return NextResponse.json({ message: "Unauthorized" }, { status: 401 });
     }
 
+    const user = await getCurrentUser();
+    const isAdmin = isAdminAccessAllowed(user);
+    if (!isAdmin) {
+      return NextResponse.json({ message: "adminOnlyAction" }, { status: 403 });
+    }
+
     const { id } = await context.params;
     const repository = new MongoPostAnalysisHistoryRepository();
     const deleted = await repository.delete(id);
 
     if (!deleted) {
       return NextResponse.json(
-        { message: "Không tìm thấy lịch sử phân tích." },
+        { message: "historyItemNotFound" },
         { status: 404 },
       );
     }
@@ -32,7 +38,7 @@ export async function DELETE(_request: NextRequest, context: RouteContext) {
     return NextResponse.json({ ok: true });
   } catch (error) {
     return NextResponse.json(
-      { message: getErrorMessage(error, "Không thể xóa lịch sử phân tích.") },
+      { message: getErrorMessage(error, "cannotDeleteHistory") },
       { status: 400 },
     );
   }

@@ -10,11 +10,11 @@ export async function GET(request: NextRequest) {
   const error = request.nextUrl.searchParams.get("error");
 
   if (error) {
-    return redirectWithError(request, `Google từ chối đăng nhập: ${error}`);
+    return redirectWithError(request, "googleAuthDenied");
   }
 
   if (!code || !state) {
-    return redirectWithError(request, "Thiếu mã xác thực Google.");
+    return redirectWithError(request, "googleAuthCodeMissing");
   }
 
   try {
@@ -25,7 +25,7 @@ export async function GET(request: NextRequest) {
   } catch (callbackError) {
     return redirectWithError(
       request,
-      getErrorMessage(callbackError, "Không thể hoàn tất đăng nhập Google."),
+      getErrorMessage(callbackError, "googleAuthCompleteFailed"),
     );
   }
 }

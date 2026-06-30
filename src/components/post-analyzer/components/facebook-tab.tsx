@@ -2,6 +2,7 @@
 
 import type React from "react";
 import { Calculator, Check, Eye, Loader2 } from "lucide-react";
+import { useTranslation } from "react-i18next";
 import { Button } from "@/components/ui/button";
 import type { PostAnalysisHistoryItemDto } from "@/types/post-analysis";
 
@@ -43,6 +44,7 @@ interface FacebookTabProps {
   handleExtractHtml: (event: React.FormEvent<HTMLFormElement>) => void;
   handleAnalyzeHtml: (event: React.FormEvent<HTMLFormElement> | null, force?: boolean) => void;
   toggleImageSelection: (url: string) => void;
+  isAdmin?: boolean;
 }
 
 export function FacebookTab({
@@ -61,56 +63,63 @@ export function FacebookTab({
   handleExtractHtml,
   handleAnalyzeHtml,
   toggleImageSelection,
+  isAdmin = false,
 }: FacebookTabProps) {
+  const { t } = useTranslation();
+
   if (!extractedData) {
     return (
       <form onSubmit={handleExtractHtml} className="space-y-5 animate-fade-slide-in">
         <div className="rounded-xl border border-blue-500/10 bg-blue-500/[0.02] p-4 text-xs leading-relaxed text-blue-300">
           <span className="mb-2 block flex items-center gap-1.5 text-xs font-bold uppercase tracking-wider text-blue-200">
-            💡 Hướng dẫn lấy mã nguồn bài viết Facebook:
+            {t("postAnalyzer.fbGuideTitle")}
           </span>
           <ol className="list-decimal space-y-2 pl-4 text-stone-400">
             <li>
-              Nhấp chuột vào <strong>mốc thời gian</strong> hiển thị của bài viết Facebook để mở bài viết ở một tab riêng biệt.
+              {t("postAnalyzer.fbGuideStep1Before")}
+              <strong>{t("postAnalyzer.fbGuideStep1Bold")}</strong>
+              {t("postAnalyzer.fbGuideStep1After")}
             </li>
             <li>
-              Nhấn tổ hợp phím{" "}
+              {t("postAnalyzer.fbGuideStep2Before")}
               <kbd className="border-stone-800 rounded border bg-stone-900 px-1 py-0.5 font-mono text-[10px] text-white">
                 Ctrl + U
-              </kbd>{" "}
-              (hoặc nhấp chuột phải và chọn <strong>Xem nguồn trang</strong>).
+              </kbd>
+              {t("postAnalyzer.fbGuideStep2After")}
+              <strong>{t("postAnalyzer.fbGuideStep2Bold")}</strong>).
             </li>
             <li>
-              Nhấn{" "}
+              {t("postAnalyzer.fbGuideStep3Before")}
               <kbd className="border-stone-800 rounded border bg-stone-900 px-1 py-0.5 font-mono text-[10px] text-white">
                 Ctrl + A
-              </kbd>{" "}
-              để chọn toàn bộ nội dung mã nguồn, sau đó nhấn{" "}
+              </kbd>
+              {t("postAnalyzer.fbGuideStep3Between")}
               <kbd className="border-stone-800 rounded border bg-stone-900 px-1 py-0.5 font-mono text-[10px] text-white">
                 Ctrl + C
-              </kbd>{" "}
-              để sao chép.
+              </kbd>
+              {t("postAnalyzer.fbGuideStep3After")}
             </li>
             <li>
-              Dán (
+              {t("postAnalyzer.fbGuideStep4Before")}
               <kbd className="border-stone-800 rounded border bg-stone-900 px-1 py-0.5 font-mono text-[10px] text-white">
                 Ctrl + V
               </kbd>
-              ) toàn bộ mã nguồn vừa copy vào khung nhập bên dưới.
+              {t("postAnalyzer.fbGuideStep4After")}
             </li>
           </ol>
         </div>
 
         <div className="space-y-1.5">
           <label className="text-xs font-semibold text-stone-400 uppercase tracking-wider block">
-            Mã nguồn HTML trang bài viết (Ctrl + U)
+            {t("postAnalyzer.htmlSourceLabel")}
           </label>
           <textarea
             value={htmlSource}
             onChange={(event) => setHtmlSource(event.target.value)}
             rows={9}
-            placeholder="Dán toàn bộ mã nguồn trang bài viết Facebook tại đây..."
-            className="w-full resize-y rounded-lg border border-stone-800 bg-stone-950/40 p-4 font-mono text-xs text-stone-100 outline-none transition-all focus:border-blue-500/50 focus:ring-1 focus:ring-blue-500/20 placeholder:text-stone-700"
+            disabled={!isAdmin}
+            placeholder={isAdmin ? t("postAnalyzer.placeholderHtmlTextareaAdmin") : t("postAnalyzer.placeholderHtmlTextareaUser")}
+            className="w-full resize-y rounded-lg border border-stone-800 bg-stone-950/40 p-4 font-mono text-xs text-stone-100 outline-none transition-all focus:border-blue-500/50 focus:ring-1 focus:ring-blue-500/20 placeholder:text-stone-700 disabled:opacity-60 disabled:cursor-not-allowed"
           />
         </div>
 
@@ -120,34 +129,32 @@ export function FacebookTab({
             htmlSource.trim().includes("facebook.com")) && (
             <div className="rounded-xl border border-amber-500/10 bg-amber-500/[0.02] p-4 text-xs text-amber-300">
               <span className="mb-1.5 block text-xs font-bold uppercase tracking-wider text-amber-200">
-                ⚠️ Phát hiện liên kết trực tiếp (URL)
+                {t("postAnalyzer.urlDirectLinkWarningTitle")}
               </span>
-              Bạn vừa nhập đường dẫn trực tiếp của bài viết. Vì đây là bài viết trong nhóm kín, hệ thống không thể trực tiếp cào dữ liệu qua URL mà không có phiên đăng nhập của bạn.
-              <br />
-              Vui lòng nhấn{" "}
+              {t("postAnalyzer.urlDirectLinkWarningDescBefore")}
               <kbd className="border-stone-800 rounded border bg-stone-900 px-1 py-0.5 font-mono text-[10px] text-white">
                 Ctrl + U
-              </kbd>{" "}
-              tại trang bài đăng, copy tất cả và dán vào đây.
+              </kbd>
+              {t("postAnalyzer.urlDirectLinkWarningDescAfter")}
             </div>
           )}
 
         <div className="flex justify-end pt-2">
           <Button
             type="submit"
-            disabled={isExtracting || !htmlSource.trim()}
+            disabled={isExtracting || !htmlSource.trim() || !isAdmin}
             variant="primary"
-            className="inline-flex h-10 items-center justify-center gap-1.5 px-5 text-xs font-bold cursor-pointer"
+            className="inline-flex h-10 items-center justify-center gap-1.5 px-5 text-xs font-bold cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
           >
             {isExtracting ? (
               <>
                 <Loader2 className="size-3.5 animate-spin" />
-                <span>Đang trích xuất...</span>
+                <span>{t("postAnalyzer.extracting")}</span>
               </>
             ) : (
               <>
                 <Eye className="size-4" />
-                <span>Trích xuất thông tin</span>
+                <span>{isAdmin ? t("postAnalyzer.extractInfo") : t("postAnalyzer.extractInfoComingSoon")}</span>
               </>
             )}
           </Button>
@@ -161,14 +168,14 @@ export function FacebookTab({
       <div className="rounded-xl border border-emerald-500/10 bg-emerald-500/[0.02] p-4 text-xs text-emerald-300 flex items-center gap-2">
         <Check className="size-4 text-emerald-400 shrink-0" />
         <span>
-          <strong>Trích xuất dữ liệu bài viết thành công!</strong> Hãy chọn ảnh kho đồ và chỉnh sửa lại nội dung nếu cần trước khi phân tích.
+          <strong>{t("postAnalyzer.extractSuccess")}</strong> {t("postAnalyzer.extractSuccessDesc")}
         </span>
       </div>
 
       <div className="flex flex-col gap-3 rounded-xl border border-stone-800 bg-stone-950/20 p-4 text-xs text-stone-400 sm:flex-row sm:items-center sm:justify-between">
         <div className="flex flex-col flex-wrap gap-3 sm:flex-row sm:items-center sm:gap-6">
           <div className="flex flex-col gap-0.5">
-            <span className="text-[10px] text-stone-500 uppercase tracking-wider font-semibold">Người đăng bài</span>
+            <span className="text-[10px] text-stone-500 uppercase tracking-wider font-semibold">{t("postAnalyzer.author")}</span>
             {extractedData.authorUrl ? (
               <a
                 href={extractedData.authorUrl}
@@ -186,7 +193,7 @@ export function FacebookTab({
           </div>
           {extractedData.postTime && (
             <div className="flex flex-col gap-0.5">
-              <span className="text-[10px] text-stone-500 uppercase tracking-wider font-semibold">Thời gian đăng</span>
+              <span className="text-[10px] text-stone-500 uppercase tracking-wider font-semibold">{t("postAnalyzer.postTime")}</span>
               {extractedData.postUrl ? (
                 <a
                   href={extractedData.postUrl}
@@ -205,7 +212,7 @@ export function FacebookTab({
           )}
           {extractedData.steamUrl && (
             <div className="flex flex-col gap-0.5">
-              <span className="text-[10px] text-stone-500 uppercase tracking-wider font-semibold">Steam Inventory Link</span>
+              <span className="text-[10px] text-stone-500 uppercase tracking-wider font-semibold">{t("postAnalyzer.steamInventoryLink")}</span>
               <a
                 href={extractedData.steamUrl}
                 target="_blank"
@@ -229,67 +236,75 @@ export function FacebookTab({
           }}
           className="h-8 text-[11px] font-semibold border-stone-850 hover:bg-stone-900"
         >
-          Quay lại / Dán nguồn khác
+          {t("postAnalyzer.backPasteAnother")}
         </Button>
       </div>
 
       <div className="space-y-1.5">
         <label className="text-xs font-semibold text-stone-400 uppercase tracking-wider block">
-          Nội dung bài viết (Có thể chỉnh sửa lại nếu cần)
+          {t("postAnalyzer.postContentEditLabel")}
         </label>
         <textarea
           value={editableText}
           onChange={(event) => setEditableText(event.target.value)}
           rows={7}
-          className="w-full resize-y rounded-lg border border-stone-800 bg-stone-950/40 p-4 text-sm leading-relaxed text-stone-100 outline-none transition-all focus:border-blue-500/50 focus:ring-1 focus:ring-blue-500/20"
+          disabled={!isAdmin}
+          className="w-full resize-y rounded-lg border border-stone-800 bg-stone-950/40 p-4 text-sm leading-relaxed text-stone-100 outline-none transition-all focus:border-blue-500/50 focus:ring-1 focus:ring-blue-500/20 disabled:opacity-60 disabled:cursor-not-allowed"
         />
       </div>
 
       <div className="space-y-2">
         <span className="text-xs font-semibold text-stone-400 uppercase tracking-wider block">
-          Chọn ảnh chụp kho đồ từ bài đăng ({selectedImages.length}/{extractedData.imageUrls.length})
+          {t("postAnalyzer.selectInventoryImages", {
+            selected: selectedImages.length,
+            total: extractedData.imageUrls.length,
+          })}
         </span>
 
         {extractedData.imageUrls.length === 0 ? (
           <div className="rounded-xl border border-dashed border-stone-800 p-8 text-center text-xs text-stone-500">
-            Không tìm thấy hình ảnh đính kèm nào khả dụng trong mã nguồn bài viết.
+            {t("postAnalyzer.noImagesFound")}
           </div>
         ) : (
-          <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 max-h-[18rem] overflow-y-auto rounded-xl border border-stone-855 bg-stone-950/40 p-3 scrollbar-thin">
+          <div className={`grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 max-h-[18rem] overflow-y-auto rounded-xl border border-stone-855 bg-stone-950/40 p-3 scrollbar-thin ${!isAdmin ? "opacity-60" : ""}`}>
             {extractedData.imageUrls.map((url, idx) => {
               const isSelected = selectedImages.includes(url);
               return (
-                <div
+                <button
                   key={idx}
+                  type="button"
+                  disabled={!isAdmin}
                   onClick={() => toggleImageSelection(url)}
-                  className={`group relative aspect-[4/3] cursor-pointer overflow-hidden rounded-lg border bg-stone-900 transition-all duration-200 ${
-                    isSelected
+                  className={`group relative aspect-[4/3] overflow-hidden rounded-lg border bg-stone-900 transition-all duration-200 ${
+                    isAdmin ? "cursor-pointer" : "cursor-not-allowed"
+                  } ${
+                    isSelected && isAdmin
                       ? "border-blue-500 ring-2 ring-blue-500/25 scale-[0.98]"
-                      : "border-stone-800 hover:border-stone-700 hover:scale-[1.01]"
-                  }`}
+                      : "border-stone-800 hover:border-stone-750 hover:scale-[1.01]"
+                  } border-none p-0 w-full text-left`}
                 >
                   <img
                     src={url}
-                    alt={`fb-post-img-${idx}`}
+                    alt={t("postAnalyzer.facebookImageAlt", "Facebook post image {{number}}", { number: idx + 1 })}
                     className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-105"
                     referrerPolicy="no-referrer"
                   />
                   <div
                     className={`absolute top-2 right-2 flex size-5 items-center justify-center rounded-full transition-all duration-150 ${
-                      isSelected
+                      isSelected && isAdmin
                         ? "bg-blue-500 text-slate-950 scale-100 opacity-100"
                         : "border border-stone-600 bg-black/60 text-transparent scale-75 opacity-0 group-hover:opacity-100 group-hover:scale-100"
                     }`}
                   >
                     <Check className="size-3 stroke-[3px]" />
                   </div>
-                </div>
+                </button>
               );
             })}
           </div>
         )}
         <p className="text-[10px] leading-relaxed text-stone-500">
-          * Click để chọn/bỏ chọn các ảnh từ bài đăng (mặc định đã chọn tất cả). AI sẽ ưu tiên trích xuất và đếm số lượng vật phẩm từ các hình ảnh được chọn này.
+          {t("postAnalyzer.imageSelectionNotice")}
         </p>
       </div>
 
@@ -305,23 +320,23 @@ export function FacebookTab({
           }}
           className="h-10 px-5 text-xs font-semibold border-stone-850 hover:bg-stone-900"
         >
-          Hủy
+          {t("common.cancel")}
         </Button>
         <Button
           type="submit"
-          disabled={isAnalyzingHtml || !editableText.trim()}
+          disabled={isAnalyzingHtml || !editableText.trim() || !isAdmin}
           variant="primary"
-          className="inline-flex h-10 items-center justify-center gap-1.5 px-5 text-xs font-bold cursor-pointer"
+          className="inline-flex h-10 items-center justify-center gap-1.5 px-5 text-xs font-bold cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
         >
           {isAnalyzingHtml ? (
             <>
               <Loader2 className="size-3.5 animate-spin" />
-              <span>Đang phân tích...</span>
+              <span>{t("postAnalyzer.analyzing")}</span>
             </>
           ) : (
             <>
               <Calculator className="size-3.5" />
-              <span>Phân tích giá</span>
+              <span>{isAdmin ? t("postAnalyzer.analyzePrice") : t("postAnalyzer.analyzePriceComingSoon")}</span>
             </>
           )}
         </Button>

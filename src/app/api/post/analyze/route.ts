@@ -1,11 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
-import { createHash } from "node:crypto";
 import { SteamMarketPriceProvider } from "@/infrastructure/price/steam-market-price-provider";
 import { MongoPostAnalysisHistoryRepository } from "@/infrastructure/repositories/mongo-post-analysis-history-repository";
 import { PostAnalysisService } from "@/services/post-analysis-service";
 import { getErrorMessage } from "@/utils/error";
-import { checkAuth } from "@/services/auth-service";
+import { checkAuth, getCurrentUser, isAdminAccessAllowed } from "@/services/auth-service";
 import { geminiRateLimiter } from "@/infrastructure/rate-limiter";
+import { createPostAnalysisFingerprint, normalizeImageInput } from "@/services/post-analysis-fingerprint";
 
 export const dynamic = "force-dynamic";
 
@@ -16,11 +16,17 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ message: "Unauthorized" }, { status: 401 });
     }
 
+    const user = await getCurrentUser();
+    const isAdmin = isAdminAccessAllowed(user);
+    if (!isAdmin) {
+      return NextResponse.json({ message: "adminOnlyAction" }, { status: 403 });
+    }
+
     const ip = request.headers.get("x-forwarded-for") || (request as NextRequest & { ip?: string }).ip || "unknown-ip";
-    const { allowed, retryAfter } = geminiRateLimiter.check(ip);
+    const { allowed, retryAfter } = await geminiRateLimiter.check(ip);
     if (!allowed) {
       return NextResponse.json(
-        { message: `Quá nhiều yêu cầu. Vui lòng thử lại sau ${retryAfter} giây.` },
+        { message: `tooManyRequestsWithRetryAfter:retryAfter=${retryAfter}` },
         { status: 429, headers: { "Retry-After": String(retryAfter) } }
       );
     }
@@ -135,71 +141,13 @@ export async function POST(request: NextRequest) {
     });
   } catch (error) {
     return NextResponse.json(
-      { message: getErrorMessage(error, "Không thể phân tích bài viết.") },
+      { message: getErrorMessage(error, "cannotAnalyzePost") },
       { status: getErrorStatus(error) },
     );
   }
 }
 
-function normalizeImageInput(
-  value: unknown,
-): { data: string; mimeType: string; fileName?: string } | undefined {
-  if (!isRecord(value)) {
-    return undefined;
-  }
 
-  const rawData = typeof value.data === "string" ? value.data.trim() : "";
-  const mimeType =
-    typeof value.mimeType === "string"
-      ? value.mimeType.trim().toLowerCase()
-      : "";
-  if (!rawData && !mimeType) {
-    return undefined;
-  }
-
-  if (!/^image\/(?:png|jpe?g|webp)$/.test(mimeType)) {
-    throw new Error("Ảnh inventory phải là PNG, JPG hoặc WebP.");
-  }
-
-  const data = rawData.includes(",")
-    ? (rawData.split(",").pop() ?? "")
-    : rawData;
-  if (!/^[a-z0-9+/=\r\n]+$/i.test(data) || data.length === 0) {
-    throw new Error("Dữ liệu ảnh không hợp lệ.");
-  }
-
-  if (data.length > 8_000_000) {
-    throw new Error("Ảnh quá lớn. Hãy dùng ảnh dưới khoảng 6MB.");
-  }
-
-  return {
-    data,
-    mimeType,
-    fileName:
-      typeof value.fileName === "string" && value.fileName.trim()
-        ? value.fileName.trim().slice(0, 180)
-        : undefined,
-  };
-}
-
-function createPostAnalysisFingerprint(
-  text: string,
-  image: { data: string; mimeType: string } | undefined,
-): string {
-  const normalizedText = text.replace(/\s+/g, " ").trim().toLowerCase();
-  const imageHash = image
-    ? createHash("sha256")
-        .update(image.mimeType)
-        .update(":")
-        .update(image.data)
-        .digest("hex")
-    : "no-image";
-  return createHash("sha256")
-    .update(normalizedText)
-    .update("|")
-    .update(imageHash)
-    .digest("hex");
-}
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
@@ -215,16 +163,37 @@ function getErrorStatus(error: unknown): number {
     : 400;
 }
 
+const CLIENT_ERROR_KEYS = [
+  "invalidImageFormat",
+  "invalidImageData",
+  "imageTooLarge",
+  "noCaseDetectedInPostOrImages",
+  "noCaseDetectedInPost",
+  "invalidChatGptJson",
+  "chatGptJsonEmpty",
+  "geminiApiKeyNotConfiguredImage",
+  "geminiNoResponse",
+  "geminiTimeout",
+  "geminiConnectionError",
+  "geminiQuotaExceeded",
+  "geminiInvalidApiKey",
+  "geminiPayloadRejected",
+  "geminiPayloadRejectedWithReason",
+  "geminiRecognitionFailed",
+  "geminiRecognitionFailedWithReason",
+];
+
 function isClientError(error: unknown): boolean {
   if (!(error instanceof Error)) {
     return false;
   }
 
+  const errMsg = error.message;
   return (
-    error.message.startsWith("Ảnh ") ||
-    error.message.startsWith("Dữ liệu ảnh ") ||
-    error.message.startsWith("Không tìm thấy case ") ||
-    error.message.startsWith("Không nhận diện được case ")
+    CLIENT_ERROR_KEYS.includes(errMsg) ||
+    errMsg.startsWith("geminiQuotaExceeded:") ||
+    errMsg.startsWith("geminiPayloadRejectedWithReason:") ||
+    errMsg.startsWith("geminiRecognitionFailedWithReason:")
   );
 }
 

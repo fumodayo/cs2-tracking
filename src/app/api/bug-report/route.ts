@@ -1,22 +1,37 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getCurrentUser } from "@/services/auth-service";
+import { getCurrentUser, isAdminUser } from "@/services/auth-service";
 import { getDatabase } from "@/infrastructure/db/mongo-client";
 import { uploadImageToCloudinary } from "@/infrastructure/cloudinary";
 import { ObjectId } from "mongodb";
+import { bugReportRateLimiter } from "@/infrastructure/rate-limiter";
+import { bugReportSchema } from "@/utils/validation";
+import { apiError, ApiErrorCode } from "@/utils/error";
 
 export const dynamic = "force-dynamic";
 
 export async function POST(request: NextRequest) {
   try {
-    const body = await request.json();
-    const { description, image, mimeType, images } = body;
-
-    if (!description || typeof description !== "string" || !description.trim()) {
-      return NextResponse.json(
-        { message: "Vui lòng nhập mô tả lỗi." },
-        { status: 400 }
+    const ip = request.headers.get("x-forwarded-for") || (request as NextRequest & { ip?: string }).ip || "unknown-ip";
+    const { allowed, retryAfter } = await bugReportRateLimiter.check(ip);
+    if (!allowed) {
+      return apiError(
+        ApiErrorCode.RATE_LIMIT_EXCEEDED,
+        "tooManyRequests",
+        429,
+        { retryAfter }
       );
     }
+
+    const body = await request.json();
+    const parsed = bugReportSchema.safeParse(body);
+    if (!parsed.success) {
+      return apiError(
+        ApiErrorCode.VALIDATION_ERROR,
+        parsed.error.issues[0].message,
+        400
+      );
+    }
+    const { description, image, mimeType, images } = parsed.data;
 
     let imageUrl = "";
     const imageUrls: string[] = [];
@@ -36,9 +51,10 @@ export async function POST(request: NextRequest) {
         }
       } catch (uploadError) {
         console.error("Failed to upload screenshots to Cloudinary:", uploadError);
-        return NextResponse.json(
-          { message: "Không thể upload một hoặc nhiều hình ảnh lên Cloudinary." },
-          { status: 500 }
+        return apiError(
+          ApiErrorCode.INTERNAL_SERVER_ERROR,
+          "cloudinaryUploadError",
+          500
         );
       }
     } else if (image && typeof image === "string" && image.trim()) {
@@ -49,9 +65,10 @@ export async function POST(request: NextRequest) {
         imageUrls.push(imageUrl);
       } catch (uploadError) {
         console.error("Failed to upload screenshot to Cloudinary:", uploadError);
-        return NextResponse.json(
-          { message: "Không thể upload hình ảnh lên Cloudinary." },
-          { status: 500 }
+        return apiError(
+          ApiErrorCode.INTERNAL_SERVER_ERROR,
+          "cloudinaryUploadError",
+          500
         );
       }
     }
@@ -81,10 +98,11 @@ export async function POST(request: NextRequest) {
     );
   } catch (error) {
     console.error("Bug report submission error:", error);
-    const message = error instanceof Error ? error.message : "Đã xảy ra lỗi không xác định.";
-    return NextResponse.json(
-      { message },
-      { status: 500 }
+    const message = error instanceof Error ? error.message : "unknownError";
+    return apiError(
+      ApiErrorCode.INTERNAL_SERVER_ERROR,
+      message,
+      500
     );
   }
 }
@@ -92,7 +110,7 @@ export async function POST(request: NextRequest) {
 export async function GET(request: NextRequest) {
   try {
     const user = await getCurrentUser();
-    if (!user || user.email !== "thaigiui2016@gmail.com") {
+    if (!user || !isAdminUser(user.email)) {
       return NextResponse.json({ message: "Unauthorized" }, { status: 403 });
     }
 
@@ -118,7 +136,7 @@ export async function GET(request: NextRequest) {
     return NextResponse.json(serializedReports);
   } catch (error) {
     console.error("Failed to fetch bug reports:", error);
-    const message = error instanceof Error ? error.message : "Đã xảy ra lỗi không xác định.";
+    const message = error instanceof Error ? error.message : "unknownError";
     return NextResponse.json({ message }, { status: 500 });
   }
 }
@@ -126,7 +144,7 @@ export async function GET(request: NextRequest) {
 export async function PATCH(request: NextRequest) {
   try {
     const user = await getCurrentUser();
-    if (!user || user.email !== "thaigiui2016@gmail.com") {
+    if (!user || !isAdminUser(user.email)) {
       return NextResponse.json({ message: "Unauthorized" }, { status: 403 });
     }
 
@@ -135,14 +153,14 @@ export async function PATCH(request: NextRequest) {
 
     if (!id || typeof id !== "string") {
       return NextResponse.json(
-        { message: "Thiếu ID báo cáo lỗi." },
+        { message: "missingId" },
         { status: 400 }
       );
     }
 
     if (!ObjectId.isValid(id)) {
       return NextResponse.json(
-        { message: "ID báo cáo lỗi không hợp lệ." },
+        { message: "invalidId" },
         { status: 400 }
       );
     }
@@ -154,7 +172,7 @@ export async function PATCH(request: NextRequest) {
 
     if (result.matchedCount === 0) {
       return NextResponse.json(
-        { message: "Không tìm thấy báo cáo lỗi." },
+        { message: "notFound" },
         { status: 404 }
       );
     }
@@ -162,7 +180,7 @@ export async function PATCH(request: NextRequest) {
     return NextResponse.json({ success: true });
   } catch (error) {
     console.error("Failed to update bug report status:", error);
-    const message = error instanceof Error ? error.message : "Đã xảy ra lỗi không xác định.";
+    const message = error instanceof Error ? error.message : "unknownError";
     return NextResponse.json({ message }, { status: 500 });
   }
 }

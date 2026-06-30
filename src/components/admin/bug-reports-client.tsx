@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { useTranslation } from "react-i18next";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { motion, AnimatePresence } from "framer-motion";
 import {
@@ -16,6 +17,7 @@ import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { toast } from "@/stores";
+import { formatDateTimeVi } from "@/utils/date";
 
 interface BugReport {
   id: string;
@@ -33,6 +35,7 @@ interface BugReport {
 
 export function AdminBugReportsClient() {
   const queryClient = useQueryClient();
+  const { t, i18n } = useTranslation();
   const [activeTab, setActiveTab] = useState<"unresolved" | "resolved">("unresolved");
   const [selectedImage, setSelectedImage] = useState<string | null>(null);
 
@@ -42,7 +45,9 @@ export function AdminBugReportsClient() {
     queryFn: async () => {
       const res = await fetch(`/api/bug-report${activeTab === "resolved" ? "?all=true" : ""}`);
       if (!res.ok) {
-        throw new Error("Không thể tải danh sách báo cáo lỗi.");
+        const errorData = await res.json().catch(() => ({}));
+        const errorKey = errorData.message ? `bugReport.errors.${errorData.message}` : "bugReportsAdmin.failedToLoadList";
+        throw new Error(t(errorKey, { defaultValue: errorData.message || (t("bugReportsAdmin.failedToLoadList") as string) }) as string);
       }
       const data = await res.json();
       
@@ -65,37 +70,27 @@ export function AdminBugReportsClient() {
       });
       if (!res.ok) {
         const errorData = await res.json().catch(() => ({}));
-        throw new Error(errorData.message || "Không thể cập nhật trạng thái báo cáo lỗi.");
+        const errorKey = errorData.message ? `bugReport.errors.${errorData.message}` : "bugReportsAdmin.failedToUpdateStatus";
+        throw new Error(t(errorKey, { defaultValue: errorData.message || (t("bugReportsAdmin.failedToUpdateStatus") as string) }) as string);
       }
       return res.json();
     },
     onSuccess: () => {
       toast.success(
         activeTab === "unresolved" 
-          ? "Đã đánh dấu báo cáo lỗi là Đã giải quyết!" 
-          : "Đã khôi phục báo cáo lỗi về trạng thái Chưa giải quyết!"
+          ? t("bugReportsAdmin.markedResolved") 
+          : t("bugReportsAdmin.restoredPending")
       );
       queryClient.invalidateQueries({ queryKey: ["bug-reports"] });
     },
     onError: (err: unknown) => {
-      const message = err instanceof Error ? err.message : "Đã xảy ra lỗi.";
+      const message = err instanceof Error ? err.message : t("bugReportsAdmin.occurredError");
       toast.error(message);
     },
   });
 
   const formatDate = (dateStr: string) => {
-    try {
-      return new Date(dateStr).toLocaleString("vi-VN", {
-        hour: "2-digit",
-        minute: "2-digit",
-        second: "2-digit",
-        day: "2-digit",
-        month: "2-digit",
-        year: "numeric",
-      });
-    } catch {
-      return dateStr;
-    }
+    return formatDateTimeVi(dateStr);
   };
 
   return (
@@ -106,21 +101,21 @@ export function AdminBugReportsClient() {
           className="absolute inset-0 bg-cover bg-center opacity-30"
           style={{ backgroundImage: "url('/assets/dashboard-banner.png')" }}
         />
-        <div className="absolute inset-0 bg-gradient-to-r from-[#0e0f0f] via-[#0e0f0f]/84 to-[#0e0f0f]/20" />
+        <div className="absolute inset-0 bg-gradient-to-r from-hero-scrim via-hero-scrim to-transparent" />
         <div className="relative mx-auto flex max-w-7xl flex-col justify-end px-4 pt-12 pb-6 sm:px-6 lg:px-8">
           <div className="max-w-3xl">
-            <p className="text-sm font-semibold tracking-[0.18em] text-blue-300 uppercase flex items-center gap-2">
+            <p className="text-sm font-semibold tracking-[0.18em] text-accent uppercase flex items-center gap-2">
               <span className="relative flex size-2">
                 <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-75"></span>
                 <span className="relative inline-flex size-2 rounded-full bg-emerald-500"></span>
               </span>
-              Trang quản trị Admin
+              {t("bugReportsAdmin.adminPanel")}
             </p>
-            <h1 className="mt-3 text-3xl font-semibold tracking-normal text-stone-50 sm:text-4xl">
-              Quản lý Báo cáo Lỗi
+            <h1 className="mt-3 text-3xl font-semibold tracking-normal text-foreground sm:text-4xl">
+              {t("bugReportsAdmin.title")}
             </h1>
-            <p className="mt-2 max-w-2xl text-sm leading-6 text-stone-300">
-              Xem và xử lý các phản hồi, báo cáo lỗi từ người dùng CS2 Tracker theo thời gian thực (tự động cập nhật mỗi 5 giây).
+            <p className="mt-2 max-w-2xl text-sm leading-6 text-muted-foreground">
+              {t("bugReportsAdmin.subtitle")}
             </p>
           </div>
         </div>
@@ -140,7 +135,7 @@ export function AdminBugReportsClient() {
               }`}
             >
               <AlertCircle className="size-3.5" />
-              Chưa giải quyết
+              {t("bugReportsAdmin.unresolvedTab")}
             </button>
             <button
               onClick={() => setActiveTab("resolved")}
@@ -151,7 +146,7 @@ export function AdminBugReportsClient() {
               }`}
             >
               <CheckCircle className="size-3.5" />
-              Đã giải quyết
+              {t("bugReportsAdmin.resolvedTab")}
             </button>
           </div>
 
@@ -160,7 +155,7 @@ export function AdminBugReportsClient() {
             {isFetching && !isLoading && (
               <RefreshCw className="size-3 animate-spin text-blue-300" />
             )}
-            <span>Tự động cập nhật sau mỗi 5s</span>
+            <span>{t("bugReportsAdmin.autoUpdateEvery5s")}</span>
           </div>
         </div>
 
@@ -172,7 +167,7 @@ export function AdminBugReportsClient() {
         ) : error ? (
           <div className="flex h-48 flex-col items-center justify-center gap-2 rounded-xl border border-red-500/20 bg-red-950/20 p-6 text-center">
             <AlertCircle className="size-8 text-red-400" />
-            <h3 className="font-semibold text-red-200">Lỗi tải dữ liệu</h3>
+            <h3 className="font-semibold text-red-200">{t("bugReportsAdmin.dataLoadError")}</h3>
             <p className="text-xs text-red-300">{(error as Error).message}</p>
           </div>
         ) : reports.length === 0 ? (
@@ -188,13 +183,13 @@ export function AdminBugReportsClient() {
             <div>
               <h3 className="text-base font-semibold text-stone-200">
                 {activeTab === "unresolved"
-                  ? "Tuyệt vời! Không còn báo cáo lỗi chưa giải quyết."
-                  : "Chưa có báo cáo lỗi nào được đánh dấu giải quyết."}
+                  ? t("bugReportsAdmin.noUnresolved")
+                  : t("bugReportsAdmin.noResolved")}
               </h3>
               <p className="mt-1 text-xs text-stone-400 max-w-sm mx-auto">
                 {activeTab === "unresolved"
-                  ? "Tất cả các lỗi hệ thống đều đã được xử lý xong xuôi."
-                  : "Các báo cáo lỗi sau khi hoàn thành sẽ xuất hiện tại đây."}
+                  ? t("bugReportsAdmin.allResolved")
+                  : t("bugReportsAdmin.resolvedWillShowHere")}
               </p>
             </div>
           </motion.div>
@@ -221,10 +216,10 @@ export function AdminBugReportsClient() {
                           </div>
                           <div className="min-w-0">
                             <h4 className="truncate text-xs font-bold text-stone-200">
-                              {report.user ? report.user.name : "Khách ẩn danh"}
+                              {report.user ? report.user.name : t("bugReportsAdmin.anonymousGuest")}
                             </h4>
                             <p className="truncate text-[10px] text-stone-400">
-                              {report.user ? report.user.email : "Không có email"}
+                              {report.user ? report.user.email : t("bugReportsAdmin.noEmail")}
                             </p>
                           </div>
                         </div>
@@ -247,41 +242,43 @@ export function AdminBugReportsClient() {
                       {report.imageUrls && report.imageUrls.length > 0 ? (
                         <div className="grid grid-cols-2 gap-3">
                           {report.imageUrls.map((url, idx) => (
-                            <div 
+                            <button 
                               key={idx}
+                              type="button"
                               onClick={() => setSelectedImage(url)}
-                              className="group relative cursor-pointer overflow-hidden rounded-xl border border-stone-850 bg-[#07090d] p-1.5 flex items-center justify-center h-32 transition-all hover:border-stone-700 hover:shadow-lg"
+                              className="group relative cursor-pointer overflow-hidden rounded-xl border border-stone-850 bg-[#07090d] p-1.5 flex items-center justify-center h-32 transition-all hover:border-stone-700 hover:shadow-lg w-full text-left"
                             >
                               <img
                                 src={url}
-                                alt={`Bug report screenshot ${idx + 1}`}
+                                alt={t("bugReportsAdmin.screenshotAltWithNumber", "Bug report screenshot {{number}}", { number: idx + 1 })}
                                 className="h-full w-full object-contain rounded-lg transition-transform duration-300 group-hover:scale-[1.02]"
                               />
                               <div className="absolute inset-0 flex items-center justify-center bg-stone-950/50 opacity-0 transition-opacity group-hover:opacity-100">
                                 <span className="flex items-center gap-1.5 rounded-full bg-stone-900/90 px-3 py-1.5 text-[10px] font-semibold text-stone-200 shadow-md shadow-black/40">
-                                  <Eye className="size-3.5" /> Phóng to
+                                  <Eye className="size-3.5" /> {t("bugReportsAdmin.zoomIn")}
                                 </span>
                               </div>
-                            </div>
+                            </button>
                           ))}
                         </div>
                       ) : (
                         report.imageUrl && (
-                          <div 
+                          <button 
+                            type="button"
                             onClick={() => setSelectedImage(report.imageUrl)}
-                            className="group relative cursor-pointer overflow-hidden rounded-xl border border-stone-850 bg-[#07090d] p-1.5 flex items-center justify-center h-48 transition-all hover:border-stone-700 hover:shadow-lg"
+                            className="group relative cursor-pointer overflow-hidden rounded-xl border border-stone-850 bg-[#07090d] p-1.5 flex items-center justify-center h-48 transition-all hover:border-stone-700 hover:shadow-lg w-full text-left"
                           >
                             <img
                               src={report.imageUrl}
-                              alt="Bug report screenshot"
+                              alt={t("bugReportsAdmin.screenshotAlt", "Bug report screenshot")}
                               className="h-full w-full object-contain rounded-lg transition-transform duration-300 group-hover:scale-[1.02]"
                             />
                             <div className="absolute inset-0 flex items-center justify-center bg-stone-950/50 opacity-0 transition-opacity group-hover:opacity-100">
                               <span className="flex items-center gap-1.5 rounded-full bg-stone-900/90 px-3 py-1.5 text-[10px] font-semibold text-stone-200 shadow-md shadow-black/40">
-                                <Eye className="size-3.5" /> Phóng to ảnh
+                                <Eye className="size-3.5" /> {t("bugReportsAdmin.zoomInImage")}
                               </span>
                             </div>
-                          </div>
+                          </button>
                         )
                       )}
                     </div>
@@ -305,7 +302,7 @@ export function AdminBugReportsClient() {
                           ) : (
                             <Check className="size-3.5" />
                           )}
-                          Đã giải quyết
+                          {t("bugReportsAdmin.resolvedTab")}
                         </Button>
                       ) : (
                         <Button
@@ -320,7 +317,7 @@ export function AdminBugReportsClient() {
                           ) : (
                             <Clock className="size-3.5" />
                           )}
-                          Mở lại lỗi
+                          {t("bugReportsAdmin.reopenBug")}
                         </Button>
                       )}
                     </div>
@@ -336,14 +333,14 @@ export function AdminBugReportsClient() {
       <Dialog open={!!selectedImage} onOpenChange={(open) => !open && setSelectedImage(null)}>
         <DialogContent className="max-w-4xl p-2 border-stone-800 bg-stone-950">
           <DialogHeader className="sr-only">
-            <DialogTitle>Ảnh chụp màn hình lỗi</DialogTitle>
-            <DialogDescription>Chi tiết hình ảnh đính kèm lỗi</DialogDescription>
+            <DialogTitle>{t("bugReportsAdmin.screenshot")}</DialogTitle>
+            <DialogDescription>{t("bugReportsAdmin.screenshotDetail")}</DialogDescription>
           </DialogHeader>
           <div className="flex max-h-[80vh] items-center justify-center overflow-hidden rounded-lg">
             {selectedImage && (
               <img
                 src={selectedImage}
-                alt="Bug report screenshot full view"
+                alt={t("bugReportsAdmin.screenshotFullViewAlt", "Bug report screenshot full view")}
                 className="max-h-full max-w-full object-contain"
               />
             )}

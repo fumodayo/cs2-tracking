@@ -1,6 +1,7 @@
 "use client";
 
 import { Calculator, Loader2 } from "lucide-react";
+import { useTranslation } from "react-i18next";
 import { Button } from "@/components/ui/button";
 
 interface CacheMatchAlertProps {
@@ -14,11 +15,13 @@ export function CacheMatchAlert({
   isUpdating,
   onUpdatePrice,
 }: CacheMatchAlertProps) {
+  const { t } = useTranslation();
+
   return (
     <div className="mt-4 flex flex-col gap-3 rounded-lg border border-emerald-500/15 bg-emerald-500/[0.02] p-4 text-xs text-emerald-300 sm:flex-row sm:items-center sm:justify-between">
       <div className="min-w-0">
         <span className="mb-0.5 block font-bold text-emerald-200">
-          ⚡ Phát hiện bài trùng khớp trong lịch sử
+          {t("postAnalyzer.matchingPostFound")}
         </span>
         <p className="leading-relaxed text-stone-450 font-medium">
           {message}
@@ -35,7 +38,7 @@ export function CacheMatchAlert({
         ) : (
           <Calculator className="size-3.5" />
         )}
-        Cập nhật giá mới
+        {t("postAnalyzer.updateNewPrices")}
       </Button>
     </div>
   );

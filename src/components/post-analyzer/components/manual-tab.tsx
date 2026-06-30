@@ -3,6 +3,7 @@
 import type React from "react";
 import { Calculator, FileImage, Loader2, X } from "lucide-react";
 import Image from "next/image";
+import { useTranslation } from "react-i18next";
 import { Tooltip } from "@/components/ui/tooltip";
 import { Button } from "@/components/ui/button";
 import { formatDateTimeVi as formatHistoryDate } from "@/utils/date";
@@ -23,6 +24,7 @@ interface ManualTabProps {
   handleImageDrop: (event: React.DragEvent<HTMLDivElement>) => void;
   handleImageChange: (event: React.ChangeEvent<HTMLInputElement>) => void;
   clearImage: () => void;
+  isAdmin?: boolean;
 }
 
 export function ManualTab({
@@ -39,7 +41,9 @@ export function ManualTab({
   handleImageDrop,
   handleImageChange,
   clearImage,
+  isAdmin = false,
 }: ManualTabProps) {
+  const { t } = useTranslation();
   return (
     <form
       onSubmit={handleSubmit}
@@ -48,43 +52,47 @@ export function ManualTab({
     >
       <div className="space-y-1.5">
         <label className="text-xs font-semibold text-stone-400 uppercase tracking-wider block">
-          Bài viết cần phân tích
+          {t("postAnalyzer.postToAnalyze")}
         </label>
         <textarea
           value={text}
           onChange={(event) => setText(event.target.value)}
           rows={7}
-          placeholder="Dán nội dung bài viết cần tính giá tại đây..."
-          className="w-full resize-y rounded-lg border border-stone-800 bg-stone-950/40 p-4 text-sm leading-relaxed text-stone-100 outline-none transition-all focus:border-blue-500/50 focus:ring-1 focus:ring-blue-500/20 placeholder:text-stone-700"
+          disabled={!isAdmin}
+          placeholder={isAdmin ? t("postAnalyzer.placeholderTextareaAdmin") : t("postAnalyzer.placeholderTextareaUser")}
+          className="w-full resize-y rounded-lg border border-stone-800 bg-stone-950/40 p-4 text-sm leading-relaxed text-stone-100 outline-none transition-all focus:border-blue-500/50 focus:ring-1 focus:ring-blue-500/20 placeholder:text-stone-700 disabled:opacity-60 disabled:cursor-not-allowed"
         />
       </div>
       <div
-        onDragOver={handleImageDragOver}
-        onDragLeave={handleImageDragLeave}
-        onDrop={handleImageDrop}
+        onDragOver={isAdmin ? handleImageDragOver : undefined}
+        onDragLeave={isAdmin ? handleImageDragLeave : undefined}
+        onDrop={isAdmin ? handleImageDrop : undefined}
         className={`rounded-xl border border-dashed p-4 transition-all duration-200 ${
-          isDraggingImage
+          isDraggingImage && isAdmin
             ? "border-blue-500 bg-blue-500/[0.02] scale-[1.01]"
             : "border-stone-800 bg-stone-950/20 hover:border-stone-700 hover:bg-stone-950/30"
-        }`}
+        } ${!isAdmin ? "opacity-60 cursor-not-allowed" : ""}`}
       >
         <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
           <div className="min-w-0">
             <div className="flex items-center gap-2 text-xs font-semibold text-stone-300 uppercase tracking-wider">
               <FileImage className="size-4 text-blue-400" />
-              Ảnh inventory
+              {t("postAnalyzer.inventoryImage")}
             </div>
             <p className="mt-1.5 text-xs text-stone-500 leading-relaxed max-w-xl">
-              Kéo thả ảnh chụp màn hình hòm đồ/skin vào đây hoặc click chọn ảnh. AI sẽ ưu tiên đếm số lượng trực tiếp từ ảnh.
+              {t("postAnalyzer.dragDropImageDesc")}
             </p>
           </div>
-          <label className="inline-flex h-9 shrink-0 items-center justify-center gap-1.5 rounded-lg border border-stone-800 bg-stone-900/60 px-3.5 text-xs font-semibold text-stone-300 hover:bg-stone-800 hover:text-stone-200 hover:border-stone-700 transition-all cursor-pointer">
+          <label className={`inline-flex h-9 shrink-0 items-center justify-center gap-1.5 rounded-lg border border-stone-800 bg-stone-900/60 px-3.5 text-xs font-semibold text-stone-300 hover:bg-stone-800 hover:text-stone-200 hover:border-stone-700 transition-all ${
+            isAdmin ? "cursor-pointer" : "cursor-not-allowed opacity-50"
+          }`}>
             <FileImage className="size-3.5 text-blue-400" />
-            Tải ảnh
+            {t("postAnalyzer.uploadImage")}
             <input
               type="file"
               accept="image/png,image/jpeg,image/webp"
               className="sr-only"
+              disabled={!isAdmin}
               onChange={handleImageChange}
             />
           </label>
@@ -106,14 +114,15 @@ export function ManualTab({
                 {image.fileName}
               </div>
               <p className="mt-1 text-xs text-stone-500">
-                Ảnh đã sẵn sàng. AI sẽ quét ảnh này khi bạn nhấn Phân tích.
+                {t("postAnalyzer.imageReadyDesc")}
               </p>
             </div>
-            <Tooltip content="Gỡ bỏ ảnh">
+            <Tooltip content={t("postAnalyzer.removeImage")}>
               <Button
                 type="button"
                 variant="ghost"
                 size="icon"
+                disabled={!isAdmin}
                 onClick={clearImage}
                 className="size-8 rounded-lg border border-stone-800 bg-stone-900/40 text-stone-400 hover:border-red-500/30 hover:bg-red-950/30 hover:text-red-400 transition-colors"
               >
@@ -126,21 +135,21 @@ export function ManualTab({
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between border-t border-stone-800/65 pt-4">
         <p className="text-xs text-stone-500">
           {selectedHistory
-            ? `Đang xem lại bài đã lưu: ${formatHistoryDate(selectedHistory.createdAt)}`
-            : "Kết quả mới sẽ tự động lưu vào cơ sở dữ liệu."}
+            ? t("postAnalyzer.reviewingSavedPost", { date: formatHistoryDate(selectedHistory.createdAt) })
+            : t("postAnalyzer.newResultsAutoSaved")}
         </p>
         <Button
           type="submit"
-          disabled={isPending || (!text.trim() && !image)}
+          disabled={isPending || (!text.trim() && !image) || !isAdmin}
           variant="primary"
-          className="inline-flex h-10 items-center justify-center gap-1.5 px-5 text-xs font-bold cursor-pointer"
+          className="inline-flex h-10 items-center justify-center gap-1.5 px-5 text-xs font-bold cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
         >
           {isPending ? (
             <Loader2 className="size-3.5 animate-spin" />
           ) : (
             <Calculator className="size-3.5" />
           )}
-          <span>Phân tích giá</span>
+          <span>{isAdmin ? t("postAnalyzer.analyzePrice") : t("postAnalyzer.analyzePriceComingSoon")}</span>
         </Button>
       </div>
     </form>

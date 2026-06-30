@@ -1,11 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
-import { createHash } from "node:crypto";
 import { USER_AGENTS } from "@/utils/api-client";
+import { isSafeUrl } from "@/utils/url";
 import { SteamMarketPriceProvider } from "@/infrastructure/price/steam-market-price-provider";
 import { MongoPostAnalysisHistoryRepository } from "@/infrastructure/repositories/mongo-post-analysis-history-repository";
 import { PostAnalysisService } from "@/services/post-analysis-service";
-import { checkAuth } from "@/services/auth-service";
+import { checkAuth, getCurrentUser, isAdminAccessAllowed } from "@/services/auth-service";
 import { geminiRateLimiter } from "@/infrastructure/rate-limiter";
+import { createPostAnalysisFingerprint } from "@/services/post-analysis-fingerprint";
 
 export const dynamic = "force-dynamic";
 
@@ -16,11 +17,17 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ message: "Unauthorized" }, { status: 401 });
     }
 
+    const user = await getCurrentUser();
+    const isAdmin = isAdminAccessAllowed(user);
+    if (!isAdmin) {
+      return NextResponse.json({ message: "adminOnlyAction" }, { status: 403 });
+    }
+
     const ip = request.headers.get("x-forwarded-for") || (request as NextRequest & { ip?: string }).ip || "unknown-ip";
-    const { allowed, retryAfter } = geminiRateLimiter.check(ip);
+    const { allowed, retryAfter } = await geminiRateLimiter.check(ip);
     if (!allowed) {
       return NextResponse.json(
-        { message: `Quá nhiều yêu cầu. Vui lòng thử lại sau ${retryAfter} giây.` },
+        { message: `tooManyRequestsWithRetryAfter:retryAfter=${retryAfter}` },
         { status: 429, headers: { "Retry-After": String(retryAfter) } }
       );
     }
@@ -34,7 +41,7 @@ export async function POST(request: NextRequest) {
 
     if (!text) {
       return NextResponse.json(
-        { message: "Nội dung bài viết trống." },
+        { message: "postContentEmpty" },
         { status: 400 },
       );
     }
@@ -71,6 +78,10 @@ export async function POST(request: NextRequest) {
       await Promise.all(
         imageUrls.map(async (imageUrl: string, idx: number) => {
           try {
+            if (!isSafeUrl(imageUrl)) {
+              throw new Error("URL is not in the allowed safe domains list (SSRF Protection)");
+            }
+
             const imageRes = await fetch(imageUrl, {
               headers: {
                 "User-Agent": USER_AGENTS.steamBrowser,
@@ -213,33 +224,14 @@ export async function POST(request: NextRequest) {
         message:
           error instanceof Error
             ? error.message
-            : "Không thể phân tích bài viết.",
+            : "cannotAnalyzePost",
       },
       { status: 500 },
     );
   }
 }
 
-function createPostAnalysisFingerprint(
-  text: string,
-  images: Array<{ data: string; mimeType: string }>,
-): string {
-  const normalizedText = text.replace(/\s+/g, " ").trim().toLowerCase();
-  let imageHash = "no-image";
-  if (images.length > 0) {
-    const hash = createHash("sha256");
-    const sorted = [...images].sort((a, b) => a.data.localeCompare(b.data));
-    sorted.forEach((img) => {
-      hash.update(img.mimeType).update(":").update(img.data).update("|");
-    });
-    imageHash = hash.digest("hex");
-  }
-  return createHash("sha256")
-    .update(normalizedText)
-    .update("|")
-    .update(imageHash)
-    .digest("hex");
-}
+
 
 function extractSteamUrl(text: string): string | null {
   const fullLinkMatch = text.match(

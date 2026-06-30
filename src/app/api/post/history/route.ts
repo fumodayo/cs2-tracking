@@ -32,7 +32,7 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ items });
   } catch (error) {
     return NextResponse.json(
-      { message: getErrorMessage(error, "Không thể tải lịch sử phân tích.") },
+      { message: getErrorMessage(error, "cannotLoadHistory") },
       { status: 500 },
     );
   }

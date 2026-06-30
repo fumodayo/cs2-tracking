@@ -1,11 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
-import { createHash } from "node:crypto";
 import { SteamMarketPriceProvider } from "@/infrastructure/price/steam-market-price-provider";
 import { MongoPostAnalysisHistoryRepository } from "@/infrastructure/repositories/mongo-post-analysis-history-repository";
 import { PostAnalysisService } from "@/services/post-analysis-service";
 import { extractSteamUrl } from "@/services/parser/facebook-parser";
-import { checkAuth } from "@/services/auth-service";
+import { checkAuth, getCurrentUser, isAdminAccessAllowed } from "@/services/auth-service";
 import { geminiRateLimiter } from "@/infrastructure/rate-limiter";
+import { createChatGptPostAnalysisFingerprint as createPostAnalysisFingerprint } from "@/services/post-analysis-fingerprint";
 
 export const dynamic = "force-dynamic";
 
@@ -16,11 +16,17 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ message: "Unauthorized" }, { status: 401 });
     }
 
+    const user = await getCurrentUser();
+    const isAdmin = isAdminAccessAllowed(user);
+    if (!isAdmin) {
+      return NextResponse.json({ message: "adminOnlyAction" }, { status: 403 });
+    }
+
     const ip = request.headers.get("x-forwarded-for") || (request as NextRequest & { ip?: string }).ip || "unknown-ip";
-    const { allowed, retryAfter } = geminiRateLimiter.check(ip);
+    const { allowed, retryAfter } = await geminiRateLimiter.check(ip);
     if (!allowed) {
       return NextResponse.json(
-        { message: `Quá nhiều yêu cầu. Vui lòng thử lại sau ${retryAfter} giây.` },
+        { message: `tooManyRequestsWithRetryAfter:retryAfter=${retryAfter}` },
         { status: 429, headers: { "Retry-After": String(retryAfter) } }
       );
     }
@@ -31,14 +37,14 @@ export async function POST(request: NextRequest) {
 
     if (!text) {
       return NextResponse.json(
-        { message: "Nội dung bài viết trống." },
+        { message: "postContentEmpty" },
         { status: 400 },
       );
     }
 
     if (!chatGptJson || typeof chatGptJson !== "object") {
       return NextResponse.json(
-        { message: "Dữ liệu JSON ChatGPT không hợp lệ." },
+        { message: "invalidChatGptJson" },
         { status: 400 },
       );
     }
@@ -80,19 +86,11 @@ export async function POST(request: NextRequest) {
         message:
           error instanceof Error
             ? error.message
-            : "Không thể phân tích bài viết.",
+            : "cannotAnalyzePost",
       },
       { status: 500 },
     );
   }
 }
 
-function createPostAnalysisFingerprint(text: string, json: unknown): string {
-  const normalizedText = text.replace(/\s+/g, " ").trim().toLowerCase();
-  const jsonStr = JSON.stringify(json);
-  return createHash("sha256")
-    .update(normalizedText)
-    .update("|chatgpt|")
-    .update(jsonStr)
-    .digest("hex");
-}
+
