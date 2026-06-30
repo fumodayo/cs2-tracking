@@ -1,10 +1,11 @@
-import { MongoClient } from "mongodb";
+import { MongoClient } from 'mongodb';
+import { ensureIndexes } from './ensure-indexes';
 
 const uri = process.env.MONGODB_URI;
 
 if (!uri) {
   throw new Error(
-    "Missing MONGODB_URI. Copy .env.example to .env.local and set MongoDB connection.",
+    'Missing MONGODB_URI. Copy .env.example to .env.local and set MongoDB connection.'
   );
 }
 
@@ -17,6 +18,7 @@ const options = {
 let client: MongoClient;
 let clientPromise: Promise<MongoClient>;
 let stalePortfolioIndexDropPromise: Promise<unknown> | null = null;
+let indexesPromise: Promise<unknown> | null = null;
 
 type GlobalWithMongo = typeof globalThis & {
   _mongoClientPromise?: Promise<MongoClient>;
@@ -30,7 +32,7 @@ function createClientPromise(): Promise<MongoClient> {
 }
 
 function getClientPromise(): Promise<MongoClient> {
-  if (process.env.NODE_ENV === "development") {
+  if (process.env.NODE_ENV === 'development') {
     if (!globalWithMongo._mongoClientPromise) {
       globalWithMongo._mongoClientPromise = createClientPromise();
     }
@@ -48,17 +50,20 @@ function getClientPromise(): Promise<MongoClient> {
 export async function getDatabase() {
   try {
     const mongoClient = await getClientPromise();
-    const db = mongoClient.db(process.env.MONGODB_DB ?? "cs2_case_tracker");
+    const db = mongoClient.db(process.env.MONGODB_DB ?? 'cs2_case_tracker');
 
     // Proactively drop any stale unique index on portfolio_items that blocks duplicate imports
     stalePortfolioIndexDropPromise ??= db
-      .collection("portfolio_items")
-      .dropIndex("importSource_1_caseId_1")
+      .collection('portfolio_items')
+      .dropIndex('importSource_1_caseId_1')
       .catch(() => {});
+
+    // Lazily bootstrap database indexes
+    indexesPromise ??= ensureIndexes(db).catch(() => {});
 
     return db;
   } catch (error) {
-    if (process.env.NODE_ENV === "development") {
+    if (process.env.NODE_ENV === 'development') {
       globalWithMongo._mongoClientPromise = undefined;
     }
 
@@ -68,13 +73,8 @@ export async function getDatabase() {
 
 function normalizeMongoConnectionError(error: unknown): Error {
   const message = error instanceof Error ? error.message : String(error);
-  if (
-    message.includes("tlsv1 alert internal error") ||
-    message.includes("SSL alert number 80")
-  ) {
-    return new Error(
-      "MongoDB Atlas đã từ chối TLS handshake. Hãy vào Atlas Network Access và whitelist IP public hiện tại của máy, hoặc tạm thêm 0.0.0.0/0 khi phát triển local.",
-    );
+  if (message.includes('tlsv1 alert internal error') || message.includes('SSL alert number 80')) {
+    return new Error('mongoTlsHandshakeFailed');
   }
 
   return error instanceof Error ? error : new Error(message);

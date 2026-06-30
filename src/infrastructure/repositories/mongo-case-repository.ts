@@ -1,18 +1,18 @@
-import { ObjectId } from "mongodb";
-import type { CaseItem } from "@/domain/case-item";
-import type { CaseRepository } from "@/domain/repositories";
-import { DEFAULT_CASES } from "@/infrastructure/cases/default-cases";
-import { getSteamCaseImageUrl } from "@/infrastructure/cases/steam-case-image-provider";
-import { getDatabase } from "@/infrastructure/db/mongo-client";
-import { mapCaseDocument, toObjectId } from "@/infrastructure/db/mappers";
+import { ObjectId } from 'mongodb';
+import type { CaseItem } from '@/domain/case-item';
+import type { CaseRepository } from '@/domain/repositories';
+import { DEFAULT_CASES } from '@/infrastructure/cases/default-cases';
+import { getSteamCaseImageUrl } from '@/infrastructure/cases/steam-case-image-provider';
+import { getDatabase } from '@/infrastructure/db/mongo-client';
+import { mapCaseDocument, toObjectId } from '@/infrastructure/db/mappers';
 
 export class MongoCaseRepository implements CaseRepository {
   async ensureSeeded(): Promise<void> {
     const db = await getDatabase();
-    const collection = db.collection("cases");
+    const collection = db.collection('cases');
 
     await collection.createIndex({ marketHashName: 1 }, { unique: true });
-    await collection.createIndex({ name: "text", marketHashName: "text" });
+    await collection.createIndex({ name: 'text', marketHashName: 'text' });
 
     // Upsert all default items — adds any missing items without touching existing ones
     const ops = DEFAULT_CASES.map((caseItem) => ({
@@ -41,18 +41,13 @@ export class MongoCaseRepository implements CaseRepository {
       ? {
           isActive: true,
           $or: [
-            { name: { $regex: normalizedQuery, $options: "i" } },
-            { marketHashName: { $regex: normalizedQuery, $options: "i" } },
+            { name: { $regex: normalizedQuery, $options: 'i' } },
+            { marketHashName: { $regex: normalizedQuery, $options: 'i' } },
           ],
         }
       : { isActive: true };
 
-    const docs = await db
-      .collection("cases")
-      .find(filter)
-      .sort({ name: 1 })
-      .limit(25)
-      .toArray();
+    const docs = await db.collection('cases').find(filter).sort({ name: 1 }).limit(25).toArray();
 
     return this.enrichMissingMetadata(docs.map(mapCaseDocument));
   }
@@ -61,9 +56,7 @@ export class MongoCaseRepository implements CaseRepository {
     await this.ensureSeeded();
 
     const db = await getDatabase();
-    const doc = await db
-      .collection("cases")
-      .findOne({ _id: toObjectId(id), isActive: true });
+    const doc = await db.collection('cases').findOne({ _id: toObjectId(id), isActive: true });
     if (!doc) {
       return null;
     }
@@ -77,11 +70,11 @@ export class MongoCaseRepository implements CaseRepository {
 
     const db = await getDatabase();
     const normalizedMarketHashName = normalizeMarketHashName(marketHashName);
-    const doc = await db.collection("cases").findOne({
+    const doc = await db.collection('cases').findOne({
       isActive: true,
       marketHashName: {
         $regex: `^${escapeRegExp(normalizedMarketHashName)}$`,
-        $options: "i",
+        $options: 'i',
       },
     });
 
@@ -93,9 +86,7 @@ export class MongoCaseRepository implements CaseRepository {
     return caseItem;
   }
 
-  async findOrCreateByMarketHashName(
-    marketHashName: string,
-  ): Promise<CaseItem> {
+  async findOrCreateByMarketHashName(marketHashName: string): Promise<CaseItem> {
     const existing = await this.findByMarketHashName(marketHashName);
     if (existing) {
       return existing;
@@ -104,7 +95,7 @@ export class MongoCaseRepository implements CaseRepository {
     const normalizedMarketHashName = normalizeMarketHashName(marketHashName);
     const now = new Date();
     const db = await getDatabase();
-    const collection = db.collection("cases");
+    const collection = db.collection('cases');
 
     await collection.updateOne(
       { marketHashName: normalizedMarketHashName },
@@ -119,7 +110,7 @@ export class MongoCaseRepository implements CaseRepository {
           createdAt: now,
         },
       },
-      { upsert: true },
+      { upsert: true }
     );
 
     const doc = await collection.findOne({
@@ -127,7 +118,7 @@ export class MongoCaseRepository implements CaseRepository {
       isActive: true,
     });
     if (!doc) {
-      throw new Error(`Không thể tạo case: ${normalizedMarketHashName}`);
+      throw new Error(`cannotCreateCase:name=${normalizedMarketHashName}`);
     }
 
     const [caseItem] = await this.enrichMissingMetadata([mapCaseDocument(doc)]);
@@ -137,16 +128,14 @@ export class MongoCaseRepository implements CaseRepository {
   async findByIds(ids: string[]): Promise<CaseItem[]> {
     await this.ensureSeeded();
 
-    const objectIds = ids
-      .filter(ObjectId.isValid)
-      .map((id) => new ObjectId(id));
+    const objectIds = ids.filter(ObjectId.isValid).map((id) => new ObjectId(id));
     if (objectIds.length === 0) {
       return [];
     }
 
     const db = await getDatabase();
     const docs = await db
-      .collection("cases")
+      .collection('cases')
       .find({ _id: { $in: objectIds }, isActive: true })
       .toArray();
 
@@ -154,10 +143,7 @@ export class MongoCaseRepository implements CaseRepository {
   }
 
   private async enrichMissingMetadata(cases: CaseItem[]): Promise<CaseItem[]> {
-    await Promise.all([
-      this.enrichMissingImages(cases),
-      this.enrichMissingRarities(cases),
-    ]);
+    await Promise.all([this.enrichMissingImages(cases), this.enrichMissingRarities(cases)]);
     return cases;
   }
 
@@ -178,16 +164,16 @@ export class MongoCaseRepository implements CaseRepository {
 
         caseItem.imageUrl = imageUrl;
 
-        await db.collection("cases").updateOne(
+        await db.collection('cases').updateOne(
           { _id: toObjectId(caseItem.id) },
           {
             $set: {
               imageUrl,
               updatedAt: new Date(),
             },
-          },
+          }
         );
-      }),
+      })
     );
   }
 
@@ -208,45 +194,45 @@ export class MongoCaseRepository implements CaseRepository {
 
         caseItem.rarity = rarity;
 
-        await db.collection("cases").updateOne(
+        await db.collection('cases').updateOne(
           { _id: toObjectId(caseItem.id) },
           {
             $set: {
               rarity,
               updatedAt: new Date(),
             },
-          },
+          }
         );
-      }),
+      })
     );
   }
 }
 
 async function findCachedRarity(
   db: Awaited<ReturnType<typeof getDatabase>>,
-  marketHashName: string,
-): Promise<CaseItem["rarity"] | undefined> {
-  const doc = await db.collection("inventory_scan_cache").findOne(
+  marketHashName: string
+): Promise<CaseItem['rarity'] | undefined> {
+  const doc = await db.collection('inventory_scan_cache').findOne(
     {
-      "items.caseItem.marketHashName": marketHashName,
-      "items.rarity": { $exists: true },
+      'items.caseItem.marketHashName': marketHashName,
+      'items.rarity': { $exists: true },
     },
     {
       projection: {
         items: {
           $elemMatch: {
-            "caseItem.marketHashName": marketHashName,
+            'caseItem.marketHashName': marketHashName,
             rarity: { $exists: true },
           },
         },
       },
-    },
+    }
   );
 
   const rarity = Array.isArray(doc?.items) ? doc.items[0]?.rarity : undefined;
   if (
-    typeof rarity?.name === "string" &&
-    typeof rarity?.color === "string" &&
+    typeof rarity?.name === 'string' &&
+    typeof rarity?.color === 'string' &&
     /^#[0-9a-f]{6}$/i.test(rarity.color)
   ) {
     return { name: rarity.name, color: rarity.color };
@@ -256,7 +242,7 @@ async function findCachedRarity(
 }
 
 function escapeRegExp(value: string): string {
-  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
 
 function normalizeMarketHashName(value: string): string {

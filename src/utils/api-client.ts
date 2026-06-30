@@ -1,37 +1,50 @@
 export const USER_AGENTS = {
   steamBrowser:
-    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-  steamApi: "Valve/Steam HTTP Client 1.0 (sevenup)",
+    'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+  steamApi: 'Valve/Steam HTTP Client 1.0 (sevenup)',
   default:
-    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+    'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
 };
 
-export async function fetchCs2cApi(
-  path: string,
-  options: RequestInit = {},
-): Promise<Response> {
-  const apiKey = process.env.CS2CAP_API_KEY?.trim();
+export async function fetchCs2cApi(path: string, options: RequestInit = {}): Promise<Response> {
+  let apiKey = process.env.CS2CAP_API_KEY?.trim();
+
+  // Try to use logged-in user's custom API key
+  try {
+    const { getCurrentUser, getUserCs2capApiKey } = await import('@/services/auth-service');
+    const user = await getCurrentUser();
+    if (user?.id) {
+      const userKey = await getUserCs2capApiKey(user.id);
+      if (userKey) {
+        apiKey = userKey;
+      }
+    }
+  } catch (err) {
+    // Gracefully ignore error if called outside request context or DB not connected
+    console.warn(
+      'Could not retrieve custom user CS2Cap API key, falling back to environment key:',
+      err
+    );
+  }
+
   const headers = new Headers(options.headers);
-  if (apiKey && !headers.has("Authorization")) {
-    headers.set("Authorization", `Bearer ${apiKey}`);
+  if (apiKey && !headers.has('Authorization')) {
+    headers.set('Authorization', `Bearer ${apiKey}`);
   }
-  if (!headers.has("Content-Type")) {
-    headers.set("Content-Type", "application/json");
+  if (!headers.has('Content-Type')) {
+    headers.set('Content-Type', 'application/json');
   }
-  if (!headers.has("User-Agent")) {
-    headers.set("User-Agent", USER_AGENTS.default);
+  if (!headers.has('User-Agent')) {
+    headers.set('User-Agent', USER_AGENTS.default);
   }
   const url = `https://api.cs2c.app${path}`;
   return fetch(url, { ...options, headers });
 }
 
-export async function fetchSteamApi(
-  url: string,
-  options: RequestInit = {},
-): Promise<Response> {
+export async function fetchSteamApi(url: string, options: RequestInit = {}): Promise<Response> {
   const headers = new Headers(options.headers);
-  if (!headers.has("User-Agent")) {
-    headers.set("User-Agent", USER_AGENTS.steamBrowser);
+  if (!headers.has('User-Agent')) {
+    headers.set('User-Agent', USER_AGENTS.steamBrowser);
   }
   return fetch(url, { ...options, headers });
 }
@@ -43,20 +56,17 @@ export class HttpError extends Error {
   data: unknown;
 
   constructor(response: Response, data: unknown) {
-    const dataObj = data && typeof data === "object" ? (data as Record<string, unknown>) : null;
-    const msg = typeof dataObj?.message === "string"
-      ? dataObj.message
-      : typeof dataObj?.error === "string"
-        ? dataObj.error
-        : typeof data === "string"
-          ? data
-          : "";
-    super(
-      msg ||
-        response.statusText ||
-        `HTTP Error ${response.status}`,
-    );
-    this.name = "HttpError";
+    const dataObj = data && typeof data === 'object' ? (data as Record<string, unknown>) : null;
+    const msg =
+      typeof dataObj?.message === 'string'
+        ? dataObj.message
+        : typeof dataObj?.error === 'string'
+          ? dataObj.error
+          : typeof data === 'string'
+            ? data
+            : '';
+    super(msg || response.statusText || `HTTP Error ${response.status}`);
+    this.name = 'HttpError';
     this.status = response.status;
     this.statusText = response.statusText;
     this.response = response;
@@ -68,10 +78,7 @@ interface RequestOptions extends RequestInit {
   params?: Record<string, string | number | boolean | undefined | null>;
 }
 
-async function request<T>(
-  url: string,
-  options: RequestOptions = {},
-): Promise<T> {
+async function request<T>(url: string, options: RequestOptions = {}): Promise<T> {
   const { params, headers, ...customOptions } = options;
 
   // 1. Build URL with query parameters if present
@@ -85,13 +92,13 @@ async function request<T>(
     });
     const queryString = searchParams.toString();
     if (queryString) {
-      finalUrl += (url.includes("?") ? "&" : "?") + queryString;
+      finalUrl += (url.includes('?') ? '&' : '?') + queryString;
     }
   }
 
   // 2. Set default headers
   const defaultHeaders: HeadersInit = {
-    "Content-Type": "application/json",
+    'Content-Type': 'application/json',
   };
 
   const mergedHeaders = {
@@ -101,7 +108,7 @@ async function request<T>(
 
   // Remove Content-Type if body is FormData (e.g. file uploads) to let browser set boundary
   if (customOptions.body instanceof FormData) {
-    delete mergedHeaders["Content-Type"];
+    delete mergedHeaders['Content-Type'];
   }
 
   // 3. Perform fetch
@@ -112,8 +119,8 @@ async function request<T>(
 
   // 4. Parse response body
   let data: unknown = null;
-  const contentType = response.headers.get("content-type");
-  if (contentType && contentType.includes("application/json")) {
+  const contentType = response.headers.get('content-type');
+  if (contentType && contentType.includes('application/json')) {
     try {
       data = await response.json();
     } catch {
@@ -136,26 +143,26 @@ async function request<T>(
 }
 
 export const apiClient = {
-  get<T>(url: string, options?: Omit<RequestOptions, "body">) {
-    return request<T>(url, { ...options, method: "GET" });
+  get<T>(url: string, options?: Omit<RequestOptions, 'body'>) {
+    return request<T>(url, { ...options, method: 'GET' });
   },
 
-  post<T>(url: string, body?: unknown, options?: Omit<RequestOptions, "body">) {
+  post<T>(url: string, body?: unknown, options?: Omit<RequestOptions, 'body'>) {
     const requestBody = body instanceof FormData ? body : JSON.stringify(body);
-    return request<T>(url, { ...options, method: "POST", body: requestBody });
+    return request<T>(url, { ...options, method: 'POST', body: requestBody });
   },
 
-  put<T>(url: string, body?: unknown, options?: Omit<RequestOptions, "body">) {
+  put<T>(url: string, body?: unknown, options?: Omit<RequestOptions, 'body'>) {
     const requestBody = body instanceof FormData ? body : JSON.stringify(body);
-    return request<T>(url, { ...options, method: "PUT", body: requestBody });
+    return request<T>(url, { ...options, method: 'PUT', body: requestBody });
   },
 
-  patch<T>(url: string, body?: unknown, options?: Omit<RequestOptions, "body">) {
+  patch<T>(url: string, body?: unknown, options?: Omit<RequestOptions, 'body'>) {
     const requestBody = body instanceof FormData ? body : JSON.stringify(body);
-    return request<T>(url, { ...options, method: "PATCH", body: requestBody });
+    return request<T>(url, { ...options, method: 'PATCH', body: requestBody });
   },
 
-  delete<T>(url: string, options?: Omit<RequestOptions, "body">) {
-    return request<T>(url, { ...options, method: "DELETE" });
+  delete<T>(url: string, options?: Omit<RequestOptions, 'body'>) {
+    return request<T>(url, { ...options, method: 'DELETE' });
   },
 };

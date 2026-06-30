@@ -1,7 +1,8 @@
-import type { CaseItem } from "@/domain/case-item";
-import type { PriceProvider } from "@/domain/price-provider";
-import type { CurrentPrice } from "@/domain/price";
-import { USER_AGENTS } from "@/utils/api-client";
+import type { CaseItem } from '@/domain/case-item';
+import type { PriceProvider } from '@/domain/price-provider';
+import type { CurrentPrice } from '@/domain/price';
+import { USER_AGENTS } from '@/utils/api-client';
+import { fetchWithTimeout } from '@/utils/fetch-with-timeout';
 
 type SteamPriceOverviewResponse = {
   success?: boolean;
@@ -18,7 +19,7 @@ type ExchangeRateResponse = {
 };
 
 const FALLBACK_USD_TO_VND_RATE = 25000;
-const EXCHANGE_RATE_URL = "https://open.er-api.com/v6/latest/USD";
+const EXCHANGE_RATE_URL = 'https://open.er-api.com/v6/latest/USD';
 const EXCHANGE_RATE_REVALIDATE_SECONDS = 60 * 60;
 const STEAM_PRICE_TIMEOUT_MS = 8_000;
 const STEAM_PRICE_MAX_ATTEMPTS = 2;
@@ -28,13 +29,10 @@ const EXCHANGE_RATE_TIMEOUT_MS = 5_000;
 let cachedUsdToVndRate: { rate: number; expiresAt: number } | null = null;
 let pendingUsdToVndRate: Promise<number> | null = null;
 
-import * as fs from "fs";
-import * as path from "path";
+import * as fs from 'fs';
+import * as path from 'path';
 
-const FALLBACK_PRICES_CACHE_FILE = path.join(
-  process.cwd(),
-  "steam_prices_fallback_cache.json",
-);
+const FALLBACK_PRICES_CACHE_FILE = path.join(process.cwd(), 'steam_prices_fallback_cache.json');
 const FALLBACK_PRICES_CACHE_MAX_AGE_MS = 6 * 60 * 60 * 1000; // 6 hours
 
 let inMemoryFallbackPrices: Record<string, number> | null = null;
@@ -56,43 +54,38 @@ async function getFallbackPrices(): Promise<Record<string, number>> {
     if (fs.existsSync(FALLBACK_PRICES_CACHE_FILE)) {
       const stats = fs.statSync(FALLBACK_PRICES_CACHE_FILE);
       if (Date.now() - stats.mtimeMs < FALLBACK_PRICES_CACHE_MAX_AGE_MS) {
-        const content = fs.readFileSync(FALLBACK_PRICES_CACHE_FILE, "utf-8");
+        const content = fs.readFileSync(FALLBACK_PRICES_CACHE_FILE, 'utf-8');
         inMemoryFallbackPrices = JSON.parse(content);
         lastLoadedTime = Date.now();
         return inMemoryFallbackPrices!;
       }
     }
   } catch (err) {
-    console.error("Failed to read fallback prices cache file:", err);
+    console.error('Failed to read fallback prices cache file:', err);
   }
 
   try {
     const res = await fetchWithTimeout(
-      "https://prices.csgotrader.app/latest/steam.json",
+      'https://prices.csgotrader.app/latest/steam.json',
       {
         headers: {
-          "User-Agent": USER_AGENTS.steamBrowser,
-          Accept: "application/json",
+          'User-Agent': USER_AGENTS.steamBrowser,
+          Accept: 'application/json',
         },
       },
-      15000,
+      15000
     );
 
     if (res.ok) {
-      const contentType = res.headers.get("content-type");
-      if (contentType && contentType.includes("application/json")) {
+      const contentType = res.headers.get('content-type');
+      if (contentType && contentType.includes('application/json')) {
         const data = (await res.json()) as Record<string, CsgoTraderSteamItem>;
         const pricesMap: Record<string, number> = {};
 
         for (const [name, item] of Object.entries(data)) {
-          if (item && typeof item === "object") {
-            const price =
-              item.last_24h ?? item.last_7d ?? item.last_30d ?? item.last_90d;
-            if (
-              typeof price === "number" &&
-              Number.isFinite(price) &&
-              price > 0
-            ) {
+          if (item && typeof item === 'object') {
+            const price = item.last_24h ?? item.last_7d ?? item.last_30d ?? item.last_90d;
+            if (typeof price === 'number' && Number.isFinite(price) && price > 0) {
               pricesMap[name] = price;
             }
           }
@@ -101,29 +94,20 @@ async function getFallbackPrices(): Promise<Record<string, number>> {
         inMemoryFallbackPrices = pricesMap;
         lastLoadedTime = Date.now();
 
-        fs.writeFile(
-          FALLBACK_PRICES_CACHE_FILE,
-          JSON.stringify(pricesMap),
-          "utf-8",
-          (err) => {
-            if (err)
-              console.error("Failed to write fallback prices cache file:", err);
-          },
-        );
+        fs.writeFile(FALLBACK_PRICES_CACHE_FILE, JSON.stringify(pricesMap), 'utf-8', (err) => {
+          if (err) console.error('Failed to write fallback prices cache file:', err);
+        });
 
         return pricesMap;
       }
     }
   } catch (err) {
-    console.error(
-      "Failed to fetch fresh fallback prices from CSGOTrader:",
-      err,
-    );
+    console.error('Failed to fetch fresh fallback prices from CSGOTrader:', err);
   }
 
   try {
     if (fs.existsSync(FALLBACK_PRICES_CACHE_FILE)) {
-      const content = fs.readFileSync(FALLBACK_PRICES_CACHE_FILE, "utf-8");
+      const content = fs.readFileSync(FALLBACK_PRICES_CACHE_FILE, 'utf-8');
       inMemoryFallbackPrices = JSON.parse(content);
       lastLoadedTime = Date.now();
       return inMemoryFallbackPrices!;
@@ -135,20 +119,15 @@ async function getFallbackPrices(): Promise<Record<string, number>> {
   return {};
 }
 
-async function fetchFallbackUsdPrice(
-  marketHashName: string,
-): Promise<number | null> {
+async function fetchFallbackUsdPrice(marketHashName: string): Promise<number | null> {
   try {
     const prices = await getFallbackPrices();
     const price = prices[marketHashName];
-    if (typeof price === "number" && price > 0) {
+    if (typeof price === 'number' && price > 0) {
       return price;
     }
   } catch (err) {
-    console.error(
-      "Failed to get fallback USD price from CSGOTrader database:",
-      err,
-    );
+    console.error('Failed to get fallback USD price from CSGOTrader database:', err);
   }
   return null;
 }
@@ -156,7 +135,7 @@ async function fetchFallbackUsdPrice(
 export class SteamMarketPriceProvider implements PriceProvider {
   async getCurrentPrice(
     caseItem: CaseItem,
-    options?: { preferFallback?: boolean },
+    options?: { preferFallback?: boolean }
   ): Promise<CurrentPrice | null> {
     if (options?.preferFallback) {
       const vndPrice = await fetchFallbackVndPrice(caseItem.marketHashName);
@@ -164,8 +143,8 @@ export class SteamMarketPriceProvider implements PriceProvider {
         return {
           caseId: caseItem.id,
           price: vndPrice,
-          currency: "VND",
-          source: "csgotrader-fallback",
+          currency: 'VND',
+          source: 'csgotrader-fallback',
           capturedAt: new Date(),
         };
       }
@@ -177,8 +156,8 @@ export class SteamMarketPriceProvider implements PriceProvider {
         return {
           caseId: caseItem.id,
           price: vndPrice,
-          currency: "VND",
-          source: "steam-market",
+          currency: 'VND',
+          source: 'steam-market',
           capturedAt: new Date(),
         };
       }
@@ -192,9 +171,7 @@ export class SteamMarketPriceProvider implements PriceProvider {
   }
 }
 
-async function fetchFallbackVndPrice(
-  marketHashName: string,
-): Promise<number | null> {
+async function fetchFallbackVndPrice(marketHashName: string): Promise<number | null> {
   const usdPrice = await fetchFallbackUsdPrice(marketHashName);
   if (usdPrice !== null) {
     const usdToVndRate = await getUsdToVndRate();
@@ -203,13 +180,11 @@ async function fetchFallbackVndPrice(
   return null;
 }
 
-async function fetchVndMarketPrice(
-  marketHashName: string,
-): Promise<number | null> {
+async function fetchVndMarketPrice(marketHashName: string): Promise<number | null> {
   try {
     const params = new URLSearchParams({
-      appid: "730",
-      currency: "15", // 15 = VND
+      appid: '730',
+      currency: '15', // 15 = VND
       market_hash_name: marketHashName,
     });
 
@@ -218,15 +193,15 @@ async function fetchVndMarketPrice(
       {
         next: { revalidate: 60 },
         headers: {
-          "User-Agent": USER_AGENTS.steamApi,
+          'User-Agent': USER_AGENTS.steamApi,
         },
       },
-      STEAM_PRICE_TIMEOUT_MS,
+      STEAM_PRICE_TIMEOUT_MS
     );
 
     if (response.status === 429) {
       console.warn(
-        `Steam rate limit hit (429) for ${marketHashName}. Using CSGOTrader steam price database fallback.`,
+        `Steam rate limit hit (429) for ${marketHashName}. Using CSGOTrader steam price database fallback.`
       );
       return await fetchFallbackVndPrice(marketHashName);
     }
@@ -250,32 +225,32 @@ async function fetchVndMarketPrice(
     console.warn(
       `Error fetching Steam price for ${marketHashName}:`,
       error,
-      ". Falling back to CSGOTrader database.",
+      '. Falling back to CSGOTrader database.'
     );
     return await fetchFallbackVndPrice(marketHashName);
   }
 }
 
 function parseUsdPrice(value: string): number | null {
-  const normalized = value.replace(/[^0-9.,]/g, "").replace(",", "");
+  const normalized = value.replace(/[^0-9.,]/g, '').replace(',', '');
   const parsed = Number(normalized);
   return Number.isFinite(parsed) ? parsed : null;
 }
 
 function parseVndPrice(value: string, usdToVndRate: number): number | null {
-  if (value.includes("$")) {
+  if (value.includes('$')) {
     const usd = parseUsdPrice(value);
     return usd !== null ? Math.round(usd * usdToVndRate) : null;
   }
 
   // Keep only digits, dots, and commas
-  const cleaned = value.replace(/[^0-9.,]/g, "");
+  const cleaned = value.replace(/[^0-9.,]/g, '');
 
   let noThousands = cleaned;
-  if (cleaned.includes(",")) {
-    noThousands = cleaned.replace(/\./g, "").replace(",", ".");
+  if (cleaned.includes(',')) {
+    noThousands = cleaned.replace(/\./g, '').replace(',', '.');
   } else {
-    noThousands = cleaned.replace(/\./g, "");
+    noThousands = cleaned.replace(/\./g, '');
   }
 
   const parsed = Number(noThousands);
@@ -301,10 +276,10 @@ async function fetchUsdToVndRate(): Promise<number> {
       {
         next: { revalidate: EXCHANGE_RATE_REVALIDATE_SECONDS },
         headers: {
-          "User-Agent": USER_AGENTS.default,
+          'User-Agent': USER_AGENTS.default,
         },
       },
-      EXCHANGE_RATE_TIMEOUT_MS,
+      EXCHANGE_RATE_TIMEOUT_MS
     );
 
     if (!response.ok) {
@@ -314,7 +289,7 @@ async function fetchUsdToVndRate(): Promise<number> {
     const data = (await response.json()) as ExchangeRateResponse;
     const rate = data.rates?.VND;
 
-    if (data.result !== "success" || !isValidRate(rate)) {
+    if (data.result !== 'success' || !isValidRate(rate)) {
       return getFallbackUsdToVndRate();
     }
 
@@ -338,10 +313,7 @@ function getFallbackUsdToVndRate(): number {
 }
 
 function getExchangeRateExpiry(nextUpdateUnix?: number): number {
-  if (
-    typeof nextUpdateUnix === "number" &&
-    nextUpdateUnix > Date.now() / 1000
-  ) {
+  if (typeof nextUpdateUnix === 'number' && nextUpdateUnix > Date.now() / 1000) {
     return nextUpdateUnix * 1000;
   }
 
@@ -349,23 +321,9 @@ function getExchangeRateExpiry(nextUpdateUnix?: number): number {
 }
 
 function isValidRate(rate: unknown): rate is number {
-  return typeof rate === "number" && Number.isFinite(rate) && rate > 0;
+  return typeof rate === 'number' && Number.isFinite(rate) && rate > 0;
 }
 
 function delay(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
-}
-
-async function fetchWithTimeout(
-  input: RequestInfo | URL,
-  init: RequestInit,
-  timeoutMs: number,
-): Promise<Response> {
-  const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), timeoutMs);
-  try {
-    return await fetch(input, { ...init, signal: controller.signal });
-  } finally {
-    clearTimeout(timeout);
-  }
 }

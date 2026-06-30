@@ -1,7 +1,7 @@
-import { useSyncExternalStore } from "react";
-import { ReactNode } from "react";
+import { useSyncExternalStore } from 'react';
+import { ReactNode } from 'react';
 
-export type ToastType = "loading" | "success" | "error" | "info";
+export type ToastType = 'loading' | 'success' | 'error' | 'info';
 
 export type Toast = {
   id: string;
@@ -14,8 +14,9 @@ export type Toast = {
     icon?: ReactNode;
     onClick: () => void | Promise<void>;
   };
+  onClick?: () => void;
+  path?: string;
 };
-
 let toasts: Toast[] = [];
 const listeners = new Set<() => void>();
 
@@ -25,7 +26,7 @@ export const toastStore = {
   getToasts() {
     return toasts;
   },
-  add(toast: Omit<Toast, "id"> & { id?: string }) {
+  add(toast: Omit<Toast, 'id'> & { id?: string }) {
     const id = toast.id || Math.random().toString(36).slice(2);
     const newToast: Toast = { ...toast, id };
 
@@ -38,7 +39,7 @@ export const toastStore = {
 
     return id;
   },
-  update(id: string, props: Partial<Omit<Toast, "id">>) {
+  update(id: string, props: Partial<Omit<Toast, 'id'>>) {
     toasts = toasts.map((t) => (t.id === id ? { ...t, ...props } : t));
     notify();
 
@@ -57,21 +58,17 @@ export const toastStore = {
 };
 
 export function useToasts() {
-  return useSyncExternalStore(
-    toastStore.subscribe,
-    toastStore.getToasts,
-    toastStore.getToasts,
-  );
+  return useSyncExternalStore(toastStore.subscribe, toastStore.getToasts, toastStore.getToasts);
 }
 
 export const toast = {
-  loading: (title: string, props?: Omit<Toast, "id" | "type" | "title">) =>
-    toastStore.add({ type: "loading", title, duration: 0, ...props }),
-  success: (title: string, props?: Omit<Toast, "id" | "type" | "title">) =>
-    toastStore.add({ type: "success", title, duration: 5000, ...props }),
-  error: (title: string, props?: Omit<Toast, "id" | "type" | "title">) =>
-    toastStore.add({ type: "error", title, duration: 5000, ...props }),
-  info: (title: string, props?: Omit<Toast, "id" | "type" | "title">) =>
-    toastStore.add({ type: "info", title, duration: 5000, ...props }),
+  loading: (title: string, props?: Omit<Toast, 'id' | 'type' | 'title'>) =>
+    toastStore.add({ type: 'loading', title, duration: 0, ...props }),
+  success: (title: string, props?: Omit<Toast, 'id' | 'type' | 'title'>) =>
+    toastStore.add({ type: 'success', title, duration: 5000, ...props }),
+  error: (title: string, props?: Omit<Toast, 'id' | 'type' | 'title'>) =>
+    toastStore.add({ type: 'error', title, duration: 5000, ...props }),
+  info: (title: string, props?: Omit<Toast, 'id' | 'type' | 'title'>) =>
+    toastStore.add({ type: 'info', title, duration: 5000, ...props }),
   dismiss: toastStore.dismiss,
 };
