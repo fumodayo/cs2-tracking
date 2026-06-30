@@ -1,12 +1,12 @@
-import { getDatabase } from "@/infrastructure/db/mongo-client";
-import { createServices } from "@/infrastructure/container";
-import { getSteamCaseImageUrl } from "@/infrastructure/cases/steam-case-image-provider";
-import { resolveSteamId, fetchSteamWalletBalance } from "@/infrastructure/steam";
-import { parseSteamCookies } from "@/utils/steam-cookies";
-import { USER_AGENTS } from "@/utils/api-client";
-import type { StorageUnitInfo } from "@/domain/storage-unit";
+import { getDatabase } from '@/infrastructure/db/mongo-client';
+import { createServices } from '@/infrastructure/container';
+import { getSteamCaseImageUrl } from '@/infrastructure/cases/steam-case-image-provider';
+import { resolveSteamId, fetchSteamWalletBalance } from '@/infrastructure/steam';
+import { parseSteamCookies } from '@/utils/steam-cookies';
+import { USER_AGENTS } from '@/utils/api-client';
+import type { StorageUnitInfo } from '@/domain/storage-unit';
 
-import { updateScanJob } from "@/services/scan-job-store";
+import { updateScanJob } from '@/services/scan-job-store';
 import {
   CachedScanResult,
   ScanItem,
@@ -15,17 +15,17 @@ import {
   getCachedScan,
   saveScanToCache,
   getNextExpiry,
-} from "@/services/scan-cache";
-import {
-  extractSteamIdFromCookie,
-  analyzeItemStatus,
-} from "@/services/scan-steam-fetcher";
-import { decodeInspectLink } from "@/services/pattern/inspect-link-decoder";
-import { analyzePattern } from "@/services/pattern/pattern-analyzer";
-import { buildInspectLink } from "@/services/pattern/inspect-link-builder";
-import type { PatternInfo } from "@/domain/pattern-info";
+} from '@/services/scan-cache';
+import { extractSteamIdFromCookie, analyzeItemStatus } from '@/services/scan-steam-fetcher';
+import { decodeInspectLink } from '@/services/pattern/inspect-link-decoder';
+import { analyzePattern } from '@/services/pattern/pattern-analyzer';
+import { buildInspectLink } from '@/services/pattern/inspect-link-builder';
+import { mapWithConcurrency } from '@/services/parser/utils';
+import type { CaseItem } from '@/domain/case-item';
+import type { PatternInfo } from '@/domain/pattern-info';
 
-const STEAM_IMAGE_CDN = "https://community.cloudflare.steamstatic.com/economy/image";
+const STEAM_IMAGE_CDN = 'https://community.cloudflare.steamstatic.com/economy/image';
+const INVENTORY_PRICE_CONCURRENCY = 4;
 
 type SteamDescription = {
   type: string;
@@ -39,6 +39,12 @@ type ParsedStickerDescription = {
   imageUrl?: string;
 };
 
+type InventoryPriceInfo = {
+  caseItem: CaseItem | null;
+  imageUrl: string | null;
+  price: number;
+};
+
 export async function runScanJob(
   jobId: string,
   params: {
@@ -46,16 +52,16 @@ export async function runScanJob(
     steamCookie?: string;
     forceRefresh?: boolean;
     ownerId?: string;
-  },
+  }
 ) {
   const { steamUrl, steamCookie, forceRefresh, ownerId } = params;
   let steamId64: string | undefined;
   let requestHasCookie = false;
   try {
     updateScanJob(jobId, {
-      status: "running",
+      status: 'running',
       percent: 5,
-      message: "formattingSteamLink",
+      message: 'formattingSteamLink',
     });
 
     // Step 1: Resolve to SteamID64 + profile info
@@ -65,12 +71,10 @@ export async function runScanJob(
       steamId64 = resolved.steamId64;
       profile = resolved.profile;
     } catch (err) {
-      throw new Error(
-        err instanceof Error ? err.message : "invalidSteamLink",
-      );
+      throw new Error(err instanceof Error ? err.message : 'invalidSteamLink');
     }
 
-    updateScanJob(jobId, { percent: 15, message: "checkingCache" });
+    updateScanJob(jobId, { percent: 15, message: 'checkingCache' });
 
     // Step 2: Check cache (unless force refresh)
     await ensureCacheIndexes();
@@ -81,9 +85,9 @@ export async function runScanJob(
       const cached = await getCachedScan(cacheScope);
       if (cached) {
         updateScanJob(jobId, {
-          status: "done",
+          status: 'done',
           percent: 100,
-          message: "scanCompleteFromCache",
+          message: 'scanCompleteFromCache',
           result: {
             steamId64: cached.steamId64,
             profile: cached.profile ?? profile,
@@ -110,26 +114,26 @@ export async function runScanJob(
 
     // Step 2.5: Validate Cookie if provided
     let hasCookie = false;
-    let cookieValue = "";
-    let parentalCookie = "";
-    let sessionidCookie = "";
+    let cookieValue = '';
+    let parentalCookie = '';
+    let sessionidCookie = '';
     if (steamCookie && steamCookie.trim()) {
       updateScanJob(jobId, {
         percent: 20,
-        message: "checkingCookieConfig",
+        message: 'checkingCookieConfig',
       });
       const parsed = parseSteamCookies(steamCookie);
       cookieValue = parsed.steamLoginSecure;
-      parentalCookie = parsed.steamparental || "";
-      sessionidCookie = parsed.sessionid || "";
+      parentalCookie = parsed.steamparental || '';
+      sessionidCookie = parsed.sessionid || '';
 
       const cookieSteamId = extractSteamIdFromCookie(cookieValue);
       if (!cookieSteamId) {
-        throw new Error("cookieInvalidFormat");
+        throw new Error('cookieInvalidFormat');
       }
       if (cookieSteamId !== steamId64) {
         throw new Error(
-          `cookieSteamIdMismatch:cookieSteamId=${cookieSteamId},steamId64=${steamId64}`,
+          `cookieSteamIdMismatch:cookieSteamId=${cookieSteamId},steamId64=${steamId64}`
         );
       }
 
@@ -142,39 +146,34 @@ export async function runScanJob(
         fullCookieHeader += `; sessionid=${sessionidCookie}`;
       }
 
-      const validateRes = await fetch(
-        "https://steamcommunity.com/my/inventory",
-        {
-          headers: {
-            "User-Agent": USER_AGENTS.steamBrowser,
-            Cookie: fullCookieHeader,
-          },
-          redirect: "manual",
+      const validateRes = await fetch('https://steamcommunity.com/my/inventory', {
+        headers: {
+          'User-Agent': USER_AGENTS.steamBrowser,
+          Cookie: fullCookieHeader,
         },
-      );
+        redirect: 'manual',
+      });
 
       if (validateRes.status === 302) {
-        const location = validateRes.headers.get("location") || "";
-        if (location.includes("/login/")) {
+        const location = validateRes.headers.get('location') || '';
+        if (location.includes('/login/')) {
           if (ownerId) {
             const db = await getDatabase();
-            await db
-              .collection("portfolio_accounts")
-              .updateOne(
-                { steamId64, ownerId },
-                {
-                  $set: {
-                    steamCookie: "",
-                    cookieError: "cookieExpired",
-                  },
+            await db.collection('portfolio_accounts').updateOne(
+              { steamId64, ownerId },
+              {
+                $set: {
+                  steamCookie: '',
+                  cookieError: 'cookieExpired',
                 },
-              );
+              }
+            );
           }
-          throw new Error("cookieExpired");
+          throw new Error('cookieExpired');
         }
       } else if (validateRes.status === 403) {
         console.warn(
-          `[InventoryScanner] /my/inventory returned 403 (Family View). Proceeding to actual fetch...`,
+          `[InventoryScanner] /my/inventory returned 403 (Family View). Proceeding to actual fetch...`
         );
       }
 
@@ -183,14 +182,14 @@ export async function runScanJob(
 
     updateScanJob(jobId, {
       percent: 30,
-      message: "startingSteamScan",
+      message: 'startingSteamScan',
     });
 
     const steamHeaders: Record<string, string> = {
-      "User-Agent": USER_AGENTS.steamBrowser,
+      'User-Agent': USER_AGENTS.steamBrowser,
       Referer: `https://steamcommunity.com/profiles/${steamId64}/inventory/`,
-      Accept: "application/json",
-      "Accept-Language": "en-US,en;q=0.9",
+      Accept: 'application/json',
+      'Accept-Language': 'en-US,en;q=0.9',
     };
 
     if (hasCookie) {
@@ -201,7 +200,7 @@ export async function runScanJob(
       if (sessionidCookie) {
         fullCookieHeader += `; sessionid=${sessionidCookie}`;
       }
-      steamHeaders["Cookie"] = fullCookieHeader;
+      steamHeaders['Cookie'] = fullCookieHeader;
     }
 
     const allAssets: Array<{
@@ -265,7 +264,7 @@ export async function runScanJob(
       for (let page = 0; page < 20; page++) {
         updateScanJob(jobId, {
           percent: 30 + Math.min(page * 2, 20) + (contextId === 16 ? 10 : 0),
-          message: "loadingInventory",
+          message: 'loadingInventory',
           detail: { group: contextId, page: page + 1 },
         });
 
@@ -278,53 +277,47 @@ export async function runScanJob(
 
         if (response.status === 403) {
           if (contextId === 16) {
-            console.error(
-              "Context 16 returned 403 Forbidden. Skipping trade-protected items.",
-            );
+            console.error('Context 16 returned 403 Forbidden. Skipping trade-protected items.');
             break;
           }
           if (hasCookie) {
             const fallbackHeaders = { ...steamHeaders };
-            delete fallbackHeaders["Cookie"];
+            delete fallbackHeaders['Cookie'];
             const fallbackRes = await fetch(inventoryUrl, {
               headers: fallbackHeaders,
             });
 
             if (ownerId) {
               const db = await getDatabase();
-              await db
-                .collection("portfolio_accounts")
-                .updateOne(
-                  { steamId64, ownerId },
-                  {
-                    $set: {
-                      steamCookie: "",
-                      cookieError: fallbackRes.ok
-                        ? "familyViewCookieRequired"
-                        : "privateInventoryCookieRequired",
-                    },
+              await db.collection('portfolio_accounts').updateOne(
+                { steamId64, ownerId },
+                {
+                  $set: {
+                    steamCookie: '',
+                    cookieError: fallbackRes.ok
+                      ? 'familyViewCookieRequired'
+                      : 'privateInventoryCookieRequired',
                   },
-                );
+                }
+              );
             }
 
             if (fallbackRes.ok) {
-              const debugInfo = `[Debug: steamLoginSecure=${cookieValue ? "present" : "empty"}, steamparental=${parentalCookie ? "present" : "empty"}, sessionid=${sessionidCookie ? "present" : "empty"}]`;
+              const debugInfo = `[Debug: steamLoginSecure=${cookieValue ? 'present' : 'empty'}, steamparental=${parentalCookie ? 'present' : 'empty'}, sessionid=${sessionidCookie ? 'present' : 'empty'}]`;
               throw new Error(
-                `familyViewInvalidParentalCookie:debugInfo=${encodeURIComponent(debugInfo)}`,
+                `familyViewInvalidParentalCookie:debugInfo=${encodeURIComponent(debugInfo)}`
               );
             } else {
-              throw new Error("privateInventoryCookieRequired");
+              throw new Error('privateInventoryCookieRequired');
             }
           } else {
-            throw new Error("privateInventoryNoCookie");
+            throw new Error('privateInventoryNoCookie');
           }
         }
 
         if (!response.ok) {
           if (contextId === 16) {
-            console.error(
-              `Context 16 returned status ${response.status}. Skipping.`,
-            );
+            console.error(`Context 16 returned status ${response.status}. Skipping.`);
             break;
           }
           if (allAssets.length > 0) break;
@@ -339,9 +332,7 @@ export async function runScanJob(
             break;
           }
           if (allAssets.length > 0) break;
-          throw new Error(
-            data.Error || "privateInventoryOrNotFound",
-          );
+          throw new Error(data.Error || 'privateInventoryOrNotFound');
         }
 
         if (data.assets) allAssets.push(...data.assets);
@@ -368,35 +359,31 @@ export async function runScanJob(
         let success = true;
 
         while (hasMoreListings) {
-          const marketScanCount = allAssets.filter(
-            (a) => a.onMarket,
-          ).length;
+          const marketScanCount = allAssets.filter((a) => a.onMarket).length;
           updateScanJob(jobId, {
             percent: 52,
-            message: "scanningMarketListings",
+            message: 'scanningMarketListings',
             detail: { count: marketScanCount },
           });
 
           const marketUrl = `https://steamcommunity.com/market/mylistings?norender=1&start=${start}&count=${count}`;
           const marketRes = await fetch(marketUrl, { headers: steamHeaders });
           if (!marketRes.ok) {
-            console.error(
-              `Steam Market listings error: HTTP ${marketRes.status}`,
-            );
+            console.error(`Steam Market listings error: HTTP ${marketRes.status}`);
             success = false;
             break;
           }
 
           const marketData = await marketRes.json();
           if (!marketData || marketData.success === false) {
-            console.error("Steam Market listings success = false");
+            console.error('Steam Market listings success = false');
             success = false;
             break;
           }
 
           const listings = marketData.listings || [];
           const assets = marketData.assets || {};
-          const cs2Assets = assets["730"]?.["2"] || {};
+          const cs2Assets = assets['730']?.['2'] || {};
 
           for (const listing of listings) {
             const asset = listing.asset;
@@ -408,25 +395,20 @@ export async function runScanJob(
                 allAssets.push({
                   classid: assetDetail.classid,
                   instanceid: assetDetail.instanceid,
-                  amount: asset.amount || "1",
+                  amount: asset.amount || '1',
                   assetid: assetId,
                   onMarket: true,
                 });
 
                 const key = `${assetDetail.classid}_${assetDetail.instanceid}`;
-                if (
-                  !allDescriptions.some(
-                    (d) => `${d.classid}_${d.instanceid}` === key,
-                  )
-                ) {
+                if (!allDescriptions.some((d) => `${d.classid}_${d.instanceid}` === key)) {
                   allDescriptions.push({
                     classid: assetDetail.classid,
                     instanceid: assetDetail.instanceid,
                     name: assetDetail.name,
-                    market_hash_name:
-                      assetDetail.market_hash_name || assetDetail.name,
+                    market_hash_name: assetDetail.market_hash_name || assetDetail.name,
                     marketable: 1,
-                    type: assetDetail.type || "",
+                    type: assetDetail.type || '',
                     icon_url: assetDetail.icon_url,
                     tags: assetDetail.tags,
                   });
@@ -435,10 +417,7 @@ export async function runScanJob(
             }
           }
 
-          if (
-            listings.length < count ||
-            start + listings.length >= marketData.total_count
-          ) {
+          if (listings.length < count || start + listings.length >= marketData.total_count) {
             hasMoreListings = false;
           } else {
             start += listings.length;
@@ -451,23 +430,23 @@ export async function runScanJob(
           marketScanWarning = true;
         }
       } catch (err) {
-        console.error("Failed to fetch market listings:", err);
+        console.error('Failed to fetch market listings:', err);
         marketScanWarning = true;
       }
     }
 
     if (allAssets.length === 0) {
-      throw new Error("emptyOrPrivateInventory");
+      throw new Error('emptyOrPrivateInventory');
     }
 
     updateScanJob(jobId, {
       percent: 55,
-      message: "analyzingItems",
+      message: 'analyzingItems',
     });
 
     const itemCounts: Record<string, { count: number; onMarket: boolean }> = {};
     for (const asset of allAssets) {
-      const statusSuffix = asset.onMarket ? "_onMarket" : "_normal";
+      const statusSuffix = asset.onMarket ? '_onMarket' : '_normal';
       const key = `${asset.classid}_${asset.instanceid}${statusSuffix}`;
       const amount = parseInt(asset.amount, 10) || 1;
 
@@ -504,7 +483,7 @@ export async function runScanJob(
       {
         marketHashName: string;
         count: number;
-        itemType: "Case" | "Capsule" | "Sticker" | "Skin";
+        itemType: 'Case' | 'Capsule' | 'Sticker' | 'Skin';
         iconUrl: string | null;
         rarity?: { name: string; color: string };
         holdDays: number;
@@ -520,7 +499,7 @@ export async function runScanJob(
     const storageUnits: StorageUnitInfo[] = [];
 
     for (const [key, info] of Object.entries(itemCounts)) {
-      const parts = key.split("_");
+      const parts = key.split('_');
       const classid = parts[0];
       const instanceid = parts[1];
       const descKey = `${classid}_${instanceid}`;
@@ -529,29 +508,26 @@ export async function runScanJob(
       if (!desc) continue;
 
       const isStorageUnit = (() => {
-        if (desc.market_hash_name === "Storage Unit") return true;
-        if (desc.type?.toLowerCase().includes("storage container")) return true;
-        if (desc.market_hash_name?.toLowerCase().includes("storage container"))
-          return true;
+        if (desc.market_hash_name === 'Storage Unit') return true;
+        if (desc.type?.toLowerCase().includes('storage container')) return true;
+        if (desc.market_hash_name?.toLowerCase().includes('storage container')) return true;
 
         const isTool =
-          desc.type?.toLowerCase().includes("tool") ||
+          desc.type?.toLowerCase().includes('tool') ||
           desc.tags?.some(
-            (t) =>
-              t.category === "Type" &&
-              t.internal_name?.toLowerCase().includes("tool"),
+            (t) => t.category === 'Type' && t.internal_name?.toLowerCase().includes('tool')
           );
 
         const hasStorageText =
           desc.descriptions?.some(
             (d) =>
-              d.value?.toLowerCase().includes("storage unit") &&
-              d.value?.toLowerCase().includes("1,000"),
+              d.value?.toLowerCase().includes('storage unit') &&
+              d.value?.toLowerCase().includes('1,000')
           ) ||
           desc.owner_descriptions?.some(
             (d) =>
-              d.value?.toLowerCase().includes("storage unit") &&
-              d.value?.toLowerCase().includes("1,000"),
+              d.value?.toLowerCase().includes('storage unit') &&
+              d.value?.toLowerCase().includes('1,000')
           );
 
         return Boolean(isTool && hasStorageText);
@@ -559,15 +535,13 @@ export async function runScanJob(
 
       if (isStorageUnit) {
         const relatedAssets = allAssets.filter(
-          (a) => a.classid === classid && a.instanceid === instanceid,
+          (a) => a.classid === classid && a.instanceid === instanceid
         );
         for (const asset of relatedAssets) {
           storageUnits.push({
             assetId: asset.assetid,
-            name: desc.name || "Storage Unit",
-            iconUrl: desc.icon_url
-              ? `${STEAM_IMAGE_CDN}/${desc.icon_url}/360fx360f`
-              : null,
+            name: desc.name || 'Storage Unit',
+            iconUrl: desc.icon_url ? `${STEAM_IMAGE_CDN}/${desc.icon_url}/360fx360f` : null,
           });
         }
         continue;
@@ -577,36 +551,33 @@ export async function runScanJob(
       const isTradeLocked = holdDays > 0;
       const isSpecialState = isTradeLocked || tradeProtected || info.onMarket;
 
-      const nameLower = desc.market_hash_name?.toLowerCase() || "";
-      const typeLower = desc.type?.toLowerCase() || "";
+      const nameLower = desc.market_hash_name?.toLowerCase() || '';
+      const typeLower = desc.type?.toLowerCase() || '';
       const isKey =
-        nameLower.includes("key") &&
-        (nameLower.includes("case") ||
-          nameLower.includes("capsule") ||
-          nameLower.includes("sticker") ||
-          typeLower.includes("key"));
+        nameLower.includes('key') &&
+        (nameLower.includes('case') ||
+          nameLower.includes('capsule') ||
+          nameLower.includes('sticker') ||
+          typeLower.includes('key'));
 
       if (!desc.marketable && !isSpecialState && !isKey) continue;
 
-      let itemType: "Case" | "Capsule" | "Sticker" | "Skin" = "Skin";
-      if (nameLower.includes("capsule") || nameLower.includes("package")) {
-        itemType = "Capsule";
-      } else if (nameLower.includes("sticker")) {
-        itemType = "Sticker";
-      } else if (
-        nameLower.includes("case") ||
-        typeLower.includes("container")
-      ) {
-        itemType = "Case";
+      let itemType: 'Case' | 'Capsule' | 'Sticker' | 'Skin' = 'Skin';
+      if (nameLower.includes('capsule') || nameLower.includes('package')) {
+        itemType = 'Capsule';
+      } else if (nameLower.includes('sticker')) {
+        itemType = 'Sticker';
+      } else if (nameLower.includes('case') || typeLower.includes('container')) {
+        itemType = 'Case';
       }
 
       let rarity: { name: string; color: string } | undefined;
       if (desc.tags) {
-        const rarityTag = desc.tags.find((t) => t.category === "Rarity");
+        const rarityTag = desc.tags.find((t) => t.category === 'Rarity');
         if (rarityTag && rarityTag.localized_tag_name) {
           rarity = {
             name: rarityTag.localized_tag_name,
-            color: rarityTag.color ? `#${rarityTag.color}` : "#b0c3d9",
+            color: rarityTag.color ? `#${rarityTag.color}` : '#b0c3d9',
           };
         }
       }
@@ -614,31 +585,39 @@ export async function runScanJob(
       let dopplerPhase: string | undefined;
       if (desc.tags) {
         for (const tag of desc.tags) {
-          const tagName = tag.localized_tag_name || "";
-          const tagInternal = tag.internal_name || "";
-          if (tagName.includes("Phase 1") || tagInternal.includes("phase1")) dopplerPhase = "Phase 1";
-          else if (tagName.includes("Phase 2") || tagInternal.includes("phase2")) dopplerPhase = "Phase 2";
-          else if (tagName.includes("Phase 3") || tagInternal.includes("phase3")) dopplerPhase = "Phase 3";
-          else if (tagName.includes("Phase 4") || tagInternal.includes("phase4")) dopplerPhase = "Phase 4";
-          else if (tagName.includes("Ruby") || tagInternal.includes("ruby")) dopplerPhase = "Ruby";
-          else if (tagName.includes("Sapphire") || tagInternal.includes("sapphire")) dopplerPhase = "Sapphire";
-          else if (tagName.includes("Emerald") || tagInternal.includes("emerald")) dopplerPhase = "Emerald";
-          else if (tagName.includes("Black Pearl") || tagInternal.includes("blackpearl")) dopplerPhase = "Black Pearl";
+          const tagName = tag.localized_tag_name || '';
+          const tagInternal = tag.internal_name || '';
+          if (tagName.includes('Phase 1') || tagInternal.includes('phase1'))
+            dopplerPhase = 'Phase 1';
+          else if (tagName.includes('Phase 2') || tagInternal.includes('phase2'))
+            dopplerPhase = 'Phase 2';
+          else if (tagName.includes('Phase 3') || tagInternal.includes('phase3'))
+            dopplerPhase = 'Phase 3';
+          else if (tagName.includes('Phase 4') || tagInternal.includes('phase4'))
+            dopplerPhase = 'Phase 4';
+          else if (tagName.includes('Ruby') || tagInternal.includes('ruby')) dopplerPhase = 'Ruby';
+          else if (tagName.includes('Sapphire') || tagInternal.includes('sapphire'))
+            dopplerPhase = 'Sapphire';
+          else if (tagName.includes('Emerald') || tagInternal.includes('emerald'))
+            dopplerPhase = 'Emerald';
+          else if (tagName.includes('Black Pearl') || tagInternal.includes('blackpearl'))
+            dopplerPhase = 'Black Pearl';
           if (dopplerPhase) break;
         }
       }
 
       const relatedAssets = allAssets.filter(
-        (a) => a.classid === classid && a.instanceid === instanceid && !!a.onMarket === !!info.onMarket,
+        (a) =>
+          a.classid === classid && a.instanceid === instanceid && !!a.onMarket === !!info.onMarket
       );
       const firstAsset = relatedAssets[0];
-      const inspectAction = desc.actions?.find((a) => a.link?.includes("csgo_econ_action_preview"));
+      const inspectAction = desc.actions?.find((a) => a.link?.includes('csgo_econ_action_preview'));
       const accessoryDescriptions = parseAccessoryDescriptions([
         ...(desc.descriptions ?? []),
         ...(desc.owner_descriptions ?? []),
       ]);
       const scanTargets =
-        itemType === "Skin"
+        itemType === 'Skin'
           ? relatedAssets.map((asset) => ({
               asset,
               count: parseInt(asset.amount, 10) || 1,
@@ -647,9 +626,7 @@ export async function runScanJob(
 
       for (const [targetIndex, target] of scanTargets.entries()) {
         const targetAsset = target.asset;
-        const props = targetAsset
-          ? assetPropertiesMap.get(targetAsset.assetid)
-          : undefined;
+        const props = targetAsset ? assetPropertiesMap.get(targetAsset.assetid) : undefined;
         const itemCert = props?.find((p) => p.propertyid === 6)?.string_value;
         let inspectLink: string | undefined;
         if (inspectAction?.link && targetAsset) {
@@ -657,12 +634,12 @@ export async function runScanJob(
             inspectAction.link,
             steamId64,
             targetAsset.assetid,
-            itemCert,
+            itemCert
           );
         }
 
         let patternInfo: PatternInfo | undefined;
-        if (itemType === "Skin") {
+        if (itemType === 'Skin') {
           const decodedInspect = inspectLink ? decodeInspectLink(inspectLink) : null;
           const propPaintSeed = props?.find((p) => p.propertyid === 1)?.int_value;
           const propFloatValue = props?.find((p) => p.propertyid === 2)?.float_value;
@@ -682,15 +659,15 @@ export async function runScanJob(
                 {
                   stickers: decodedInspect?.stickers,
                   keychains: decodedInspect?.keychains,
-                },
+                }
               );
               patternInfo = enrichPatternInfoWithSteamStickerDescriptions(
                 patternInfo,
                 accessoryDescriptions.stickers,
-                accessoryDescriptions.charms,
+                accessoryDescriptions.charms
               );
             } catch (err) {
-              console.debug("[scan-service] Failed to analyze pattern from asset properties:", err);
+              console.debug('[scan-service] Failed to analyze pattern from asset properties:', err);
             }
           }
 
@@ -705,31 +682,31 @@ export async function runScanJob(
                 {
                   stickers: decodedInspect.stickers,
                   keychains: decodedInspect.keychains,
-                },
+                }
               );
               patternInfo = enrichPatternInfoWithSteamStickerDescriptions(
                 patternInfo,
                 accessoryDescriptions.stickers,
-                accessoryDescriptions.charms,
+                accessoryDescriptions.charms
               );
             } catch (err) {
-              console.debug("[scan-service] Failed to decode/analyze pattern during scan:", err);
+              console.debug('[scan-service] Failed to decode/analyze pattern during scan:', err);
             }
           }
         }
 
         const stateKey = info.onMarket
-          ? "onMarket"
+          ? 'onMarket'
           : tradeProtected
-            ? "tradeProtected"
+            ? 'tradeProtected'
             : holdDays > 0
-              ? "hold"
-              : "normal";
+              ? 'hold'
+              : 'normal';
         const assetKey =
-          itemType === "Skin"
-            ? targetAsset?.assetid ?? inspectLink ?? `skin-${targetIndex}`
-            : "stack";
-        const cs2Key = `${desc.market_hash_name}_${dopplerPhase || ""}_${stateKey}_${assetKey}`;
+          itemType === 'Skin'
+            ? (targetAsset?.assetid ?? inspectLink ?? `skin-${targetIndex}`)
+            : 'stack';
+        const cs2Key = `${desc.market_hash_name}_${dopplerPhase || ''}_${stateKey}_${assetKey}`;
 
         if (!cs2Items[cs2Key]) {
           cs2Items[cs2Key] = {
@@ -747,10 +724,7 @@ export async function runScanJob(
             patternInfo,
           };
         } else {
-          cs2Items[cs2Key].holdDays = Math.max(
-            cs2Items[cs2Key].holdDays,
-            holdDays,
-          );
+          cs2Items[cs2Key].holdDays = Math.max(cs2Items[cs2Key].holdDays, holdDays);
           if (tradeHoldUntil) {
             const curVal = cs2Items[cs2Key].tradeHoldUntil;
             if (!curVal || new Date(tradeHoldUntil).getTime() > new Date(curVal).getTime()) {
@@ -762,7 +736,7 @@ export async function runScanJob(
       }
     }
 
-    updateScanJob(jobId, { percent: 65, message: "fetchingPriceInfo" });
+    updateScanJob(jobId, { percent: 65, message: 'fetchingPriceInfo' });
 
     const { caseRepository, priceService } = createServices();
     const items: ScanItem[] = [];
@@ -770,7 +744,81 @@ export async function runScanJob(
     let totalQuantity = 0;
 
     const cs2Keys = Object.keys(cs2Items);
-    let lastFetchedFromSteam = false;
+    const uniqueMarketHashNames = Array.from(
+      new Set(cs2Keys.map((key) => cs2Items[key].marketHashName))
+    );
+    const iconUrlByMarketHashName = new Map<string, string>();
+    for (const key of cs2Keys) {
+      const item = cs2Items[key];
+      if (item.iconUrl && !iconUrlByMarketHashName.has(item.marketHashName)) {
+        iconUrlByMarketHashName.set(item.marketHashName, item.iconUrl);
+      }
+    }
+    let completedPricingCount = 0;
+
+    const priceEntries = await mapWithConcurrency(
+      uniqueMarketHashNames,
+      INVENTORY_PRICE_CONCURRENCY,
+      async (marketHashName): Promise<[string, InventoryPriceInfo]> => {
+        updateScanJob(jobId, {
+          percent:
+            65 +
+            Math.round((completedPricingCount / Math.max(uniqueMarketHashNames.length, 1)) * 30),
+          message: 'pricingItem',
+          detail: { name: marketHashName },
+        });
+
+        const caseItem = await caseRepository.findByMarketHashName(marketHashName);
+        let price = 0;
+        let imageUrl: string | null = caseItem?.imageUrl ?? null;
+
+        if (caseItem) {
+          const priceSnapshot = await priceService.getCurrentPrice(caseItem, {
+            preferFallback: true,
+          });
+          price = priceSnapshot?.price || 0;
+        } else {
+          const virtualItem = {
+            id: `ext_${marketHashName}`,
+            name: marketHashName,
+            marketHashName,
+            isActive: false,
+          };
+          try {
+            const priceSnapshot = await priceService.getCurrentPrice(virtualItem, {
+              preferFallback: true,
+            });
+            price = priceSnapshot?.price || 0;
+          } catch {
+            price = 0;
+          }
+
+          const itemIconUrl = iconUrlByMarketHashName.get(marketHashName);
+          if (itemIconUrl) {
+            imageUrl = `${STEAM_IMAGE_CDN}/${itemIconUrl}/360fx360f`;
+          } else {
+            try {
+              imageUrl = await getSteamCaseImageUrl(marketHashName);
+            } catch {
+              /* ignore */
+            }
+          }
+        }
+
+        completedPricingCount += 1;
+        updateScanJob(jobId, {
+          percent:
+            65 +
+            Math.round((completedPricingCount / Math.max(uniqueMarketHashNames.length, 1)) * 30),
+          message: 'pricingItem',
+          detail: { name: marketHashName },
+        });
+
+        return [marketHashName, { caseItem, imageUrl, price }];
+      }
+    );
+    const priceInfoByMarketHashName = new Map(priceEntries);
+
     for (let i = 0; i < cs2Keys.length; i++) {
       const cs2Key = cs2Keys[i];
       const {
@@ -787,57 +835,11 @@ export async function runScanJob(
         inspectLink,
         patternInfo,
       } = cs2Items[cs2Key];
-      const percent = 65 + Math.round((i / cs2Keys.length) * 30);
-      updateScanJob(jobId, {
-        percent,
-        message: "pricingItem",
-        detail: { name: marketHashName },
-      });
-
-      const caseItem =
-        await caseRepository.findByMarketHashName(marketHashName);
-      let price = 0;
-      let imageUrl: string | null = null;
-
-      if (lastFetchedFromSteam) {
-        await new Promise((r) => setTimeout(r, 500));
-        lastFetchedFromSteam = false;
-      }
-
-      if (caseItem) {
-        const priceSnapshot = await priceService.getCurrentPrice(caseItem, {
-          preferFallback: true,
-        });
-        price = priceSnapshot?.price || 0;
-        imageUrl = caseItem.imageUrl ?? null;
-        lastFetchedFromSteam = priceSnapshot ? !priceSnapshot.isCached && priceSnapshot.source === "steam-market" : false;
-      } else {
-        const virtualItem = {
-          id: `ext_${marketHashName}`,
-          name: marketHashName,
-          marketHashName,
-          isActive: false,
-        };
-        try {
-          const priceSnapshot = await priceService.getCurrentPrice(virtualItem, {
-            preferFallback: true,
-          });
-          price = priceSnapshot?.price || 0;
-          lastFetchedFromSteam = priceSnapshot ? !priceSnapshot.isCached && priceSnapshot.source === "steam-market" : false;
-        } catch {
-          lastFetchedFromSteam = false;
-        }
-
-        if (iconUrl) {
-          imageUrl = `${STEAM_IMAGE_CDN}/${iconUrl}/360fx360f`;
-        } else {
-          try {
-            imageUrl = await getSteamCaseImageUrl(marketHashName);
-          } catch {
-            /* ignore */
-          }
-        }
-      }
+      const priceInfo = priceInfoByMarketHashName.get(marketHashName);
+      const caseItem = priceInfo?.caseItem ?? null;
+      const imageUrl =
+        priceInfo?.imageUrl ?? (iconUrl ? `${STEAM_IMAGE_CDN}/${iconUrl}/360fx360f` : null);
+      const price = priceInfo?.price ?? 0;
 
       items.push({
         caseItem: caseItem
@@ -872,7 +874,7 @@ export async function runScanJob(
     const now = new Date();
     const expiresAt = getNextExpiry();
 
-    updateScanJob(jobId, { percent: 98, message: "savingScanResult" });
+    updateScanJob(jobId, { percent: 98, message: 'savingScanResult' });
 
     let walletRaw: string | null = null;
     let walletVnd: number | null = null;
@@ -890,10 +892,10 @@ export async function runScanJob(
           walletRaw = walletResult.raw;
           walletVnd = walletResult.vnd;
         } else {
-          walletRaw = "walletBalanceNotFound";
+          walletRaw = 'walletBalanceNotFound';
         }
       } catch (walletErr) {
-        console.error("Failed to fetch steam wallet balance:", walletErr);
+        console.error('Failed to fetch steam wallet balance:', walletErr);
         walletRaw = `walletBalanceError:message=${walletErr instanceof Error ? walletErr.message : String(walletErr)}`;
       }
     }
@@ -920,7 +922,7 @@ export async function runScanJob(
 
     await saveScanToCache({ steamId64, ownerId, hasCookie }, scanResult);
 
-    if (hasCookie && ownerId && ownerId !== "guest") {
+    if (hasCookie && ownerId && ownerId !== 'guest') {
       try {
         const db = await getDatabase();
         const updateDoc: Record<string, unknown> = { cookieError: null };
@@ -929,7 +931,7 @@ export async function runScanJob(
           updateDoc.walletBalanceVnd = walletVnd;
         }
         await db
-          .collection("portfolio_accounts")
+          .collection('portfolio_accounts')
           .updateOne({ steamId64, ownerId }, { $set: updateDoc });
       } catch {
         /* ignore */
@@ -937,9 +939,9 @@ export async function runScanJob(
     }
 
     updateScanJob(jobId, {
-      status: "done",
+      status: 'done',
       percent: 100,
-      message: "scanComplete",
+      message: 'scanComplete',
       result: {
         steamId64,
         profile,
@@ -961,23 +963,20 @@ export async function runScanJob(
       },
     });
   } catch (err) {
-    console.error("Scan job error:", err);
-    if (ownerId && steamId64 && ownerId !== "guest") {
+    console.error('Scan job error:', err);
+    if (ownerId && steamId64 && ownerId !== 'guest') {
       const isCookieError =
         err instanceof Error &&
-        (err.message.includes("Cookie") ||
-          err.message.includes("cookie") ||
-          err.message.includes("privateInventory") ||
-          err.message.includes("Family View"));
+        (err.message.includes('Cookie') ||
+          err.message.includes('cookie') ||
+          err.message.includes('privateInventory') ||
+          err.message.includes('Family View'));
       if (isCookieError) {
         try {
           const db = await getDatabase();
           await db
-            .collection("portfolio_accounts")
-            .updateOne(
-              { steamId64, ownerId },
-              { $set: { cookieError: err.message } },
-            );
+            .collection('portfolio_accounts')
+            .updateOne({ steamId64, ownerId }, { $set: { cookieError: err.message } });
         } catch {
           /* ignore */
         }
@@ -988,17 +987,17 @@ export async function runScanJob(
       try {
         const expiredCache = await getCachedScan(
           { steamId64, ownerId, hasCookie: requestHasCookie },
-          { ignoreExpiry: true },
+          { ignoreExpiry: true }
         );
         if (expiredCache) {
           console.warn(
             `[InventoryScanner] Live scan failed, falling back to cache for ${steamId64}. Error:`,
-            err,
+            err
           );
           updateScanJob(jobId, {
-            status: "done",
+            status: 'done',
             percent: 100,
-            message: "fallbackToCache",
+            message: 'fallbackToCache',
             result: {
               steamId64: expiredCache.steamId64,
               profile: expiredCache.profile,
@@ -1022,24 +1021,20 @@ export async function runScanJob(
           return;
         }
       } catch (fallbackErr) {
-        console.error("Failed to fetch expired cache fallback:", fallbackErr);
+        console.error('Failed to fetch expired cache fallback:', fallbackErr);
       }
     }
 
     updateScanJob(jobId, {
-      status: "error",
+      status: 'error',
       percent: 100,
-      message:
-        err instanceof Error ? err.message : "errScanInventory",
-      error:
-        err instanceof Error ? err.message : "errScanInventory",
+      message: err instanceof Error ? err.message : 'errScanInventory',
+      error: err instanceof Error ? err.message : 'errScanInventory',
     });
   }
 }
 
-function parseAccessoryDescriptions(
-  descriptions: SteamDescription[],
-): {
+function parseAccessoryDescriptions(descriptions: SteamDescription[]): {
   stickers: ParsedStickerDescription[];
   charms: ParsedStickerDescription[];
 } {
@@ -1050,9 +1045,9 @@ function parseAccessoryDescriptions(
     const html = description.value;
     const lowerHtml = html.toLowerCase();
     if (
-      !lowerHtml.includes("sticker:") &&
-      !lowerHtml.includes("charm:") &&
-      !lowerHtml.includes("keychain:")
+      !lowerHtml.includes('sticker:') &&
+      !lowerHtml.includes('charm:') &&
+      !lowerHtml.includes('keychain:')
     ) {
       continue;
     }
@@ -1062,11 +1057,11 @@ function parseAccessoryDescriptions(
     charms.push(...parsedFromImages.charms);
 
     if (parsedFromImages.stickers.length === 0) {
-      stickers.push(...parseAccessoryText(html, "sticker"));
+      stickers.push(...parseAccessoryText(html, 'sticker'));
     }
     if (parsedFromImages.charms.length === 0) {
-      charms.push(...parseAccessoryText(html, "charm"));
-      charms.push(...parseAccessoryText(html, "keychain"));
+      charms.push(...parseAccessoryText(html, 'charm'));
+      charms.push(...parseAccessoryText(html, 'keychain'));
     }
   }
 
@@ -1083,7 +1078,7 @@ function parseAccessoryImages(html: string): {
 
   for (const imageTag of imageTags) {
     const attrs = parseHtmlAttributes(imageTag);
-    const title = decodeHtmlEntities(attrs.title ?? "");
+    const title = decodeHtmlEntities(attrs.title ?? '');
     const src = attrs.src ? normalizeSteamImageUrl(attrs.src) : undefined;
     const accessory = parseAccessoryTitle(title, src);
     if (!accessory) continue;
@@ -1100,10 +1095,10 @@ function parseAccessoryImages(html: string): {
 
 function parseAccessoryText(
   html: string,
-  label: "sticker" | "charm" | "keychain",
+  label: 'sticker' | 'charm' | 'keychain'
 ): ParsedStickerDescription[] {
   const text = decodeHtmlEntities(stripHtml(html));
-  const match = text.match(new RegExp(`${label}:\\s*(.+)`, "i"));
+  const match = text.match(new RegExp(`${label}:\\s*(.+)`, 'i'));
   if (!match?.[1]) return [];
 
   return match[1]
@@ -1115,7 +1110,7 @@ function parseAccessoryText(
 
 function parseAccessoryTitle(
   title: string,
-  imageUrl?: string,
+  imageUrl?: string
 ): { label: string; description: ParsedStickerDescription } | null {
   const match = title.match(/^\s*(sticker|charm|keychain):\s*(.+)$/i);
   if (!match?.[2]) return null;
@@ -1129,9 +1124,9 @@ function parseAccessoryTitle(
 function buildAccessoryDescription(
   label: string,
   name: string,
-  imageUrl?: string,
+  imageUrl?: string
 ): ParsedStickerDescription {
-  const prefix = isCharmLabel(label) ? "Charm" : "Sticker";
+  const prefix = isCharmLabel(label) ? 'Charm' : 'Sticker';
   return {
     name,
     marketHashName: name.toLowerCase().startsWith(`${prefix.toLowerCase()} |`)
@@ -1150,18 +1145,15 @@ function parseHtmlAttributes(tag: string): Record<string, string> {
 }
 
 function isCharmLabel(label: string): boolean {
-  return label.toLowerCase() === "charm" || label.toLowerCase() === "keychain";
+  return label.toLowerCase() === 'charm' || label.toLowerCase() === 'keychain';
 }
 
 function enrichPatternInfoWithSteamStickerDescriptions(
   patternInfo: PatternInfo | undefined,
   stickerDescriptions: ParsedStickerDescription[],
-  charmDescriptions: ParsedStickerDescription[],
+  charmDescriptions: ParsedStickerDescription[]
 ): PatternInfo | undefined {
-  if (
-    !patternInfo ||
-    (stickerDescriptions.length === 0 && charmDescriptions.length === 0)
-  ) {
+  if (!patternInfo || (stickerDescriptions.length === 0 && charmDescriptions.length === 0)) {
     return patternInfo;
   }
   const existing = patternInfo.stickers ?? [];
@@ -1200,29 +1192,29 @@ function enrichPatternInfoWithSteamStickerDescriptions(
 
 function stripHtml(value: string): string {
   return value
-    .replace(/<br\s*\/?>/gi, ", ")
-    .replace(/<[^>]+>/g, " ")
-    .replace(/\s+/g, " ")
+    .replace(/<br\s*\/?>/gi, ', ')
+    .replace(/<[^>]+>/g, ' ')
+    .replace(/\s+/g, ' ')
     .trim();
 }
 
 function decodeHtmlEntities(value: string): string {
   return value
-    .replace(/&amp;/g, "&")
+    .replace(/&amp;/g, '&')
     .replace(/&quot;/g, '"')
     .replace(/&#39;/g, "'")
-    .replace(/&lt;/g, "<")
-    .replace(/&gt;/g, ">");
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>');
 }
 
 function normalizeSteamImageUrl(url: string): string {
   const normalized = decodeHtmlEntities(url.trim());
-  if (normalized.startsWith("//")) return `https:${normalized}`;
-  if (normalized.startsWith("/economy/image/")) {
+  if (normalized.startsWith('//')) return `https:${normalized}`;
+  if (normalized.startsWith('/economy/image/')) {
     return `https://community.cloudflare.steamstatic.com${normalized}`;
   }
-  if (normalized.startsWith("http://")) {
-    return normalized.replace(/^http:\/\//i, "https://");
+  if (normalized.startsWith('http://')) {
+    return normalized.replace(/^http:\/\//i, 'https://');
   }
   return normalized;
 }

@@ -37,6 +37,7 @@ const FALLBACK_PRICES_CACHE_MAX_AGE_MS = 6 * 60 * 60 * 1000; // 6 hours
 
 let inMemoryFallbackPrices: Record<string, number> | null = null;
 let lastLoadedTime = 0;
+let pendingFallbackPrices: Promise<Record<string, number>> | null = null;
 
 interface CsgoTraderSteamItem {
   last_24h?: number;
@@ -50,6 +51,14 @@ async function getFallbackPrices(): Promise<Record<string, number>> {
     return inMemoryFallbackPrices;
   }
 
+  pendingFallbackPrices ??= loadFallbackPrices().finally(() => {
+    pendingFallbackPrices = null;
+  });
+
+  return pendingFallbackPrices;
+}
+
+async function loadFallbackPrices(): Promise<Record<string, number>> {
   try {
     if (fs.existsSync(FALLBACK_PRICES_CACHE_FILE)) {
       const stats = fs.statSync(FALLBACK_PRICES_CACHE_FILE);

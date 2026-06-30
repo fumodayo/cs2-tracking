@@ -6,8 +6,19 @@ import { getSteamCaseImageUrl } from '@/infrastructure/cases/steam-case-image-pr
 import { getDatabase } from '@/infrastructure/db/mongo-client';
 import { mapCaseDocument, toObjectId } from '@/infrastructure/db/mappers';
 
+let caseSeedPromise: Promise<void> | null = null;
+
 export class MongoCaseRepository implements CaseRepository {
   async ensureSeeded(): Promise<void> {
+    caseSeedPromise ??= this.seedDefaults().catch((error) => {
+      caseSeedPromise = null;
+      throw error;
+    });
+
+    return caseSeedPromise;
+  }
+
+  private async seedDefaults(): Promise<void> {
     const db = await getDatabase();
     const collection = db.collection('cases');
 
