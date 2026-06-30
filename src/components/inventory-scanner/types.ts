@@ -7,6 +7,8 @@ export type CaseItemData = {
 };
 export type InventoryItemType = "Case" | "Capsule" | "Sticker" | "Skin";
 
+import type { PatternInfo } from "@/domain/pattern-info";
+
 export type ScanResultItem = {
   caseItem: CaseItemData;
   type: InventoryItemType;
@@ -30,8 +32,23 @@ export type ScanResultItem = {
   buyDate?: string;
   storageUnitId?: string;
   storageUnitName?: string;
+  storageUnitQuantity?: number;
   buffPriceManual?: number;
   buffRateManual?: number;
+  scannedAt?: string;
+  dopplerPhase?: string;
+  inspectLink?: string;
+  patternInfo?: PatternInfo;
+  identityKey?: string;
+  variantKeysSet?: Set<string>;
+  variantCount?: number;
+  hasMixedVariants?: boolean;
+  underlyingIds?: string[];
+  note?: string;
+  stickerPriceRate?: number;
+  stickerBuyPriceRate?: number;
+  stickerScanTotalPrice?: number;
+  stickerScanPriceCapturedAt?: string;
 };
 
 export type SteamProfile = {
@@ -66,6 +83,8 @@ export type ScanResponse = {
   scannedAt: string;
   expiresAt: string;
   marketScanWarning?: boolean;
+  walletBalance?: string | null;
+  walletBalanceVnd?: number | null;
 };
 
 export type ScanProgress = {

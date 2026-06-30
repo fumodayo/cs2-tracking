@@ -1,7 +1,10 @@
 "use client";
 
 import { Check, FolderPlus, Loader2, LogIn, RefreshCw } from "lucide-react";
+import { useState } from "react";
+import { useTranslation } from "react-i18next";
 import type { ScanResultItem } from "../types";
+import { translateImportProgressMessage } from "../utils";
 
 interface PortfolioSyncSectionProps {
   user: { email: string } | null;
@@ -30,18 +33,21 @@ export function PortfolioSyncSection({
   retryingPrices,
   retryStatus,
 }: PortfolioSyncSectionProps) {
+  const { t } = useTranslation();
+  const [redirecting, setRedirecting] = useState(false);
+
   return (
     <div className="space-y-6">
       <div className="relative overflow-hidden flex flex-col gap-4 rounded-xl border border-blue-500/15 bg-gradient-to-r from-blue-950/15 to-stone-900/15 px-5 py-4 sm:flex-row sm:items-center sm:justify-between shadow-md transition-all duration-300 hover:border-blue-500/25">
         <div className="absolute -right-6 -top-6 -z-10 h-20 w-20 rounded-full bg-blue-500/5 blur-xl pointer-events-none" />
         <div>
           <p className="text-sm font-bold text-stone-200">
-            Bạn muốn theo dõi giá đồ của mình tăng giảm theo ngày?
+            {t("inventoryScanner.syncPortfolioTitle")}
           </p>
           <p className="mt-1 text-xs text-stone-400">
             {user
-              ? `Đang lưu portfolio cá nhân cho ${user.email}.`
-              : "Hãy đăng nhập bằng Gmail ngay để đưa kết quả inventory-scanner vào portfolio riêng."}
+              ? t("inventoryScanner.savingPersonalPortfolioFor", { email: user.email })
+              : t("inventoryScanner.loginGmailPrompt")}
           </p>
         </div>
         {user ? (
@@ -56,21 +62,32 @@ export function PortfolioSyncSection({
             ) : (
               <FolderPlus className="size-3.5" />
             )}
-            <span>Lưu vào portfolio</span>
+            <span>{t("inventoryScanner.saveToPortfolio")}</span>
           </button>
         ) : (
-          <a
-            href="/api/auth/google"
-            aria-disabled={!googleConfigured}
+          <button
+            type="button"
+            onClick={() => {
+              if (googleConfigured && !redirecting) {
+                setRedirecting(true);
+                localStorage.setItem("pending_portfolio_sync", "true");
+                window.location.href = "/api/auth/google";
+              }
+            }}
+            disabled={!googleConfigured || redirecting}
             className={`inline-flex h-9.5 shrink-0 items-center justify-center gap-2 rounded-lg px-4 text-xs font-bold transition-all duration-200 active:scale-95 ${
-              googleConfigured
+              googleConfigured && !redirecting
                 ? "bg-accent text-accent-foreground hover:bg-accent-hover cursor-pointer shadow-[0_4px_12px_rgba(59,130,246,0.15)]"
-                : "pointer-events-none border border-stone-850 bg-stone-900/10 text-stone-500"
+                : "pointer-events-none border border-stone-850 bg-stone-900/10 text-stone-500 disabled:opacity-40"
             }`}
           >
-            <LogIn className="size-3.5" />
-            <span>{googleConfigured ? "Đăng nhập Gmail" : "Thiếu Google OAuth"}</span>
-          </a>
+            {redirecting ? (
+              <Loader2 className="size-3.5 animate-spin" />
+            ) : (
+              <LogIn className="size-3.5" />
+            )}
+            <span>{googleConfigured ? t("inventoryScanner.loginGmail") : t("inventoryScanner.missingGoogleOAuth")}</span>
+          </button>
         )}
       </div>
 
@@ -80,7 +97,7 @@ export function PortfolioSyncSection({
             const percent = percentMatch ? parseInt(percentMatch[1], 10) : 0;
             const message = percentMatch
               ? portfolioImportStatus.slice(percentMatch[0].length)
-              : portfolioImportStatus;
+              : translateImportProgressMessage(portfolioImportStatus, t);
             return (
               <div className="rounded-lg border border-blue-500/20 bg-blue-500/5 px-4 py-3">
                 <div className="flex items-center justify-between text-sm">
@@ -131,9 +148,9 @@ export function PortfolioSyncSection({
           <div className="min-w-0 flex-1">
             {zeroPricedItems.length > 0 ? (
               <p className="font-semibold text-blue-100">
-                {zeroPricedItems.length} item 0đ &mdash;{" "}
+                {t("inventoryScanner.zeroPricedItemsCount", { count: zeroPricedItems.length })} &mdash;{" "}
                 <span className="font-normal text-stone-300">
-                  {retryingPrices ? "đang tự động lấy giá..." : "sẽ tự động retry..."}
+                  {retryingPrices ? t("inventoryScanner.autoFetchingPrice") : t("inventoryScanner.willAutoRetry")}
                 </span>
               </p>
             ) : null}
@@ -158,7 +175,7 @@ export function PortfolioSyncSection({
                 ))}
                 {zeroPricedItems.length > 10 && (
                   <span className="inline-flex items-center rounded border border-stone-700/50 bg-stone-900/80 px-2 py-0.5 text-xs font-medium text-stone-400">
-                    + {zeroPricedItems.length - 10} item khác...
+                    {t("inventoryScanner.plusOtherItems", { count: zeroPricedItems.length - 10 })}
                   </span>
                 )}
               </div>

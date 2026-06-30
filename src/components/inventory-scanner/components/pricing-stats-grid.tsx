@@ -1,10 +1,13 @@
 "use client";
 
 import React from "react";
+import { useTranslation } from "react-i18next";
 import { BuffRateCard } from "../buff-rate-card";
 import { RateCard } from "../rate-card";
 import { StatCard } from "@/components/ui/stat-card";
 import { formatVND } from "../utils";
+
+import { AccountEntry } from "../types";
 
 interface PricingStatsGridProps {
   buffCnyToVndRate: number;
@@ -15,9 +18,10 @@ interface PricingStatsGridProps {
   setRateLe: (val: number) => void;
   totalPrice: number;
   totalQuantity: number;
-  totalInventoryCount: number;
   totalSi: number;
   totalLe: number;
+  totalWalletVnd: number;
+  accounts: AccountEntry[];
 }
 
 export function PricingStatsGrid({
@@ -29,10 +33,13 @@ export function PricingStatsGrid({
   setRateLe,
   totalPrice,
   totalQuantity,
-  totalInventoryCount,
   totalSi,
   totalLe,
+  totalWalletVnd,
+  accounts,
 }: PricingStatsGridProps) {
+  const { t } = useTranslation();
+
   return (
     <div className="space-y-6">
       <div className="grid gap-4 lg:grid-cols-3">
@@ -41,37 +48,37 @@ export function PricingStatsGrid({
           onChange={setBuffCnyToVndRate}
           tooltip={
             <span>
-              Tỷ giá dùng để đổi nhân dân tệ (CNY) sang đồng (VND) khi tính giá skin trên Buff163.
+              {t("inventoryScanner.buffRateTooltip")}
             </span>
           }
         />
         <RateCard
           id="rateAll"
-          label="Rate sỉ (all)"
+          label={t("inventoryScanner.rateSiAll")}
           value={rateAll}
           onChange={setRateAll}
           total={totalPrice}
           color="blue"
-          desc="Giá bán khi bán sỉ toàn bộ"
+          desc={t("inventoryScanner.rateSiDesc")}
           customCalculatedTotal={totalSi}
           tooltip={
             <span>
-              Tổng giá trị quy đổi theo rate sỉ. Áp dụng tỷ lệ chiết khấu cho hòm, capsule, sticker và skin thường. Skin đã có giá Buff được tính 100% giá trị.
+              {t("inventoryScanner.rateSiTooltip")}
             </span>
           }
         />
         <RateCard
           id="rateLe"
-          label="Rate lẻ"
+          label={t("inventoryScanner.rateLe")}
           value={rateLe}
           onChange={setRateLe}
           total={totalPrice}
-          color="violet"
-          desc="Giá bán khi bán lẻ từng hòm"
+          color="amber"
+          desc={t("inventoryScanner.rateLeDesc")}
           customCalculatedTotal={totalLe}
           tooltip={
             <span>
-              Tổng giá trị quy đổi theo rate lẻ. Áp dụng tỷ lệ chiết khấu cho hòm, capsule, sticker. Skin đã có giá Buff được tính 100% giá trị.
+              {t("inventoryScanner.rateLeTooltip")}
             </span>
           }
         />
@@ -79,36 +86,52 @@ export function PricingStatsGrid({
 
       <div className="grid gap-4 sm:grid-cols-3">
         <StatCard
-          label="Tổng số lượng item định giá"
+          label={t("inventoryScanner.totalPricedItems")}
           value={String(totalQuantity)}
-          unit="item"
+          unit={t("inventoryScanner.itemUnit")}
           variant="blue"
           tooltip={
             <span>
-              Tổng số lượng các vật phẩm được đưa vào bảng tính định giá (hòm, capsule, sticker, skin).
+              {t("inventoryScanner.totalQuantityTooltip")}
             </span>
           }
         />
         <StatCard
-          label="Giá trị thị trường (100%)"
+          label={t("inventoryScanner.marketValue")}
           value={formatVND(totalPrice)}
           valueClass="text-emerald-400"
           variant="emerald"
           tooltip={
             <span>
-              Tổng giá trị các vật phẩm tính theo giá trị thị trường 100% (không áp dụng chiết khấu/rate).
+              {t("inventoryScanner.marketValueTooltip")}
             </span>
           }
         />
         <StatCard
-          label="Tổng item trong hòm đồ"
-          value={String(totalInventoryCount)}
-          unit="item"
-          variant="neutral"
+          label={t("inventoryScanner.totalSteamWallet")}
+          value={formatVND(totalWalletVnd)}
+          valueClass="text-sky-400 font-bold"
+          variant="blue"
           tooltip={
-            <span>
-              Tổng số lượng tất cả các vật phẩm hiện có trong hòm đồ Steam đã quét (bao gồm cả các loại item không định giá như huy hiệu, graffiti...).
-            </span>
+            <div className="space-y-1">
+              <p>{t("inventoryScanner.walletTooltip")}</p>
+              {accounts.some((a) => a.status === "done" && a.result?.walletBalance) && (
+                <div className="mt-1.5 border-t border-stone-800 pt-1.5 space-y-0.5">
+                  {accounts
+                    .filter((a) => a.status === "done" && a.result?.walletBalance)
+                    .map((a) => (
+                      <div key={a.id} className="flex justify-between gap-4 text-[10px] text-stone-400">
+                        <span className="truncate max-w-[100px]">{a.result!.profile.name}:</span>
+                        <span className="font-mono font-semibold text-stone-300">
+                          {a.result?.walletBalance
+                            ?.replace(/Chờ xử lý/gi, t("common.pending", "Pending"))
+                            .replace(/Pending/gi, t("common.pending", "Pending"))}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
           }
         />
       </div>

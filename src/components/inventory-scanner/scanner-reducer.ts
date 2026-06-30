@@ -69,8 +69,21 @@ export type ScannerAction =
       buffPriceManual?: number;
       buffRateManual?: number;
       id?: string;
+      note?: string;
+      stickerPriceRate?: number;
+      stickerBuyPriceRate?: number;
+      stickerScanTotalPrice?: number;
+      stickerScanPriceCapturedAt?: string;
+      patternInfo?: any;
+      dopplerPhase?: string;
+      inspectLink?: string;
     }
   | { type: "UPDATE_MANUAL_QTY"; idOrName: string; qty: number }
+  | {
+      type: "UPDATE_MANUAL_ITEM";
+      id: string;
+      payload: Partial<ScanResultItem>;
+    }
   | {
       type: "REMOVE_ITEM";
       marketHashName: string;
@@ -195,7 +208,7 @@ export function scannerReducer(
                 progress: {
                   status: "queued",
                   stage: "queued",
-                  message: "Đang tạo job quét inventory.",
+                  message: "creatingScanJob",
                   percent: 0,
                 },
               }
@@ -238,6 +251,13 @@ export function scannerReducer(
         };
       }
 
+      const nextRemovedKeys = new Set(state.removedKeys);
+      if (result && result.items) {
+        for (const item of result.items) {
+          nextRemovedKeys.delete(item.caseItem.marketHashName);
+        }
+      }
+
       return {
         ...state,
         accounts: state.accounts.map((a) =>
@@ -245,6 +265,7 @@ export function scannerReducer(
             ? { ...a, status: "done", result, error: null, progress }
             : a,
         ),
+        removedKeys: nextRemovedKeys,
       };
     }
 
@@ -303,6 +324,14 @@ export function scannerReducer(
         buffPriceManual,
         buffRateManual,
         id,
+        note,
+        stickerPriceRate,
+        stickerBuyPriceRate,
+        stickerScanTotalPrice,
+        stickerScanPriceCapturedAt,
+        patternInfo,
+        dopplerPhase,
+        inspectLink,
       } = action;
       const type = getInventoryItemType(caseItem.name);
 
@@ -344,6 +373,14 @@ export function scannerReducer(
             storageUnitName,
             buffPriceManual,
             buffRateManual,
+            note,
+            stickerPriceRate,
+            stickerBuyPriceRate,
+            stickerScanTotalPrice,
+            stickerScanPriceCapturedAt,
+            patternInfo,
+            dopplerPhase,
+            inspectLink,
           },
         ];
       }
@@ -357,6 +394,20 @@ export function scannerReducer(
         removedKeys: nextRemovedKeys,
       };
     }
+
+    case "UPDATE_MANUAL_ITEM":
+      return {
+        ...state,
+        manualItems: state.manualItems.map((item) =>
+          item.id === action.id
+            ? {
+                ...item,
+                ...action.payload,
+                total: item.price * (action.payload.quantity ?? item.quantity),
+              }
+            : item,
+        ),
+      };
 
     case "UPDATE_MANUAL_QTY":
       return {
@@ -391,7 +442,7 @@ export function scannerReducer(
         };
       }
       const nextRemovedKeys = new Set(state.removedKeys);
-      nextRemovedKeys.add(action.marketHashName);
+      nextRemovedKeys.add(action.id ?? action.marketHashName);
       return {
         ...state,
         removedKeys: nextRemovedKeys,
@@ -463,7 +514,7 @@ export function scannerReducer(
       return {
         ...state,
         portfolioImporting: true,
-        portfolioImportStatus: "Đang khởi động...",
+        portfolioImportStatus: "starting",
         portfolioImportMessage: null,
         portfolioImportError: null,
       };

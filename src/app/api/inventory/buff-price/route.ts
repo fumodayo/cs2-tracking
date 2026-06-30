@@ -1,5 +1,7 @@
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { USER_AGENTS } from "@/utils/api-client";
+import { buffPriceRateLimiter } from "@/infrastructure/rate-limiter";
+import { fetchWithTimeout } from "@/utils/fetch-with-timeout";
 
 const CS2CAP_API_BASE_URL = "https://api.cs2c.app";
 const CS2CAP_TIMEOUT_MS = 8_000;
@@ -7,8 +9,17 @@ const DEFAULT_CNY_TO_VND_RATE = 3600;
 
 export const dynamic = "force-dynamic";
 
-export async function POST(request: Request) {
+export async function POST(request: NextRequest) {
   try {
+    const ip = request.headers.get("x-forwarded-for") || (request as NextRequest & { ip?: string }).ip || "unknown-ip";
+    const { allowed, retryAfter } = await buffPriceRateLimiter.check(ip);
+    if (!allowed) {
+      return NextResponse.json(
+        { message: "tooManyRequests", details: { retryAfter } },
+        { status: 429, headers: { "Retry-After": String(retryAfter) } }
+      );
+    }
+
     const body = await request.json();
     const marketHashName =
       typeof body.marketHashName === "string" ? body.marketHashName.trim() : "";
@@ -20,15 +31,32 @@ export async function POST(request: Request) {
 
     if (!marketHashName) {
       return NextResponse.json(
-        { message: "Thiếu tên market hash." },
+        { message: "missingMarketHashName" },
         { status: 400 },
       );
     }
 
-    const apiKey = process.env.CS2CAP_API_KEY?.trim();
+    let apiKey = request.headers.get("x-cs2cap-api-key")?.trim() || request.headers.get("X-CS2Cap-API-Key")?.trim() || "";
+
+    if (!apiKey) {
+      apiKey = process.env.CS2CAP_API_KEY?.trim() || "";
+      try {
+        const { getCurrentUser, getUserCs2capApiKey } = await import("@/services/auth-service");
+        const user = await getCurrentUser();
+        if (user?.id) {
+          const userKey = await getUserCs2capApiKey(user.id);
+          if (userKey) {
+            apiKey = userKey;
+          }
+        }
+      } catch {
+        // ignore context error outside request
+      }
+    }
+
     if (!apiKey) {
       return NextResponse.json(
-        { message: "Thiếu CS2CAP_API_KEY trong .env." },
+        { message: "noApiKeyConfigured" },
         { status: 400 },
       );
     }
@@ -36,7 +64,7 @@ export async function POST(request: Request) {
     const itemId = await fetchCs2CapItemId(marketHashName, apiKey);
     if (itemId === null) {
       return NextResponse.json(
-        { message: "Không tìm thấy item trên CS2Cap." },
+        { message: "itemNotFoundOnCs2cap" },
         { status: 404 },
       );
     }
@@ -48,7 +76,7 @@ export async function POST(request: Request) {
     );
     if (priceCny === null) {
       return NextResponse.json(
-        { message: "Không tìm thấy giá BUFF163 cho item này." },
+        { message: "buffPriceNotFound" },
         { status: 404 },
       );
     }
@@ -62,7 +90,7 @@ export async function POST(request: Request) {
     });
   } catch {
     return NextResponse.json(
-      { message: "Không thể lấy giá BUFF163." },
+      { message: "buffGeneric" },
       { status: 500 },
     );
   }
@@ -202,18 +230,4 @@ function collectRecords(value: unknown): Record<string, unknown>[] {
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
-}
-
-async function fetchWithTimeout(
-  input: RequestInfo | URL,
-  init: RequestInit,
-  timeoutMs: number,
-): Promise<Response> {
-  const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), timeoutMs);
-  try {
-    return await fetch(input, { ...init, signal: controller.signal });
-  } finally {
-    clearTimeout(timeout);
-  }
 }

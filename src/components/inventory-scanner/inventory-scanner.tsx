@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useMemo, useState, useEffect, useCallback } from "react";
-import { useQueryParamsState, type ParamConfig } from "@/hooks/use-query-params";
+import { useTranslation } from "react-i18next";
 import {
   getCoreRowModel,
   getFilteredRowModel,
@@ -11,54 +11,35 @@ import {
   type ColumnDef,
 } from "@tanstack/react-table";
 
-import { ShoppingBag, Users } from "lucide-react";
 import { useInventoryScanner } from "./use-inventory-scanner";
+import { usePatternInspect } from "./hooks/use-pattern-inspect";
 
 import { AddCaseSearch } from "./add-case-search";
 import { CookieGuideModal } from "@/components/shared/cookie-guide-modal";
 import { ScanResultItem } from "./types";
 import { buildInventoryColumns } from "./inventory-scanner-columns";
+import { groupItemsForSummary } from "./hooks/use-scanner-data-merged";
 
 import { AccountsSection } from "./components/accounts-section";
-import { PortfolioSyncSection } from "./components/portfolio-sync-section";
-import { PricingStatsGrid } from "./components/pricing-stats-grid";
-import { ResultsTable } from "./components/results-table";
+import { CS2CapModal } from "@/components/auth/cs2cap-modal";
+import { ConfirmDialog } from "@/components/ui/confirm-dialog";
+import { SellSelectedDialog } from "../portfolio/sell-selected-dialog";
+import type { PortfolioTableRow } from "../portfolio/portfolio-table-model";
+import type { PortfolioReportRowDto, PriceChangeDto } from "@/types/report";
+import type { PriceRange } from "@/domain/price";
 
-const scannerQueryConfig = {
-  q: {
-    defaultValue: "",
-    parse: (val: string | null) => val || "",
-    serialize: (val: string) => val || null,
-    debounceMs: 300,
-  } as ParamConfig<string>,
-  page: {
-    defaultValue: 1,
-    parse: (val: string | null) => (val ? Math.max(1, parseInt(val, 10)) : 1),
-    serialize: (val: number) => (val > 1 ? String(val) : null),
-  } as ParamConfig<number>,
-  pageSize: {
-    defaultValue: 10,
-    parse: (val: string | null) => (val ? Math.max(1, parseInt(val, 10)) : 10),
-    serialize: (val: number) => (val !== 10 ? String(val) : null),
-  } as ParamConfig<number>,
-  type: {
-    defaultValue: [] as string[],
-    parse: (val: string | null) => (val ? val.split(",") : []),
-    serialize: (val: string[]) => (val.length > 0 ? val.join(",") : null),
-  } as ParamConfig<string[]>,
-  status: {
-    defaultValue: [] as string[],
-    parse: (val: string | null) => (val ? val.split(",") : []),
-    serialize: (val: string[]) => (val.length > 0 ? val.join(",") : null),
-  } as ParamConfig<string[]>,
-  accounts: {
-    defaultValue: [] as string[],
-    parse: (val: string | null) => (val ? val.split(",") : []),
-    serialize: (val: string[]) => (val.length > 0 ? val.join(",") : null),
-  } as ParamConfig<string[]>,
-};
+import { ScannerToolbar } from "./components/scanner-toolbar";
+import { ScannerResults } from "./components/scanner-results";
+import { SlidePanel, SlidePanelContent } from "@/components/ui/slide-panel";
+import { ItemHoverCard } from "../portfolio/item-hover-card";
+
+
 
 export function InventoryScanner() {
+  const { t } = useTranslation();
+  const [showGuestKeyModal, setShowGuestKeyModal] = useState(false);
+  const [selectedItemForPanel, setSelectedItemForPanel] = useState<ScanResultItem | null>(null);
+
   const {
     state,
     isLoaded,
@@ -68,6 +49,8 @@ export function InventoryScanner() {
     setRateLe,
     buffCnyToVndRate,
     setBuffCnyToVndRate,
+    mode,
+    setMode,
     user,
     googleConfigured,
     updateAccountUrl,
@@ -80,6 +63,7 @@ export function InventoryScanner() {
     cancelScanAll,
     addManualItem,
     updateManualItemQty,
+    updateManualItem,
     removeItem,
     updateBuffPriceCny,
     fetchBuffPrice,
@@ -96,9 +80,61 @@ export function InventoryScanner() {
     isAnyScanPending,
     hasValidUrls,
     zeroPricedItems,
+    refreshPrices,
+    isRefreshingPrices,
+    urlState,
+    setters,
+    debouncedUrlState,
   } = useInventoryScanner();
 
-  const [urlState, setters] = useQueryParamsState(scannerQueryConfig);
+  const { inspectingKeys, patternResults, inspectPattern } = usePatternInspect();
+
+  // Trigger automatic portfolio import after Gmail login redirect
+  useEffect(() => {
+    if (
+      isLoaded &&
+      user &&
+      typeof window !== "undefined" &&
+      localStorage.getItem("pending_portfolio_sync") === "true"
+    ) {
+      if (mergedRaw && mergedRaw.items.length > 0) {
+        localStorage.removeItem("pending_portfolio_sync");
+        localStorage.setItem("pending_portfolio_sync_redirect", "true");
+        importInventoryToPortfolio();
+      } else {
+        localStorage.removeItem("pending_portfolio_sync");
+        window.location.href = "/portfolio";
+      }
+    }
+  }, [isLoaded, user, mergedRaw, importInventoryToPortfolio]);
+
+  // Monitor auto-import result and redirect on success
+  useEffect(() => {
+    if (
+      state.portfolioImportMessage &&
+      typeof window !== "undefined" &&
+      localStorage.getItem("pending_portfolio_sync_redirect") === "true"
+    ) {
+      localStorage.removeItem("pending_portfolio_sync_redirect");
+      window.location.href = "/portfolio";
+    }
+  }, [state.portfolioImportMessage]);
+
+  // Clear pending redirect flag on import error
+  useEffect(() => {
+    if (
+      state.portfolioImportError &&
+      typeof window !== "undefined" &&
+      localStorage.getItem("pending_portfolio_sync_redirect") === "true"
+    ) {
+      localStorage.removeItem("pending_portfolio_sync_redirect");
+    }
+  }, [state.portfolioImportError]);
+
+  const hasScannedAccount = useMemo(
+    () => state.accounts.some((a) => a.status === "done" && a.result),
+    [state.accounts],
+  );
 
   const selectedAccounts = urlState.accounts;
   const setSelectedAccounts = setters.accounts;
@@ -137,41 +173,6 @@ export function InventoryScanner() {
     },
     [urlState.page, urlState.pageSize, setters],
   );
-
-  // Bidirectional sync between URL parameters and useInventoryScanner reducer state
-  useEffect(() => {
-    if (state.globalFilter !== urlState.q) {
-      setters.q(state.globalFilter);
-    }
-  }, [state.globalFilter, urlState.q, setters]);
-
-  const selectedTypesArr = useMemo(
-    () => Array.from(state.selectedTypes).sort(),
-    [state.selectedTypes],
-  );
-  useEffect(() => {
-    const targetTypeArr = urlState.type.slice().sort();
-    if (JSON.stringify(selectedTypesArr) !== JSON.stringify(targetTypeArr)) {
-      setters.type(selectedTypesArr);
-    }
-  }, [selectedTypesArr, urlState.type, setters]);
-
-  useEffect(() => {
-    if (urlState.q !== state.globalFilter) {
-      setGlobalFilter(urlState.q);
-    }
-  }, [urlState.q, state.globalFilter, setGlobalFilter]);
-
-  useEffect(() => {
-    const targetSet = new Set(urlState.type);
-    const setsEqual =
-      state.selectedTypes.size === targetSet.size &&
-      Array.from(state.selectedTypes).every((v) => targetSet.has(v));
-    if (!setsEqual) {
-      clearTypeFilters();
-      urlState.type.forEach((t) => toggleTypeFilter(t));
-    }
-  }, [urlState.type, state.selectedTypes, toggleTypeFilter, clearTypeFilters]);
 
   // Reset pagination to first page when search filters change
   useEffect(() => {
@@ -228,8 +229,487 @@ export function InventoryScanner() {
     [selectedAccounts, selectedStatuses, merged?.scannedItems],
   );
 
-  const visibleManualItems =
-    selectedAccounts.length === 0 ? filteredManualItems : [];
+  const visibleManualItems = useMemo(() => {
+    return selectedAccounts.length === 0 ? filteredManualItems : [];
+  }, [selectedAccounts, filteredManualItems]);
+
+  const tableData = useMemo(() => {
+    const rawData = [...visibleManualItems, ...filteredScannedItems];
+    if (mode === "case-summary") {
+      return groupItemsForSummary(rawData);
+    }
+    return rawData;
+  }, [visibleManualItems, filteredScannedItems, mode]);
+
+  const [rowSelection, setRowSelection] = useState<Record<string, boolean>>({});
+
+  useEffect(() => {
+    console.log("DEBUG SCANNER - mode:", mode, "rowSelection:", rowSelection);
+  }, [mode, rowSelection]);
+
+  const [sellDialogOpen, setSellDialogOpen] = useState(false);
+  const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
+  const [isDeleteListExpanded, setIsDeleteListExpanded] = useState(false);
+
+  const handleModeChange = useCallback(
+    (newMode: "case-summary" | "transactions") => {
+      if (newMode === mode) return;
+
+      const rawData = [...visibleManualItems, ...filteredScannedItems];
+      const currentRows = mode === "case-summary" ? groupItemsForSummary(rawData) : rawData;
+      const nextRows = newMode === "case-summary" ? groupItemsForSummary(rawData) : rawData;
+
+      setRowSelection((selection) => {
+        const selectedUnderlyingIds = new Set<string>();
+        const currentRowsMap = new Map(
+          currentRows.map((row) => [
+            row.isManual && row.id ? row.id : (row.identityKey || row.caseItem.marketHashName),
+            row,
+          ])
+        );
+
+        for (const [rowId, isSelected] of Object.entries(selection)) {
+          if (!isSelected) continue;
+          const row = currentRowsMap.get(rowId);
+          if (row) {
+            const ids = row.underlyingIds || [rowId];
+            ids.forEach((id) => selectedUnderlyingIds.add(id));
+          } else {
+            selectedUnderlyingIds.add(rowId);
+          }
+        }
+
+        const nextSelection: Record<string, boolean> = {};
+        for (const row of nextRows) {
+          const rowId = row.isManual && row.id ? row.id : (row.identityKey || row.caseItem.marketHashName);
+          const ids = row.underlyingIds || [rowId];
+          if (ids.some((id) => selectedUnderlyingIds.has(id))) {
+            nextSelection[rowId] = true;
+          }
+        }
+        return nextSelection;
+      });
+
+      setMode(newMode);
+    },
+    [mode, visibleManualItems, filteredScannedItems, setMode, setRowSelection],
+  );
+
+  useEffect(() => {
+    if (!deleteConfirmOpen) {
+      setIsDeleteListExpanded(false);
+    }
+  }, [deleteConfirmOpen]);
+
+  const mapScannerItemToPortfolioRow = useCallback((item: ScanResultItem): PortfolioTableRow => {
+    const itemTypeMap: Record<string, "case" | "capsule" | "sticker" | "skin"> = {
+      Case: "case",
+      Capsule: "capsule",
+      Sticker: "sticker",
+      Skin: "skin",
+    };
+    const id = item.isManual && item.id ? item.id : (item.identityKey || item.caseItem.marketHashName);
+    const marketHashName = item.caseItem.marketHashName;
+
+    const rawItem = mergedRaw?.items.find(
+      (i) => i.caseItem.marketHashName === marketHashName,
+    );
+    const steamPrice = rawItem?.price ?? item.price;
+    const currentPrice = item.price;
+
+    return {
+      id,
+      mode: "case-summary",
+      case: {
+        id: item.caseItem.id,
+        name: item.caseItem.name,
+        marketHashName: item.caseItem.marketHashName,
+        imageUrl: item.caseItem.imageUrl ?? undefined,
+        isActive: true,
+        rarity: item.rarity,
+      },
+      itemIds: [id],
+      quantity: item.quantity,
+      lotCount: 1,
+      buyPrice: item.buyPrice ?? 0,
+      buyDate: item.buyDate ?? null,
+      createdAt: null,
+      note: item.note ?? (item.isManual ? t("common.manual") : undefined),
+      sourceType: item.isManual ? "manual" : "existing",
+      itemType: itemTypeMap[item.type] ?? "case",
+      sourceAccounts: (item.sourceAccounts ?? []).map((sa) => ({
+        steamId64: sa.steamId64,
+        name: sa.name,
+        breakdown: sa.breakdown,
+      })),
+      currentPrice,
+      steamPrice,
+      currentPriceCapturedAt: null,
+      investedValue: (item.buyPrice ?? 0) * item.quantity,
+      currentValue: currentPrice * item.quantity,
+      profitAmount: 0,
+      profitPercent: 0,
+      marketChanges: {} as Record<PriceRange, PriceChangeDto>,
+      tradeHoldUntil: null,
+      isTemporaryPrice: false,
+      storageUnitQuantity: 0,
+      patternInfo: item.patternInfo,
+      dopplerPhase: item.dopplerPhase,
+      inspectLink: item.inspectLink,
+    };
+  }, [mergedRaw, t]);
+
+  const currentSelectedItemForPanel = useMemo(() => {
+    if (!selectedItemForPanel) return null;
+    const targetId = selectedItemForPanel.isManual && selectedItemForPanel.id
+      ? selectedItemForPanel.id
+      : (selectedItemForPanel.identityKey || selectedItemForPanel.caseItem.marketHashName);
+
+    return tableData.find((item) => {
+      const id = item.isManual && item.id ? item.id : (item.identityKey || item.caseItem.marketHashName);
+      return id === targetId;
+    }) ?? selectedItemForPanel;
+  }, [selectedItemForPanel, tableData]);
+
+  const selectedPortfolioRowForPanel = useMemo(() => {
+    return currentSelectedItemForPanel ? mapScannerItemToPortfolioRow(currentSelectedItemForPanel) : null;
+  }, [currentSelectedItemForPanel, mapScannerItemToPortfolioRow]);
+
+  const relatedPortfolioRowsForPanel = useMemo(() => {
+    if (!selectedItemForPanel || !currentSelectedItemForPanel) return [];
+    if (mode === "transactions") {
+      return selectedPortfolioRowForPanel ? [selectedPortfolioRowForPanel] : [];
+    }
+
+    const rawData = [...visibleManualItems, ...filteredScannedItems];
+    const targetMarketHashName = currentSelectedItemForPanel.caseItem.marketHashName;
+    const targetDoppler = currentSelectedItemForPanel.dopplerPhase ?? "normal";
+
+    return rawData
+      .filter((item) => {
+        const itemDoppler = item.dopplerPhase ?? "normal";
+        return item.caseItem.marketHashName === targetMarketHashName && itemDoppler === targetDoppler;
+      })
+      .map(mapScannerItemToPortfolioRow);
+  }, [
+    selectedItemForPanel,
+    currentSelectedItemForPanel,
+    selectedPortfolioRowForPanel,
+    mode,
+    visibleManualItems,
+    filteredScannedItems,
+    mapScannerItemToPortfolioRow,
+  ]);
+
+  const selectedRows = useMemo(() => {
+    return tableData.filter((item) => {
+      const id = item.isManual && item.id ? item.id : (item.identityKey || item.caseItem.marketHashName);
+      return rowSelection[id];
+    });
+  }, [tableData, rowSelection]);
+
+  const selectedPortfolioRows = useMemo(() => {
+    return selectedRows.map(mapScannerItemToPortfolioRow);
+  }, [selectedRows, mapScannerItemToPortfolioRow]);
+
+  const allPortfolioRows = useMemo(() => {
+    return tableData.map(mapScannerItemToPortfolioRow);
+  }, [tableData, mapScannerItemToPortfolioRow]);
+
+  const sellDialogOriginalRows = useMemo(() => {
+    return tableData.map((item) => {
+      const id = item.isManual && item.id ? item.id : (item.identityKey || item.caseItem.marketHashName);
+      return {
+        item: {
+          id,
+          quantity: item.quantity,
+          buyPrice: item.buyPrice ?? 0,
+          buyDate: item.buyDate ?? null,
+          createdAt: null,
+          note: item.isManual ? t("common.manual") : t("inventoryScanner.scanned"),
+          sourceAccounts: item.sourceAccounts,
+          storageUnitId: item.storageUnitId,
+          storageUnitQuantity: item.storageUnitId ? item.quantity : 0,
+        },
+        case: {
+          id: item.caseItem.id,
+          name: item.caseItem.name,
+          marketHashName: item.caseItem.marketHashName,
+          imageUrl: item.caseItem.imageUrl,
+        },
+        currentPrice: item.price,
+        currentValue: item.total,
+        investedValue: (item.buyPrice ?? 0) * item.quantity,
+        profitAmount: 0,
+        profitPercent: 0,
+        marketChanges: {} as Record<PriceRange, PriceChangeDto>,
+      };
+    }) as unknown as PortfolioReportRowDto[];
+  }, [tableData, t]);
+
+  const handleSellDelete = useCallback((id: string) => {
+    if (id.startsWith("manual-")) {
+      removeItem("", true, id);
+    } else {
+      removeItem("", false, id);
+    }
+  }, [removeItem]);
+
+  const handleSellUpdateQuantity = useCallback((id: string, newQty: number) => {
+    if (id.startsWith("manual-")) {
+      updateManualItemQty(id, newQty);
+    } else {
+      const scannedItem = tableData.find((item) => !item.isManual && (item.identityKey || item.caseItem.marketHashName) === id);
+      if (scannedItem) {
+        removeItem("", false, id);
+        addManualItem(
+          scannedItem.caseItem,
+          scannedItem.price,
+          newQty,
+          scannedItem.buyPrice,
+          scannedItem.buyDate,
+          scannedItem.sourceAccounts,
+          scannedItem.storageUnitId,
+          scannedItem.buffPriceManual,
+          scannedItem.buffRateManual,
+          scannedItem.storageUnitName
+        );
+      }
+    }
+  }, [removeItem, updateManualItemQty, addManualItem, tableData]);
+
+  const handleUpdateLot = useCallback(
+    async (
+      id: string,
+      payload: {
+        quantity?: number;
+        buyPrice?: number;
+        note?: string;
+        sourceAccounts?: Array<{ steamId64: string; name: string }>;
+        storageUnitId?: string;
+        stickerPriceRate?: number;
+        stickerBuyPriceRate?: number;
+        dopplerPhase?: string;
+        patternInfo?: any;
+        inspectLink?: string;
+      },
+    ) => {
+      if (id.startsWith("manual-")) {
+        updateManualItem(id, {
+          quantity: payload.quantity,
+          buyPrice: payload.buyPrice,
+          note: payload.note,
+          sourceAccounts: payload.sourceAccounts,
+          storageUnitId: payload.storageUnitId,
+          stickerPriceRate: payload.stickerPriceRate,
+          stickerBuyPriceRate: payload.stickerBuyPriceRate,
+          dopplerPhase: payload.dopplerPhase,
+          patternInfo: payload.patternInfo,
+          inspectLink: payload.inspectLink,
+        });
+      } else {
+        const scannedItem = tableData.find(
+          (item) => !item.isManual && (item.identityKey || item.caseItem.marketHashName) === id,
+        );
+        if (scannedItem) {
+          removeItem("", false, id);
+          addManualItem(
+            scannedItem.caseItem,
+            scannedItem.price,
+            payload.quantity ?? scannedItem.quantity,
+            payload.buyPrice ?? scannedItem.buyPrice,
+            scannedItem.buyDate,
+            payload.sourceAccounts ?? scannedItem.sourceAccounts,
+            payload.storageUnitId ?? scannedItem.storageUnitId,
+            scannedItem.buffPriceManual,
+            scannedItem.buffRateManual,
+            scannedItem.storageUnitName,
+            payload.stickerPriceRate ?? scannedItem.buffRateManual,
+            payload.stickerBuyPriceRate ?? scannedItem.buffRateManual,
+            id,
+            payload.note ?? scannedItem.note,
+          );
+        }
+      }
+    },
+    [removeItem, addManualItem, updateManualItem, tableData],
+  );
+
+  const handleUpdateQuantity = useCallback(
+    (id: string, newQty: number) => {
+      if (id.startsWith("manual-")) {
+        updateManualItemQty(id, newQty);
+      } else {
+        const scannedItem = tableData.find(
+          (item) => !item.isManual && (item.identityKey || item.caseItem.marketHashName) === id,
+        );
+        if (scannedItem) {
+          removeItem("", false, id);
+          addManualItem(
+            scannedItem.caseItem,
+            scannedItem.price,
+            newQty,
+            scannedItem.buyPrice,
+            scannedItem.buyDate,
+            scannedItem.sourceAccounts,
+            scannedItem.storageUnitId,
+            scannedItem.buffPriceManual,
+            scannedItem.buffRateManual,
+            scannedItem.storageUnitName,
+            scannedItem.stickerPriceRate,
+            scannedItem.stickerBuyPriceRate,
+            id,
+            scannedItem.note,
+          );
+        }
+      }
+    },
+    [removeItem, updateManualItemQty, addManualItem, tableData],
+  );
+
+  const handleUpdateBuyPrice = useCallback(
+    (id: string, newBuyPrice: number) => {
+      if (id.startsWith("manual-")) {
+        updateManualItem(id, { buyPrice: newBuyPrice });
+      } else {
+        const scannedItem = tableData.find(
+          (item) => !item.isManual && (item.identityKey || item.caseItem.marketHashName) === id,
+        );
+        if (scannedItem) {
+          removeItem("", false, id);
+          addManualItem(
+            scannedItem.caseItem,
+            scannedItem.price,
+            scannedItem.quantity,
+            newBuyPrice,
+            scannedItem.buyDate,
+            scannedItem.sourceAccounts,
+            scannedItem.storageUnitId,
+            scannedItem.buffPriceManual,
+            scannedItem.buffRateManual,
+            scannedItem.storageUnitName,
+            scannedItem.stickerPriceRate,
+            scannedItem.stickerBuyPriceRate,
+            id,
+            scannedItem.note,
+          );
+        }
+      }
+    },
+    [removeItem, updateManualItem, addManualItem, tableData],
+  );
+
+  const handleUpdateNote = useCallback(
+    (id: string, newNote: string) => {
+      if (id.startsWith("manual-")) {
+        updateManualItem(id, { note: newNote });
+      } else {
+        const scannedItem = tableData.find(
+          (item) => !item.isManual && (item.identityKey || item.caseItem.marketHashName) === id,
+        );
+        if (scannedItem) {
+          removeItem("", false, id);
+          addManualItem(
+            scannedItem.caseItem,
+            scannedItem.price,
+            scannedItem.quantity,
+            scannedItem.buyPrice,
+            scannedItem.buyDate,
+            scannedItem.sourceAccounts,
+            scannedItem.storageUnitId,
+            scannedItem.buffPriceManual,
+            scannedItem.buffRateManual,
+            scannedItem.storageUnitName,
+            scannedItem.stickerPriceRate,
+            scannedItem.stickerBuyPriceRate,
+            id,
+            newNote,
+          );
+        }
+      }
+    },
+    [removeItem, updateManualItem, addManualItem, tableData],
+  );
+
+  const handleDelete = useCallback(
+    (id: string) => {
+      handleSellDelete(id);
+      if (relatedPortfolioRowsForPanel.length <= 1 || mode === "transactions") {
+        setSelectedItemForPanel(null);
+      }
+    },
+    [handleSellDelete, relatedPortfolioRowsForPanel.length, mode],
+  );
+
+  const handleDeleteSelected = useCallback(() => {
+    if (selectedRows.length === 0) return;
+    setDeleteConfirmOpen(true);
+  }, [selectedRows]);
+
+  const executeDeleteSelected = useCallback(() => {
+    for (const item of selectedRows) {
+      if (item.underlyingIds && item.underlyingIds.length > 0) {
+        for (const uid of item.underlyingIds) {
+          removeItem("", item.isManual, uid);
+        }
+      } else {
+        const itemId = item.id || item.identityKey;
+        if (itemId) {
+          removeItem("", item.isManual, itemId);
+        } else {
+          removeItem(item.caseItem.marketHashName, item.isManual);
+        }
+      }
+    }
+    setRowSelection({});
+    setDeleteConfirmOpen(false);
+    setSelectedItemForPanel(null);
+  }, [selectedRows, removeItem]);
+
+  const handleSellAll = useCallback(() => {
+    if (!currentSelectedItemForPanel) return;
+    const targetMarketHashName = currentSelectedItemForPanel.caseItem.marketHashName;
+    const targetDoppler = currentSelectedItemForPanel.dopplerPhase ?? "normal";
+
+    const newSelection: Record<string, boolean> = {};
+    tableData.forEach((row) => {
+      const itemDoppler = row.dopplerPhase ?? "normal";
+      if (row.caseItem.marketHashName === targetMarketHashName && itemDoppler === targetDoppler) {
+        const id = row.isManual && row.id ? row.id : (row.identityKey || row.caseItem.marketHashName);
+        newSelection[id] = true;
+      }
+    });
+
+    setRowSelection(newSelection);
+    setSellDialogOpen(true);
+  }, [currentSelectedItemForPanel, tableData]);
+
+  const handleDeleteAll = useCallback(() => {
+    if (!currentSelectedItemForPanel) return;
+    const targetMarketHashName = currentSelectedItemForPanel.caseItem.marketHashName;
+    const targetDoppler = currentSelectedItemForPanel.dopplerPhase ?? "normal";
+
+    const newSelection: Record<string, boolean> = {};
+    tableData.forEach((row) => {
+      const itemDoppler = row.dopplerPhase ?? "normal";
+      if (row.caseItem.marketHashName === targetMarketHashName && itemDoppler === targetDoppler) {
+        const id = row.isManual && row.id ? row.id : (row.identityKey || row.caseItem.marketHashName);
+        newSelection[id] = true;
+      }
+    });
+
+    setRowSelection(newSelection);
+    setDeleteConfirmOpen(true);
+  }, [currentSelectedItemForPanel, tableData]);
+
+  const totalWalletVnd = useMemo(() => {
+    return state.accounts.reduce((sum, acc) => {
+      if (acc.status === "done" && acc.result?.walletBalanceVnd) {
+        return sum + acc.result.walletBalanceVnd;
+      }
+      return sum;
+    }, 0);
+  }, [state.accounts]);
 
   /**
    * Defines TanStack Table columns, linking custom cells with action callbacks
@@ -238,6 +718,7 @@ export function InventoryScanner() {
   const columns = useMemo<ColumnDef<ScanResultItem>[]>(
     () =>
       buildInventoryColumns({
+        t,
         buffLoadingKeys: state.buffLoadingKeys,
         buffPricesCny: state.buffPricesCny,
         buffPriceErrors: state.buffPriceErrors,
@@ -246,10 +727,16 @@ export function InventoryScanner() {
         buffCnyToVndRate,
         rateAll,
         rateLe,
-        removeItem,
+        updateManualItemQty,
         mergedRawItems: mergedRaw?.items,
+        inspectingKeys,
+        patternResults,
+        inspectPattern,
+        mode,
+        onSelectItem: setSelectedItemForPanel,
       }),
     [
+      t,
       buffCnyToVndRate,
       state.buffLoadingKeys,
       state.buffPriceErrors,
@@ -258,8 +745,13 @@ export function InventoryScanner() {
       updateBuffPriceCny,
       rateAll,
       rateLe,
-      removeItem,
+      updateManualItemQty,
       mergedRaw,
+      inspectingKeys,
+      patternResults,
+      inspectPattern,
+      mode,
+      setSelectedItemForPanel,
     ],
   );
 
@@ -297,15 +789,19 @@ export function InventoryScanner() {
 
   // eslint-disable-next-line react-hooks/incompatible-library
   const table = useReactTable({
-    data: filteredScannedItems,
+    data: tableData,
     columns,
     state: {
-      globalFilter: state.globalFilter,
+      globalFilter: debouncedUrlState.q,
       columnVisibility,
       pagination,
+      rowSelection,
     },
     onColumnVisibilityChange: setColumnVisibility,
     onPaginationChange: setPagination,
+    onRowSelectionChange: setRowSelection,
+    getRowId: (row) => row.isManual && row.id ? row.id : (row.identityKey || row.caseItem.marketHashName),
+    enableRowSelection: true,
     initialState: {
       sorting: [{ id: "total", desc: true }],
     },
@@ -330,27 +826,10 @@ export function InventoryScanner() {
 
   return (
     <main className="min-h-screen">
-      <section className="relative min-h-[16rem] overflow-hidden border-b border-stone-800">
-        <div
-          className="absolute inset-0 bg-cover bg-center opacity-40"
-          style={{ backgroundImage: "url('/assets/dashboard-banner.png')" }}
-        />
-        <div className="absolute inset-0 bg-gradient-to-r from-[#0e0f0f] via-[#0e0f0f]/84 to-[#0e0f0f]/20" />
-        <div className="relative mx-auto flex max-w-7xl flex-col justify-end px-4 pt-16 pb-8 sm:px-6 lg:px-8">
-          <div className="max-w-3xl">
-            <p className="text-sm font-semibold tracking-[0.18em] text-blue-300 uppercase">
-              Công cụ CS2
-            </p>
-            <h1 className="mt-3 text-4xl font-semibold tracking-normal text-stone-50 sm:text-5xl">
-              Quét hòm đồ Steam
-            </h1>
-            <p className="mt-4 max-w-2xl text-base leading-7 text-stone-300">
-              Nhập một hoặc nhiều link profile Steam để quét case, capsule,
-              sticker và tính tổng giá trị gộp từ nhiều tài khoản.
-            </p>
-          </div>
-        </div>
-      </section>
+      <ScannerToolbar
+        user={user}
+        onShowGuestKeyModal={() => setShowGuestKeyModal(true)}
+      />
 
       <section className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
         <AccountsSection
@@ -372,111 +851,47 @@ export function InventoryScanner() {
           setShowCookieGuide={setShowCookieGuide}
         />
 
-        {merged && (
-          <div className="space-y-6">
-            {merged.accountCount > 0 && (
-              <div className="flex flex-wrap items-center gap-3 rounded-xl border border-sky-500/20 bg-sky-950/20 px-5 py-3.5 text-sm text-sky-200">
-                <Users className="size-4 text-sky-400" />
-                <span>
-                  Kết quả gộp từ{" "}
-                  <span className="font-semibold text-sky-100">
-                    {merged.accountCount} tài khoản
-                  </span>
-                  {state.manualItems.length > 0 && (
-                    <>
-                      {" "}
-                      +{" "}
-                      <span className="font-semibold text-sky-100">
-                        {state.manualItems.length} item thủ công
-                      </span>
-                    </>
-                  )}
-                </span>
-              </div>
-            )}
-
-            <PortfolioSyncSection
-              user={user}
-              googleConfigured={googleConfigured}
-              importInventoryToPortfolio={importInventoryToPortfolio}
-              portfolioImporting={state.portfolioImporting}
-              portfolioImportStatus={state.portfolioImportStatus}
-              portfolioImportMessage={state.portfolioImportMessage}
-              portfolioImportError={state.portfolioImportError}
-              hasItemsToImport={!!mergedRaw?.items.length}
-              zeroPricedItems={zeroPricedItems}
-              retryingPrices={state.retryingPrices}
-              retryStatus={state.retryStatus}
-            />
-
-            {merged.items.length > 0 && !state.scanningAll && !isAnyScanPending && (
-              <div className="mb-4 flex justify-end">
-                <AddCaseSearch
-                  onAdd={addManualItem}
-                  scannedAccounts={state.accounts
-                    .filter((a) => a.status === "done" && a.result?.profile)
-                    .map((a) => ({
-                      steamId64: a.result!.steamId64,
-                      name: a.result!.profile.name,
-                    }))}
-                  defaultBuffRate={buffCnyToVndRate}
-                />
-              </div>
-            )}
-
-            <PricingStatsGrid
-              buffCnyToVndRate={buffCnyToVndRate}
-              setBuffCnyToVndRate={setBuffCnyToVndRate}
-              rateAll={rateAll}
-              setRateAll={setRateAll}
-              rateLe={rateLe}
-              setRateLe={setRateLe}
-              totalPrice={merged.totalPrice}
-              totalQuantity={merged.totalQuantity}
-              totalInventoryCount={merged.totalInventoryCount}
-              totalSi={totalSi}
-              totalLe={totalLe}
-            />
-
-            {merged.items.length > 0 ? (
-              <ResultsTable
-                table={table}
-                globalFilter={state.globalFilter}
-                setGlobalFilter={setGlobalFilter}
-                selectedTypes={state.selectedTypes}
-                clearTypeFilters={clearTypeFilters}
-                toggleTypeFilter={toggleTypeFilter}
-                selectedStatuses={selectedStatuses}
-                setSelectedStatuses={setSelectedStatuses}
-                selectedAccounts={selectedAccounts}
-                setSelectedAccounts={setSelectedAccounts}
-                accountOptions={accountOptions}
-                visibleManualItems={visibleManualItems}
-                updateManualItemQty={updateManualItemQty}
-                removeItem={removeItem}
-                fetchBuffPrice={fetchBuffPrice}
-                updateBuffPriceCny={updateBuffPriceCny}
-                buffPricesCny={state.buffPricesCny}
-                buffPriceErrors={state.buffPriceErrors}
-                buffLoadingKeys={state.buffLoadingKeys}
-                buffCnyToVndRate={buffCnyToVndRate}
-                rateAll={rateAll}
-                rateLe={rateLe}
-                manualItems={state.manualItems}
-              />
-            ) : (
-              <div className="flex flex-col items-center justify-center rounded-xl border border-dashed border-stone-800 bg-stone-900/30 py-16 text-center">
-                <ShoppingBag className="mb-4 size-10 text-stone-600" />
-                <p className="text-lg font-medium text-stone-300">
-                  Không tìm thấy item nào
-                </p>
-              </div>
-            )}
-          </div>
-        )}
+        <ScannerResults
+          mode={mode}
+          setMode={handleModeChange}
+          merged={merged}
+          state={state}
+          isAnyScanPending={isAnyScanPending}
+          addManualItem={addManualItem}
+          buffCnyToVndRate={buffCnyToVndRate}
+          setBuffCnyToVndRate={setBuffCnyToVndRate}
+          rateAll={rateAll}
+          setRateAll={setRateAll}
+          rateLe={rateLe}
+          setRateLe={setRateLe}
+          totalSi={totalSi}
+          totalLe={totalLe}
+          totalWalletVnd={totalWalletVnd}
+          tableData={tableData}
+          table={table}
+          selectedStatuses={selectedStatuses}
+          setSelectedStatuses={setSelectedStatuses}
+          selectedAccounts={selectedAccounts}
+          setSelectedAccounts={setSelectedAccounts}
+          accountOptions={accountOptions}
+          rowSelection={rowSelection}
+          setRowSelection={setRowSelection}
+          setSellDialogOpen={setSellDialogOpen}
+          handleDeleteSelected={handleDeleteSelected}
+          refreshPrices={refreshPrices}
+          isRefreshingPrices={isRefreshingPrices}
+          setGlobalFilter={setGlobalFilter}
+          clearTypeFilters={clearTypeFilters}
+          toggleTypeFilter={toggleTypeFilter}
+          user={user}
+          googleConfigured={googleConfigured}
+          importInventoryToPortfolio={importInventoryToPortfolio}
+          zeroPricedItems={zeroPricedItems}
+          inspectingKeys={inspectingKeys}
+        />
       </section>
 
-      {!merged && (
+      {!merged && hasScannedAccount && (
         <section className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
           <div className="space-y-6">
             <AddCaseSearch onAdd={addManualItem} />
@@ -488,6 +903,123 @@ export function InventoryScanner() {
         open={showCookieGuide}
         onClose={() => setShowCookieGuide(false)}
       />
+
+      <CS2CapModal
+        open={showGuestKeyModal}
+        onOpenChange={setShowGuestKeyModal}
+        mode="guest"
+      />
+
+      {sellDialogOpen && (
+        <SellSelectedDialog
+          open={sellDialogOpen}
+          onClose={() => setSellDialogOpen(false)}
+          selectedItems={selectedPortfolioRows}
+          allItems={allPortfolioRows}
+          originalRows={sellDialogOriginalRows}
+          onDelete={handleSellDelete}
+          onUpdateQuantity={handleSellUpdateQuantity}
+          onClearSelection={() => setRowSelection({})}
+          wholesaleRate={rateAll}
+          retailRate={rateLe}
+          buffPricesCny={state.buffPricesCny}
+          buffCnyToVndRate={buffCnyToVndRate}
+          onDeselectItem={(id) => setRowSelection((prev) => ({ ...prev, [id]: false }))}
+        />
+      )}
+
+      <ConfirmDialog
+        open={deleteConfirmOpen}
+        onClose={() => setDeleteConfirmOpen(false)}
+        title={t("inventoryScanner.confirmDeleteTitle")}
+        description={t("inventoryScanner.confirmDeleteDesc", { count: selectedRows.length })}
+        confirmText={t("common.delete")}
+        cancelText={t("common.cancel")}
+        onConfirm={executeDeleteSelected}
+        variant="danger"
+      >
+        {selectedRows.length > 0 && (
+          <div className="mt-4 rounded-xl border border-red-500/10 bg-red-950/5 p-4 text-xs">
+            <p className="mb-2.5 font-bold text-red-400/90 uppercase tracking-wider text-[10px]">
+              {t("portfolio.deleteSelectedConfirmListHeader", "Items to be deleted:")}
+            </p>
+            {(() => {
+              const summaryMap = new Map<string, number>();
+              selectedRows.forEach((row) => {
+                const name = row.caseItem.name;
+                const currentQty = summaryMap.get(name) || 0;
+                summaryMap.set(name, currentQty + row.quantity);
+              });
+              const summaryList = Array.from(summaryMap.entries()).map(([name, qty]) => ({ name, qty }));
+              const visibleList = isDeleteListExpanded ? summaryList : summaryList.slice(0, 5);
+              const remainingCount = summaryList.length - 5;
+
+              return (
+                <div className="space-y-2">
+                  <ul className={`space-y-2 text-stone-300 ${isDeleteListExpanded ? "max-h-[200px] overflow-y-auto pr-1.5 scrollbar-thin scrollbar-thumb-stone-800 scrollbar-track-transparent" : ""}`}>
+                    {visibleList.map((item, idx) => (
+                      <li key={idx} className="flex items-center justify-between border-b border-stone-900 pb-1.5 last:border-b-0 last:pb-0">
+                        <span className="truncate font-semibold text-stone-200">{item.name}</span>
+                        <span className="ml-2 size-5 shrink-0 inline-flex items-center justify-center rounded-full bg-red-500/10 text-[10.5px] font-extrabold text-red-400">
+                          {item.qty}
+                        </span>
+                      </li>
+                    ))}
+                  </ul>
+                  {summaryList.length > 5 && (
+                    <button
+                      type="button"
+                      onClick={() => setIsDeleteListExpanded(!isDeleteListExpanded)}
+                      className="w-full text-left text-stone-400 hover:text-stone-200 transition-colors font-semibold italic mt-2.5 pt-2 border-t border-stone-900 flex items-center justify-between"
+                    >
+                      <span>
+                        {isDeleteListExpanded
+                          ? t("portfolio.deleteSelectedConfirmListCollapse", "Collapse list")
+                          : t("portfolio.deleteSelectedConfirmListRemaining", "... and {{count}} other items", { count: remainingCount })}
+                      </span>
+                      <span className="text-[10px] uppercase not-italic tracking-wider text-red-400/80 bg-red-500/5 px-2 py-0.5 rounded border border-red-500/10 hover:bg-red-500/10">
+                        {isDeleteListExpanded
+                          ? t("common.collapse")
+                          : t("common.expand")}
+                      </span>
+                    </button>
+                  )}
+                </div>
+              );
+            })()}
+          </div>
+        )}
+      </ConfirmDialog>
+
+      <SlidePanel
+        open={!!selectedItemForPanel}
+        onOpenChange={(open) => !open && setSelectedItemForPanel(null)}
+      >
+        {selectedItemForPanel && selectedPortfolioRowForPanel && (
+          <SlidePanelContent
+            title={selectedPortfolioRowForPanel.case.name}
+            hideHeader
+            noPadding
+            className="border-stone-850/80 max-w-[440px] overflow-hidden border-l border-border bg-[#0e121a] text-stone-100 shadow-[0_30px_90px_rgba(0,0,0,0.9)] backdrop-blur-3xl"
+          >
+            <ItemHoverCard
+              item={selectedPortfolioRowForPanel}
+              relatedRows={relatedPortfolioRowsForPanel}
+              buffCnyToVndRate={buffCnyToVndRate}
+              buffPricesCny={state.buffPricesCny}
+              embedded
+              useSellLabel
+              onUpdateLot={handleUpdateLot}
+              onUpdateQuantity={handleUpdateQuantity}
+              onUpdateBuyPrice={handleUpdateBuyPrice}
+              onUpdateNote={handleUpdateNote}
+              onDelete={handleDelete}
+              onSellAll={handleSellAll}
+              onDeleteAll={handleDeleteAll}
+            />
+          </SlidePanelContent>
+        )}
+      </SlidePanel>
     </main>
   );
 }

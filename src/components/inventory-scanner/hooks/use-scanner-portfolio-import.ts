@@ -1,8 +1,10 @@
 "use client";
 
 import { useCallback } from "react";
+import { useTranslation } from "react-i18next";
 import type { AccountEntry, ScanResultItem } from "../types";
 import type { ScannerAction } from "../scanner-reducer";
+import { translateImportProgressMessage } from "../utils";
 
 interface UseScannerPortfolioImportProps {
   dispatch: React.Dispatch<ScannerAction>;
@@ -22,6 +24,7 @@ export function useScannerPortfolioImport({
   mergedRaw,
   applyBuffPricing,
 }: UseScannerPortfolioImportProps) {
+  const { t } = useTranslation();
   /**
    * Imports all scanned items directly to user's personal tracking portfolio.
    */
@@ -46,7 +49,7 @@ export function useScannerPortfolioImport({
     try {
       dispatch({
         type: "UPDATE_PORTFOLIO_IMPORT_STATUS",
-        status: "Đang chuẩn bị dữ liệu hòm đồ...",
+        status: t("inventoryScanner.apiErrors.preparingInventoryData", "Preparing inventory data..."),
       });
 
       const response = await fetch("/api/portfolio/import-inventory", {
@@ -59,19 +62,21 @@ export function useScannerPortfolioImport({
       });
 
       if (!response.ok) {
-        let errMessage = "Không thể lưu inventory vào portfolio.";
+        let errMessage = t("inventoryScanner.apiErrors.errSaveToPortfolio", "Cannot save inventory to portfolio.");
         try {
           const resText = await response.text();
           const errData = JSON.parse(resText);
           errMessage = errData.message || errMessage;
         } catch {
-          errMessage = `Không thể lưu portfolio (HTTP ${response.status})`;
+          errMessage = t("inventoryScanner.apiErrors.errSaveToPortfolioHttp", "Cannot save portfolio (HTTP {{status}})", {
+            status: response.status,
+          });
         }
         throw new Error(errMessage);
       }
 
       if (!response.body) {
-        throw new Error("Không thể đọc phản hồi từ máy chủ.");
+        throw new Error(t("inventoryScanner.apiErrors.errReadServerResponse", "Cannot read server response."));
       }
 
       // Read streaming progress from server
@@ -98,13 +103,13 @@ export function useScannerPortfolioImport({
               const percent = event.percent ?? 0;
               dispatch({
                 type: "UPDATE_PORTFOLIO_IMPORT_STATUS",
-                status: `[${percent}%] ${event.message}`,
+                status: `[${percent}%] ${translateImportProgressMessage(event.message, t)}`,
               });
             } else if (event.type === "done") {
               lastResult = event.importResult ?? null;
               dispatch({
                 type: "PORTFOLIO_IMPORT_SUCCESS",
-                message: event.message,
+                message: translateImportProgressMessage(event.message, t),
               });
             } else if (event.type === "error") {
               throw new Error(event.message);
@@ -125,7 +130,7 @@ export function useScannerPortfolioImport({
             lastResult = event.importResult ?? null;
             dispatch({
               type: "PORTFOLIO_IMPORT_SUCCESS",
-              message: event.message,
+              message: translateImportProgressMessage(event.message, t),
             });
           } else if (event.type === "error") {
             throw new Error(event.message);
@@ -138,7 +143,7 @@ export function useScannerPortfolioImport({
       if (!lastResult) {
         dispatch({
           type: "PORTFOLIO_IMPORT_SUCCESS",
-          message: "Đã lưu inventory vào portfolio cá nhân.",
+          message: t("inventoryScanner.apiErrors.successSaveToPortfolio", "Inventory saved to personal portfolio."),
         });
       }
     } catch (error) {
@@ -146,8 +151,8 @@ export function useScannerPortfolioImport({
         type: "PORTFOLIO_IMPORT_FAILURE",
         error:
           error instanceof Error
-            ? error.message
-            : "Không thể lưu inventory vào portfolio.",
+            ? translateImportProgressMessage(error.message, t)
+            : t("inventoryScanner.apiErrors.errSaveToPortfolio", "Cannot save inventory to portfolio."),
       });
     }
   }, [accounts, mergedRaw, applyBuffPricing, dispatch]);

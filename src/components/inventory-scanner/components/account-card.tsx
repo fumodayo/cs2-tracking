@@ -1,7 +1,9 @@
 import React, { useState, useEffect } from "react";
-import { Loader2, Search, ChevronDown, ChevronUp, X, AlertCircle, ShoppingBag } from "lucide-react";
+import { Loader2, Search, ChevronDown, Trash2, AlertCircle, ShoppingBag, Wallet } from "lucide-react";
+import { proxySteamUrl } from "@/utils/url";
+import { useTranslation } from "react-i18next";
 import { AccountEntry } from "../types";
-import { formatVND, formatProgressDetail } from "../utils";
+import { formatVND, formatProgressDetail, translateScanProgressMessage, translateAccountError } from "../utils";
 import { AccountCookieConfig } from "./account-cookie-config";
 import { toast } from "@/stores";
 
@@ -23,7 +25,6 @@ export interface AccountCardProps {
   onUpdateCookie: (accountId: string, cookie: string) => void;
   onUpdateSessionId: (accountId: string, sessionId: string) => void;
   onOpenGuide: () => void;
-  accountsLength: number;
 }
 
 export function AccountCard({
@@ -39,8 +40,8 @@ export function AccountCard({
   onUpdateCookie,
   onUpdateSessionId,
   onOpenGuide,
-  accountsLength,
 }: AccountCardProps) {
+  const { t } = useTranslation();
   const [showCookies, setShowCookies] = useState(false);
   const [cookieStatus, setCookieStatus] = useState<CookieStatus | undefined>(undefined);
   const [checkCooldown, setCheckCooldown] = useState(0);
@@ -57,11 +58,11 @@ export function AccountCard({
 
   const handleCheckCookie = async (accountId: string, steamUrl: string, steamCookie: string) => {
     if (!steamUrl.trim()) {
-      toast.error("Vui lòng nhập link profile Steam hoặc SteamID trước khi kiểm tra cookie.");
+      toast.error(t("inventoryScanner.toastEnterUrl"));
       return;
     }
     if (!steamCookie.trim()) {
-      toast.error("Vui lòng nhập cookie steamLoginSecure.");
+      toast.error(t("inventoryScanner.toastEnterCookie"));
       return;
     }
 
@@ -80,17 +81,23 @@ export function AccountCard({
       const data = await res.json();
       if (res.ok && data.isValid) {
         setCookieStatus({ status: "live" });
-        toast.success("Cookie hoạt động tốt!");
+        toast.success(t("inventoryScanner.toastCookieValid"));
       } else if (data.isExpired) {
-        setCookieStatus({ status: "expired", message: data.message || "Cookie hết hạn" });
-        toast.error("Cookie đã hết hạn!");
+        setCookieStatus({
+          status: "expired",
+          message: data.message ? translateAccountError(data.message, t) : t("inventoryScanner.cookieExpiredStatus")
+        });
+        toast.error(t("inventoryScanner.toastCookieExpired"));
       } else {
-        setCookieStatus({ status: "error", message: data.message || "Lỗi kiểm tra" });
-        toast.error(data.message || "Lỗi kiểm tra cookie.");
+        setCookieStatus({
+          status: "error",
+          message: data.message ? translateAccountError(data.message, t) : t("inventoryScanner.cookieCheckErrorStatus")
+        });
+        toast.error(data.message ? translateAccountError(data.message, t) : t("inventoryScanner.cookieCheckErrorDesc"));
       }
     } catch {
-      setCookieStatus({ status: "error", message: "Không thể kết nối máy chủ." });
-      toast.error("Lỗi khi kết nối đến máy chủ.");
+      setCookieStatus({ status: "error", message: t("inventoryScanner.cannotConnectServer") });
+      toast.error(t("inventoryScanner.toastConnectionError"));
     }
 
     setCheckCooldown(5);
@@ -100,7 +107,7 @@ export function AccountCard({
     acc.error &&
     (acc.error.toLowerCase().includes("cookie") ||
       acc.error.toLowerCase().includes("session") ||
-      acc.error.toLowerCase().includes("hết hạn") ||
+      acc.error.toLowerCase().includes("h\u1ebft h\u1ea1n") ||
       acc.error.toLowerCase().includes("unauthorized"));
 
   const isCookieInvalid =
@@ -115,7 +122,11 @@ export function AccountCard({
         <div className="flex min-w-0 items-center gap-2.5">
           <div className="relative flex size-9 shrink-0 items-center justify-center overflow-hidden rounded-full border border-stone-800 bg-stone-900 text-xs font-semibold text-stone-400 shadow-inner ring-1 ring-white/5">
             {acc.result?.profile?.avatarUrl ? (
-              <img src={acc.result.profile.avatarUrl} alt="" className="size-full object-cover" />
+              <img
+                src={proxySteamUrl(acc.result.profile.avatarUrl)}
+                alt={t("steamAccounts.avatarAlt", "{{name}}'s Steam avatar", { name: acc.result.profile.name || t("inventoryScanner.accountNumber", { index: index + 1 }) })}
+                className="size-full object-cover"
+              />
             ) : (
               <span>#{index + 1}</span>
             )}
@@ -130,24 +141,44 @@ export function AccountCard({
                   {acc.result.profile.name}
                 </span>
               ) : (
-                <span className="text-stone-300">Tài khoản #{index + 1}</span>
+                <span className="text-stone-300">{t("inventoryScanner.accountNumber", { index: index + 1 })}</span>
               )}
               {acc.status === "scanning" && (
-                <span className="animate-pulse text-[9px] text-blue-450 font-bold bg-blue-500/5 px-1 py-0.2 rounded">
-                  Quét...
+                <span className="animate-pulse text-[9px] text-blue-400 font-bold bg-blue-500/5 px-1 py-0.2 rounded">
+                  {t("inventoryScanner.scanning")}
                 </span>
               )}
               {acc.status === "error" && (
                 <span className="text-[9px] text-red-400 font-bold bg-red-500/5 px-1 py-0.2 rounded">
-                  Lỗi
+                  {t("inventoryScanner.error")}
                 </span>
               )}
             </h3>
-            <span className="text-[10px] text-stone-500 font-mono mt-0.5 truncate max-w-[130px]">
-              {acc.status === "done" && acc.result
-                ? `${acc.result.totalQuantity} items · ${formatVND(acc.result.totalPrice)}`
-                : "Sẵn sàng quét"}
-            </span>
+            <div className="flex flex-wrap items-center gap-1.5 mt-0.5">
+              <span className="text-[10px] text-stone-500 font-mono">
+                {acc.status === "done" && acc.result
+                  ? `${acc.result.totalQuantity} ${t("inventoryScanner.itemUnit", "items")} · ${formatVND(acc.result.totalPrice)}`
+                  : !acc.url.trim()
+                    ? t("inventoryScanner.notLinked")
+                    : t("inventoryScanner.readyToScan")}
+              </span>
+              {acc.status === "done" && acc.result?.walletBalance && (
+                (() => {
+                  const displayWallet = acc.result.walletBalance
+                    .replace(/Chờ xử lý/gi, t("common.pending", "Pending"))
+                    .replace(/Pending/gi, t("common.pending", "Pending"));
+                  return (
+                    <div
+                      className="flex items-center gap-1 text-[9px] font-bold text-emerald-400 bg-emerald-500/10 px-1 py-0.2 rounded border border-emerald-500/15"
+                      title={t("inventoryScanner.steamWalletBalance", { balance: displayWallet })}
+                    >
+                      <Wallet className="size-2.5 shrink-0" />
+                      <span>{t("inventoryScanner.walletShort", { balance: displayWallet })}</span>
+                    </div>
+                  );
+                })()
+              )}
+            </div>
           </div>
         </div>
 
@@ -162,71 +193,63 @@ export function AccountCard({
               }
             }}
             disabled={acc.status !== "scanning" && (isAnyScanPending || !acc.url.trim())}
-            className={`inline-flex h-7 px-2 items-center justify-center gap-1.5 rounded-md text-[10px] font-semibold transition-all duration-200 cursor-pointer focus:outline-none ${
-              acc.status === "scanning"
-                ? "border border-red-500/35 bg-red-950/20 text-red-300 hover:bg-red-950/30 active:scale-98"
-                : "bg-blue-400 text-stone-950 hover:bg-blue-300 active:scale-98 disabled:cursor-not-allowed disabled:opacity-40"
-            }`}
-            title={acc.status === "scanning" ? "Dừng quét" : "Quét tài khoản này"}
+            className={`inline-flex h-7 px-2 items-center justify-center gap-1.5 rounded-md text-[10px] font-semibold transition-all duration-200 cursor-pointer focus:outline-none ${acc.status === "scanning"
+              ? "border border-red-500/35 bg-red-950/20 text-red-300 hover:bg-red-950/30 active:scale-98"
+              : "bg-accent text-accent-foreground hover:bg-accent-hover active:scale-98 disabled:cursor-not-allowed disabled:opacity-40"
+              }`}
+            title={acc.status === "scanning" ? t("inventoryScanner.stopScan") : t("inventoryScanner.scanThisAccount")}
           >
             {acc.status === "scanning" ? (
               <Loader2 className="size-3 animate-spin text-red-400" />
             ) : (
               <Search className="size-3" />
             )}
-            <span>{acc.status === "scanning" ? "Dừng" : "Quét"}</span>
+            <span>{acc.status === "scanning" ? t("inventoryScanner.stop") : t("inventoryScanner.scan")}</span>
           </button>
 
           {acc.status === "done" && (
             <button
               type="button"
               onClick={onToggleExpandAccId}
-              title={isExpandedAccId ? "Thu gọn" : "Chi tiết"}
+              title={isExpandedAccId ? t("inventoryScanner.collapse") : t("inventoryScanner.details")}
               className="flex h-7 items-center justify-center gap-1 rounded-md border border-stone-800 bg-stone-900/40 px-2 text-[10px] font-medium text-stone-400 hover:bg-stone-900/80 hover:text-stone-300 cursor-pointer focus:outline-none"
             >
-              <span>{isExpandedAccId ? "Thu gọn" : "Chi tiết"}</span>
-              {isExpandedAccId ? <ChevronUp className="size-3" /> : <ChevronDown className="size-3" />}
+              <span>{isExpandedAccId ? t("inventoryScanner.collapse") : t("inventoryScanner.details")}</span>
+              <ChevronDown
+                className={`size-3 transition-transform duration-300 ${isExpandedAccId ? "rotate-180" : "rotate-0"
+                  }`}
+              />
             </button>
           )}
 
-          {accountsLength > 1 && (
-            <button
-              type="button"
-              onClick={() => onRemove(acc.id)}
-              disabled={acc.status === "scanning"}
-              className="inline-flex size-7 items-center justify-center rounded-md border border-stone-800 bg-stone-900/40 text-stone-500 opacity-0 transition-all group-hover:opacity-100 hover:border-red-500/20 hover:bg-red-500/10 hover:text-red-400 focus:opacity-100 disabled:opacity-50 cursor-pointer focus:outline-none"
-              title="Xóa tài khoản"
-            >
-              <X className="size-3.5" />
-            </button>
-          )}
+          <button
+            type="button"
+            onClick={() => onRemove(acc.id)}
+            disabled={acc.status === "scanning"}
+            className="inline-flex size-7 items-center justify-center rounded-md text-stone-500 transition-all hover:bg-red-500/10 hover:text-red-400 disabled:opacity-50 cursor-pointer focus:outline-none"
+            title={t("inventoryScanner.removeAccount")}
+          >
+            <Trash2 className="size-3.5" />
+          </button>
         </div>
       </div>
 
       {/* Warning/Error Badges */}
       {(acc.result?.marketScanWarning || isCookieInvalid || (!acc.steamCookie && acc.status !== "scanning")) && (
         <div className="flex flex-wrap gap-1">
-          {acc.result?.marketScanWarning && (
-            <span
-              className="cursor-help rounded border border-amber-500/20 bg-amber-500/5 px-1.5 py-0.5 text-[9px] font-semibold text-amber-400"
-              title="Quá trình quét Market Listings bị bỏ qua do thiếu hoặc hết hạn cookie."
-            >
-              Thiếu Market Listings (Bỏ qua)
-            </span>
-          )}
           {isCookieInvalid ? (
             <span
               className="cursor-help rounded border border-red-500/20 bg-red-500/5 px-1.5 py-0.5 text-[9px] font-semibold text-red-400"
-              title="Cookie đã hết hạn hoặc không đúng định dạng. Quá trình quét Market Listings bị bỏ qua."
+              title={t("inventoryScanner.cookieExpiredTooltip")}
             >
-              Cookie lỗi/hết hạn
+              {t("inventoryScanner.cookieErrorExpired")}
             </span>
-          ) : !acc.steamCookie && acc.status !== "scanning" ? (
+          ) : (acc.result?.marketScanWarning || (!acc.steamCookie && acc.status !== "scanning")) ? (
             <span
-              className="cursor-help rounded border border-amber-500/20 bg-amber-500/5 px-1.5 py-0.5 text-[9px] font-semibold text-amber-400/90"
-              title="Quá trình quét Market Listings bị bỏ qua do thiếu cookie."
+              className="cursor-help rounded border border-amber-500/20 bg-amber-500/5 px-1.5 py-0.5 text-[9px] font-semibold text-amber-400"
+              title={t("inventoryScanner.missingCookieWarningTooltip")}
             >
-              Thiếu cookie (Bỏ qua Market)
+              {t("inventoryScanner.missingCookieWarning")}
             </span>
           ) : null}
         </div>
@@ -237,20 +260,19 @@ export function AccountCard({
         <div className="relative">
           <input
             type="text"
-            placeholder="Link Steam hoặc SteamID64..."
+            placeholder={t("inventoryScanner.urlPlaceholder")}
             value={acc.url}
             onChange={(e) => {
               setCookieStatus(undefined);
               onUpdateUrl(acc.id, e.target.value);
             }}
             disabled={acc.status === "scanning"}
-            className={`w-full rounded border bg-stone-950/80 py-1.5 pr-20 pl-3 text-xs text-stone-150 placeholder-stone-600 transition-all duration-200 focus:ring-1 focus:ring-blue-500/30 focus:outline-none disabled:opacity-50 ${
-              acc.status === "error"
-                ? "border-red-500/30 bg-red-950/5 focus:border-red-500"
-                : acc.status === "done"
+            className={`w-full rounded border bg-stone-950/80 py-1.5 pr-20 pl-3 text-xs text-stone-150 placeholder-stone-600 transition-all duration-200 focus:ring-1 focus:ring-blue-500/30 focus:outline-none disabled:opacity-50 ${acc.status === "error"
+              ? "border-red-500/30 bg-red-950/5 focus:border-red-500"
+              : acc.status === "done"
                 ? "border-emerald-500/20 bg-emerald-950/5 focus:border-emerald-500"
                 : "border-stone-800 focus:border-stone-750"
-            }`}
+              }`}
           />
           <div className="absolute top-1/2 right-2.5 flex -translate-y-1/2 items-center gap-1">
             {acc.status === "scanning" && <Loader2 className="size-3.5 animate-spin text-blue-400" />}
@@ -259,7 +281,7 @@ export function AccountCard({
                 className="max-w-[4.5rem] truncate rounded border border-emerald-500/10 bg-emerald-500/5 px-1.5 py-0.5 text-[9px] font-semibold text-emerald-400"
                 title={acc.result?.profile?.name}
               >
-                {acc.result?.profile?.name ?? "Đã quét"}
+                {acc.result?.profile?.name ?? t("inventoryScanner.scanned")}
               </span>
             )}
             {acc.status === "error" && <AlertCircle className="size-3.5 text-red-400" />}
@@ -291,7 +313,9 @@ export function AccountCard({
       {acc.status === "scanning" && acc.progress ? (
         <div className="rounded border border-blue-500/10 bg-blue-500/5 p-2.5">
           <div className="flex items-center justify-between gap-3 text-[10px]">
-            <span className="font-semibold text-blue-200 truncate">{acc.progress.message}</span>
+            <span className="font-semibold text-blue-200 truncate">
+              {translateScanProgressMessage(acc.progress.message, t, acc.progress.detail)}
+            </span>
             <span className="shrink-0 font-bold text-blue-400 tabular-nums">{Math.round(acc.progress.percent)}%</span>
           </div>
           <div className="mt-1.5 h-1 w-full overflow-hidden rounded-full bg-stone-900 border border-stone-800">
@@ -302,51 +326,60 @@ export function AccountCard({
           </div>
           {acc.progress.detail ? (
             <p className="mt-1 font-mono text-[9px] text-stone-500 truncate">
-              {formatProgressDetail(acc.progress.detail)}
+              {formatProgressDetail(acc.progress.detail, t)}
             </p>
           ) : null}
         </div>
       ) : null}
 
       {/* Expanded Details inside the card */}
-      {isExpandedAccId && acc.result && (
-        <div className="rounded border border-stone-800 bg-stone-950/60 p-3 shadow-inner">
-          {acc.result.items.length > 0 ? (
-            <div className="max-h-48 scrollbar-thin scrollbar-thumb-stone-800 space-y-1.5 overflow-y-auto pr-1">
-              {[...acc.result.items]
-                .sort((a, b) => b.total - a.total)
-                .map((item) => (
-                  <div
-                    key={`${item.caseItem.marketHashName}__hold_${item.holdDays || 0}`}
-                    className="flex items-center justify-between rounded px-2 py-1 text-[11px] transition-colors hover:bg-stone-900/60"
-                  >
-                    <div className="flex min-w-0 items-center gap-2">
-                      <div className="flex size-6 shrink-0 items-center justify-center overflow-hidden rounded border border-stone-800 bg-stone-900 shadow-sm">
-                        {item.caseItem.imageUrl ? (
-                          <img src={item.caseItem.imageUrl} alt="" className="size-5 object-contain" />
-                        ) : (
-                          <ShoppingBag className="size-3 text-stone-600" />
-                        )}
+      {acc.result && (
+        <div
+          className={`grid transition-all duration-300 ease-in-out ${isExpandedAccId
+            ? "grid-rows-[1fr] opacity-100 mt-3"
+            : "grid-rows-[0fr] opacity-0 mt-0 pointer-events-none"
+            }`}
+        >
+          <div className="overflow-hidden">
+            <div className="rounded border border-stone-800 bg-stone-950/60 p-3 shadow-inner">
+              {acc.result.items.length > 0 ? (
+                <div className="max-h-48 scrollbar-thin scrollbar-thumb-stone-800 space-y-1.5 overflow-y-auto pr-1">
+                  {[...acc.result.items]
+                    .sort((a, b) => b.total - a.total)
+                    .map((item, idx) => (
+                      <div
+                        key={`${item.caseItem.marketHashName}__hold_${item.holdDays || 0}__${idx}`}
+                        className="flex items-center justify-between rounded px-2 py-1 text-[11px] transition-colors hover:bg-stone-900/60"
+                      >
+                        <div className="flex min-w-0 items-center gap-2">
+                          <div className="flex size-6 shrink-0 items-center justify-center overflow-hidden rounded border border-stone-800 bg-stone-900 shadow-sm">
+                            {item.caseItem.imageUrl ? (
+                              <img src={proxySteamUrl(item.caseItem.imageUrl)} alt={item.caseItem.name} className="size-5 object-contain" />
+                            ) : (
+                              <ShoppingBag className="size-3 text-stone-600" />
+                            )}
+                          </div>
+                          <span className="truncate font-medium text-stone-300" title={item.caseItem.name}>
+                            {item.caseItem.name}
+                          </span>
+                          {item.holdDays && item.holdDays > 0 ? (
+                            <span className="ml-1 shrink-0 rounded border border-red-500/10 bg-red-500/5 px-1 py-0.5 text-[8px] font-bold text-red-400">
+                              {t("inventoryScanner.holdDays", { count: item.holdDays })}
+                            </span>
+                          ) : null}
+                        </div>
+                        <div className="flex shrink-0 items-center gap-2 pl-1.5">
+                          <span className="font-medium text-stone-500">×{item.quantity}</span>
+                          <span className="font-bold text-emerald-400">{formatVND(item.total)}</span>
+                        </div>
                       </div>
-                      <span className="truncate font-medium text-stone-300" title={item.caseItem.name}>
-                        {item.caseItem.name}
-                      </span>
-                      {item.holdDays && item.holdDays > 0 ? (
-                        <span className="ml-1 shrink-0 rounded border border-red-500/10 bg-red-500/5 px-1 py-0.5 text-[8px] font-bold text-red-400">
-                          Hold {item.holdDays}d
-                        </span>
-                      ) : null}
-                    </div>
-                    <div className="flex shrink-0 items-center gap-2 pl-1.5">
-                      <span className="font-medium text-stone-500">×{item.quantity}</span>
-                      <span className="font-bold text-emerald-400">{formatVND(item.total)}</span>
-                    </div>
-                  </div>
-                ))}
+                    ))}
+                </div>
+              ) : (
+                <p className="py-2.5 text-center text-[10px] text-stone-500">{t("inventoryScanner.noPricedItems")}</p>
+              )}
             </div>
-          ) : (
-            <p className="py-2.5 text-center text-[10px] text-stone-500">Không có item định giá.</p>
-          )}
+          </div>
         </div>
       )}
     </div>

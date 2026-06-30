@@ -1,4 +1,5 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, useRef } from "react";
+import { useTranslation } from "react-i18next";
 import { Plus, Check } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
@@ -20,13 +21,19 @@ export const FacetedFilter: React.FC<FacetedFilterProps> = ({
   selectedValues,
   onChange,
 }) => {
+  const { t } = useTranslation();
   const [isOpen, setIsOpen] = useState(false);
+  const containerRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     if (!isOpen) return;
-    const handleClick = () => setIsOpen(false);
-    document.addEventListener("click", handleClick);
-    return () => document.removeEventListener("click", handleClick);
+    const handleClick = (e: MouseEvent) => {
+      if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
+        setIsOpen(false);
+      }
+    };
+    document.addEventListener("click", handleClick, true);
+    return () => document.removeEventListener("click", handleClick, true);
   }, [isOpen]);
 
   const toggleValue = (val: string) => {
@@ -40,7 +47,7 @@ export const FacetedFilter: React.FC<FacetedFilterProps> = ({
   };
 
   return (
-    <div className="relative" onClick={(e) => e.stopPropagation()}>
+    <div className="relative" ref={containerRef}>
       <Button
         type="button"
         onClick={() => setIsOpen(!isOpen)}
@@ -92,7 +99,7 @@ export const FacetedFilter: React.FC<FacetedFilterProps> = ({
                 onClick={() => onChange(new Set())}
                 className="w-full rounded-sm px-2 py-1.5 text-center text-xs text-stone-400 hover:bg-stone-800 hover:text-stone-100"
               >
-                Clear filters
+                {t("inventoryScanner.clearFilters")}
               </Button>
             </>
           )}

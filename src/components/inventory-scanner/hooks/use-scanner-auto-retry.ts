@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef } from "react";
+import { useTranslation } from "react-i18next";
 import type { ScanResultItem } from "../types";
 import type { ScannerAction } from "../scanner-reducer";
 
@@ -21,6 +22,7 @@ export function useScannerAutoRetry({
   buffCnyToVndRate,
   isAnyScanPending,
 }: UseScannerAutoRetryProps) {
+  const { t } = useTranslation();
   const autoRetryRoundRef = useRef(0);
   const hasScanCompletedRef = useRef(false);
   const prevScanPendingRef = useRef(false);
@@ -46,7 +48,7 @@ export function useScannerAutoRetry({
       if (autoRetryRoundRef.current > 0) {
         dispatch({
           type: "PRICE_RETRY_STATUS",
-          status: "Đã cập nhật giá cho tất cả item!",
+          status: t("inventoryScanner.apiErrors.allPricesUpdated", "Prices updated for all items!"),
         });
       }
       return;
@@ -54,7 +56,10 @@ export function useScannerAutoRetry({
     if (autoRetryRoundRef.current >= MAX_AUTO_RETRY_ROUNDS) {
       dispatch({
         type: "PRICE_RETRY_STATUS",
-        status: `Đã thử ${MAX_AUTO_RETRY_ROUNDS} lần, còn ${zeroPricedItems.length} item vẫn 0đ. Steam có thể không có giá cho các item này.`,
+        status: t("inventoryScanner.apiErrors.retryRoundsLimit", "Tried {{max}} times, {{count}} items still 0 VND. Steam might not have prices for these items.", {
+          max: MAX_AUTO_RETRY_ROUNDS,
+          count: zeroPricedItems.length,
+        }),
       });
       return;
     }
@@ -77,7 +82,11 @@ export function useScannerAutoRetry({
       dispatch({ type: "START_PRICE_RETRY" });
       dispatch({
         type: "PRICE_RETRY_STATUS",
-        status: `Lần ${round}/${MAX_AUTO_RETRY_ROUNDS}: đang lấy giá ${itemsToRetry.length} item...`,
+        status: t("inventoryScanner.apiErrors.retryRoundProgress", "Round {{round}}/{{max}}: fetching prices for {{count}} items...", {
+          round,
+          max: MAX_AUTO_RETRY_ROUNDS,
+          count: itemsToRetry.length,
+        }),
       });
 
       try {
@@ -110,9 +119,12 @@ export function useScannerAutoRetry({
             (r: { price: number }) => r.price > 0,
           ).length;
           const remaining = itemsToRetry.length - matchedCount;
-          const statusText = `Lần ${round}: cập nhật ${matchedCount}/${
-            itemsToRetry.length
-          } item.${remaining > 0 ? ` Còn ${remaining} item, đang chờ retry tiếp...` : ""}`;
+          const statusText = t("inventoryScanner.apiErrors.retryRoundUpdated", "Round {{round}}: updated {{matched}}/{{total}} items.{{remaining}}", {
+            round,
+            matched: matchedCount,
+            total: itemsToRetry.length,
+            remaining: remaining > 0 ? t("inventoryScanner.apiErrors.waitingForNextRetry", " {{count}} items remaining, waiting to retry...", { count: remaining }) : "",
+          });
 
           dispatch({
             type: "PRICE_RETRY_SUCCESS",
@@ -122,13 +134,13 @@ export function useScannerAutoRetry({
         } else {
           dispatch({
             type: "PRICE_RETRY_FAILURE",
-            status: `Lần ${round}: lỗi phản hồi từ API, sẽ thử lại...`,
+            status: t("inventoryScanner.apiErrors.retryRoundApiError", "Round {{round}}: API response error, retrying...", { round }),
           });
         }
       } catch {
         dispatch({
           type: "PRICE_RETRY_FAILURE",
-          status: `Lần ${round}: lỗi kết nối, sẽ thử lại...`,
+          status: t("inventoryScanner.apiErrors.retryRoundConnectionError", "Round {{round}}: connection error, retrying...", { round }),
         });
       }
     }, delay);

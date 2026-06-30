@@ -1,8 +1,12 @@
 "use client";
 
+import React, { useState } from "react";
 import { AlertCircle, Loader2, Plus, Search, Users } from "lucide-react";
+import { useTranslation } from "react-i18next";
 import { Button } from "@/components/ui/button";
+import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { AccountCard } from "./account-card";
+import { translateAccountError } from "../utils";
 import type { AccountEntry } from "../types";
 
 interface AccountsSectionProps {
@@ -48,18 +52,58 @@ export function AccountsSection({
   addAccount,
   setShowCookieGuide,
 }: AccountsSectionProps) {
+  const { t } = useTranslation();
+  const [accountToDelete, setAccountToDelete] = useState<{
+    id: string;
+    name: string;
+  } | null>(null);
+
   return (
     <div className="mb-8 rounded-xl border border-stone-800 bg-stone-900/50 p-6">
       {!isLoaded ? (
-        <div className="flex h-32 items-center justify-center">
-          <Loader2 className="size-6 animate-spin text-stone-500" />
+        <div className="space-y-4">
+          <div className="mb-4 flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <Users className="size-4 text-stone-600 animate-pulse" />
+              <div className="h-4 w-36 animate-pulse rounded bg-stone-800" />
+            </div>
+            <div className="h-8 w-24 animate-pulse rounded bg-stone-800" />
+          </div>
+          <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+            <div className="flex flex-col rounded-lg border border-stone-800 bg-stone-950/40 p-4 space-y-4">
+              <div className="flex items-center gap-3">
+                <div className="size-10 animate-pulse rounded-full bg-stone-800" />
+                <div className="flex-1 space-y-2">
+                  <div className="h-4 w-32 animate-pulse rounded bg-stone-800" />
+                  <div className="h-3 w-48 animate-pulse rounded bg-stone-800" />
+                </div>
+              </div>
+              <div className="flex gap-2">
+                <div className="h-8 flex-1 animate-pulse rounded bg-stone-800" />
+                <div className="h-8 w-20 animate-pulse rounded bg-stone-800" />
+              </div>
+            </div>
+            <div className="flex flex-col rounded-lg border border-stone-800 bg-stone-950/40 p-4 space-y-4">
+              <div className="flex items-center gap-3">
+                <div className="size-10 animate-pulse rounded-full bg-stone-800" />
+                <div className="flex-1 space-y-2">
+                  <div className="h-4 w-28 animate-pulse rounded bg-stone-800" />
+                  <div className="h-3 w-40 animate-pulse rounded bg-stone-800" />
+                </div>
+              </div>
+              <div className="flex gap-2">
+                <div className="h-8 flex-1 animate-pulse rounded bg-stone-800" />
+                <div className="h-8 w-20 animate-pulse rounded bg-stone-800" />
+              </div>
+            </div>
+          </div>
         </div>
       ) : (
         <>
           <div className="mb-4 flex items-center justify-between">
             <h2 className="text-sm font-semibold tracking-wider text-stone-300 uppercase flex items-center gap-2">
               <Users className="size-4 text-blue-400" />
-              Danh sách tài khoản ({accounts.length})
+              {t("inventoryScanner.accountsList", { count: accounts.length })}
             </h2>
             <div className="flex items-center gap-2">
               {(scanningAll || isAnyScanPending) && (
@@ -69,7 +113,7 @@ export function AccountsSection({
                   onClick={cancelScanAll}
                   className="h-8 px-4 text-xs font-semibold cursor-pointer"
                 >
-                  Dừng quét
+                  {t("inventoryScanner.stopScan")}
                 </Button>
               )}
               <Button
@@ -81,11 +125,11 @@ export function AccountsSection({
               >
                 {scanningAll ? (
                   <>
-                    <Loader2 className="size-3.5 animate-spin" /> Đang quét...
+                    <Loader2 className="size-3.5 animate-spin" /> {t("inventoryScanner.scanning")}
                   </>
                 ) : (
                   <>
-                    <Search className="size-3.5" /> Quét tất cả
+                    <Search className="size-3.5" /> {t("inventoryScanner.scanAll")}
                   </>
                 )}
               </Button>
@@ -105,12 +149,24 @@ export function AccountsSection({
                 isAnyScanPending={isAnyScanPending}
                 onScan={() => doScan(acc.id, true, accounts)}
                 onCancelScan={cancelScanAll}
-                onRemove={removeAccount}
+                onRemove={() => {
+                  const hasUrl = Boolean(acc.url?.trim());
+                  const hasCookie = Boolean(acc.steamCookie?.trim());
+                  const hasSession = Boolean(acc.steamSessionId?.trim());
+                  const hasResult = acc.result !== null;
+                  if (!hasUrl && !hasCookie && !hasSession && !hasResult) {
+                    removeAccount(acc.id);
+                  } else {
+                    setAccountToDelete({
+                      id: acc.id,
+                      name: acc.result?.profile?.name || acc.url || t("inventoryScanner.accountNumber", { index: idx + 1 }),
+                    });
+                  }
+                }}
                 onUpdateUrl={updateAccountUrl}
                 onUpdateCookie={updateAccountCookie}
                 onUpdateSessionId={updateAccountSessionId}
                 onOpenGuide={() => setShowCookieGuide(true)}
-                accountsLength={accounts.length}
               />
             ))}
 
@@ -120,9 +176,9 @@ export function AccountsSection({
               onClick={addAccount}
               className="border-stone-800 hover:border-blue-500/30 hover:bg-stone-900/10 group flex h-full min-h-[90px] w-full cursor-pointer flex-col items-center justify-center gap-2 rounded-md border border-dashed bg-stone-950/20 p-4 transition-all duration-200"
             >
-              <Plus className="size-5 text-stone-500 transition-transform group-hover:scale-110 group-hover:text-blue-450" />
+              <Plus className="size-5 text-stone-500 transition-transform group-hover:scale-110 group-hover:text-blue-400" />
               <span className="text-xs font-semibold text-stone-400 group-hover:text-stone-300">
-                Thêm tài khoản
+                {t("inventoryScanner.addAccount")}
               </span>
             </button>
           </div>
@@ -137,14 +193,30 @@ export function AccountsSection({
                 <AlertCircle className="mt-0.5 size-4 shrink-0" />
                 <p>
                   <span className="font-medium">
-                    TK {accounts.findIndex((x) => x.id === a.id) + 1}:
+                    {t("inventoryScanner.accountLabel", { index: accounts.findIndex((x) => x.id === a.id) + 1 })}
                   </span>{" "}
-                  {a.error}
+                  {translateAccountError(a.error, t)}
                 </p>
               </div>
             ))}
         </>
       )}
+
+      <ConfirmDialog
+        open={accountToDelete !== null}
+        onClose={() => setAccountToDelete(null)}
+        title={t("inventoryScanner.confirmUnlinkTitle")}
+        description={t("inventoryScanner.confirmUnlinkDesc", { name: accountToDelete?.name })}
+        confirmText={t("inventoryScanner.unlink")}
+        cancelText={t("inventoryScanner.goBack")}
+        variant="danger"
+        onConfirm={async () => {
+          if (accountToDelete) {
+            removeAccount(accountToDelete.id);
+            setAccountToDelete(null);
+          }
+        }}
+      />
     </div>
   );
 }

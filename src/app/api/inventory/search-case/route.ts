@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createServices } from "@/infrastructure/container";
+import { searchCases } from "@/services/case-search";
 
 export const dynamic = "force-dynamic";
 
@@ -10,32 +11,8 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ results: [] });
     }
 
-    const { caseRepository, priceService } = createServices();
-    const cases = await caseRepository.search(query);
-
-    const trimmedQuery = query.trim();
-    if (trimmedQuery.length >= 3) {
-      const hasExactMatch = cases.some(
-        (c) =>
-          c.marketHashName.toLowerCase() === trimmedQuery.toLowerCase() ||
-          c.name.toLowerCase() === trimmedQuery.toLowerCase(),
-      );
-      if (!hasExactMatch) {
-        const { getSteamCaseImageUrl } =
-          await import("@/infrastructure/cases/steam-case-image-provider");
-        const imageUrl = await getSteamCaseImageUrl(trimmedQuery);
-
-        if (imageUrl) {
-          cases.unshift({
-            id: `ext_${trimmedQuery}`,
-            name: trimmedQuery,
-            marketHashName: trimmedQuery,
-            imageUrl: imageUrl,
-            isActive: true,
-          });
-        }
-      }
-    }
+    const cases = await searchCases(query);
+    const { priceService } = createServices();
 
     const results = await Promise.all(
       cases.map(async (caseItem) => {
@@ -65,7 +42,7 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ results: filteredResults });
   } catch (error) {
     return NextResponse.json(
-      { message: error instanceof Error ? error.message : "Lỗi tìm kiếm." },
+      { message: error instanceof Error ? error.message : "searchFailed" },
       { status: 500 },
     );
   }

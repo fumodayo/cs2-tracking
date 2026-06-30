@@ -1,5 +1,7 @@
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { createServices } from "@/infrastructure/container";
+import { mapWithConcurrency } from "@/services/parser/utils";
+import { retryPriceRateLimiter } from "@/infrastructure/rate-limiter";
 
 const RETRY_CONCURRENCY = 3;
 
@@ -16,14 +18,23 @@ type RetryResult = {
  * Batch-retries fetching Steam Market prices for multiple items with concurrency.
  * Returns { results: RetryResult[] } — one entry per input item.
  */
-export async function POST(request: Request) {
+export async function POST(request: NextRequest) {
   try {
+    const ip = request.headers.get("x-forwarded-for") || (request as NextRequest & { ip?: string }).ip || "unknown-ip";
+    const { allowed, retryAfter } = await retryPriceRateLimiter.check(ip);
+    if (!allowed) {
+      return NextResponse.json(
+        { message: "tooManyRequests", details: { retryAfter } },
+        { status: 429, headers: { "Retry-After": String(retryAfter) } }
+      );
+    }
+
     const body = await request.json();
     const { marketHashNames } = body;
 
     if (!Array.isArray(marketHashNames) || marketHashNames.length === 0) {
       return NextResponse.json(
-        { message: "Thiếu marketHashNames." },
+        { message: "missingMarketHashNames" },
         { status: 400 },
       );
     }
@@ -67,31 +78,8 @@ export async function POST(request: Request) {
   } catch (error) {
     console.error("Retry price error:", error);
     return NextResponse.json(
-      { message: "Không thể lấy giá từ Steam Market." },
+      { message: "steamMarketGeneric" },
       { status: 500 },
     );
   }
-}
-
-async function mapWithConcurrency<T, R>(
-  items: T[],
-  concurrency: number,
-  mapper: (item: T) => Promise<R>,
-): Promise<R[]> {
-  const results = new Array<R>(items.length);
-  let nextIndex = 0;
-
-  const workers = Array.from(
-    { length: Math.min(concurrency, items.length) },
-    async () => {
-      while (nextIndex < items.length) {
-        const currentIndex = nextIndex;
-        nextIndex += 1;
-        results[currentIndex] = await mapper(items[currentIndex]);
-      }
-    },
-  );
-
-  await Promise.all(workers);
-  return results;
 }

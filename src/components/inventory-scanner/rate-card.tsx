@@ -9,7 +9,7 @@ type RateCardProps = {
   value: number;
   onChange: (v: number) => void;
   total: number;
-  color: "blue" | "violet";
+  color: "blue" | "amber";
   desc: string;
   customCalculatedTotal?: number;
   tooltip?: ReactNode;
@@ -28,12 +28,12 @@ const iconContainerClasses = {
 
 const valueClasses = {
   blue: "text-blue-400",
-  amber: "text-amber-450",
+  amber: "text-amber-400",
 };
 
 const inputBgClasses = {
-  blue: "border-blue-550/20 bg-blue-500/10 focus-within:border-blue-500/50 focus-within:ring-blue-500/30",
-  amber: "border-amber-500/20 bg-amber-500/10 focus-within:border-amber-500/50 focus-within:ring-amber-500/30",
+  blue: "border-blue-500/20 bg-blue-500/10 text-blue-400 focus-within:border-blue-500/50 focus-within:ring-blue-500/30",
+  amber: "border-amber-500/20 bg-amber-500/10 text-amber-400 focus-within:border-amber-500/50 focus-within:ring-amber-500/30",
 };
 
 export const RateCard: React.FC<RateCardProps> = ({
@@ -48,9 +48,6 @@ export const RateCard: React.FC<RateCardProps> = ({
   tooltip,
   icon,
 }) => {
-  // Mapping violet to amber to follow the purple ban rule
-  const mappedColor = color === "blue" ? "blue" : "amber";
-
   const displayTotal =
     customCalculatedTotal !== undefined
       ? customCalculatedTotal
@@ -59,20 +56,20 @@ export const RateCard: React.FC<RateCardProps> = ({
   // Auto-assign icons
   const getIcon = () => {
     if (icon) return icon;
-    return mappedColor === "blue" ? (
+    return color === "blue" ? (
       <Percent className="size-5" />
     ) : (
       <ShoppingBag className="size-5" />
     );
   };
 
-  const customClass = toneClasses[mappedColor];
-  const iconContainerClass = iconContainerClasses[mappedColor];
-  const valueColorClass = valueClasses[mappedColor];
-  const inputBgClass = inputBgClasses[mappedColor];
+  const customClass = toneClasses[color];
+  const iconContainerClass = iconContainerClasses[color];
+  const valueColorClass = valueClasses[color];
+  const inputBgClass = inputBgClasses[color];
 
   return (
-    <div className={`rounded-xl border p-4 shadow-sm transition-all duration-300 hover:scale-[1.015] hover:shadow-[0_8px_30px_rgb(0,0,0,0.12)] flex items-start justify-between gap-3 ${customClass}`}>
+    <div className={`rounded-xl border p-4 shadow-sm transition-all duration-300 hover:shadow-[0_8px_30px_rgb(0,0,0,0.12)] flex items-start justify-between gap-3 ${customClass}`}>
       <div className="min-w-0 flex-1">
         <div className="flex flex-wrap items-center gap-2">
           <label htmlFor={id} className="text-xs font-semibold tracking-wider text-stone-400 uppercase cursor-pointer">
@@ -97,7 +94,7 @@ export const RateCard: React.FC<RateCardProps> = ({
               onChange={(e) =>
                 onChange(Math.min(100, Math.max(1, Number(e.target.value) || 0)))
               }
-              className="w-8 bg-transparent text-center text-xs font-bold font-mono outline-none [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
+              className="w-8 bg-transparent text-center text-xs font-bold font-mono outline-none [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none text-current"
             />
             <span className="text-[10px] opacity-70">%</span>
           </div>
