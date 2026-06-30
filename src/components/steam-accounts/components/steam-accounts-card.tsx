@@ -1,23 +1,16 @@
-import React, { useState, useEffect } from "react";
-import { AnimatePresence, motion } from "framer-motion";
+"use client";
+
+import React, { useMemo, useState, useEffect } from "react";
 import { TbPackage } from "react-icons/tb";
 import {
   Users,
   Loader2,
-  Trash2,
   CheckCircle2,
   AlertCircle,
-  ChevronDown,
-  ChevronUp,
-  Search,
   RefreshCcw,
-  Plus,
-  Eye,
-  EyeOff,
-  HelpCircle,
 } from "lucide-react";
 import { useTranslation } from "react-i18next";
-import { UseQueryResult } from "@tanstack/react-query";
+import { useQueryClient, type UseQueryResult } from "@tanstack/react-query";
 
 import { Button } from "@/components/ui/button";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
@@ -25,13 +18,22 @@ import { SlidePanel, SlidePanelContent } from "@/components/ui/slide-panel";
 import { FadeIn } from "@/components/ui/animation";
 
 import { CookieGuideModal } from "@/components/shared/cookie-guide-modal";
+import { proxySteamUrl } from "@/utils/url";
 import { MissingItemsDialog, StorageUnitInspectPanel } from "@/components/portfolio";
+import {
+  getStorageUnitItemKey,
+  type StorageUnit,
+  type StorageUnitItem,
+} from "@/components/portfolio/storage-unit-panel";
+import { ItemHoverCard } from "@/components/portfolio/item-hover-card";
+import { mapTransactionRow } from "@/components/portfolio/portfolio-table-model";
+import { STORAGE_UNITS_QUERY_KEY } from "@/lib/api-client/steam-accounts-api";
 import { useSteamAccounts } from "../use-steam-accounts";
-import { parseSteamCookies, buildSteamCookie } from "@/infrastructure/steam";
 import { toast } from "@/stores";
 import type { PortfolioReportDto } from "@/types/report";
-import { AccountStorageUnits } from "./account-storage-units";
+import { translateAccountError, translateSyncMessage } from "../../inventory-scanner/utils";
 import { AddAccountDialog } from "./add-account-dialog";
+import { AccountList } from "./account-list";
 
 export function SteamAccountsCard({
   reportQuery,
@@ -45,26 +47,18 @@ export function SteamAccountsCard({
   buffCnyToVndRate: number;
 }) {
   const { t } = useTranslation();
-  const [selectedStorageUnit, setSelectedStorageUnit] = useState<{
-    id: string;
-    name: string;
-    currentCount: number;
-    maxCapacity: number;
-    items: Array<{
-      caseId: string;
-      marketHashName: string;
-      name: string;
-      imageUrl?: string;
-      rarity?: { name: string; color: string } | null;
-      quantity: number;
-    }>;
-  } | null>(null);
+  const queryClient = useQueryClient();
+  const [selectedStorageUnit, setSelectedStorageUnit] =
+    useState<StorageUnit | null>(null);
+  const [selectedStorageItem, setSelectedStorageItem] =
+    useState<StorageUnitItem | null>(null);
+  const [deletingStorageUnitItemKey, setDeletingStorageUnitItemKey] =
+    useState<string | null>(null);
 
   const {
     accountsQuery,
     addAccountMutation,
     deleteAccountMutation,
-    updateCookieMutation,
     isSyncing,
     syncOverallPercent,
     syncOverallMessage,
@@ -82,6 +76,7 @@ export function SteamAccountsCard({
     setParentalInputs,
     sessionIdInputs,
     setSessionIdInputs,
+    updateCookieMutation,
     cookieStatuses,
     checkCooldowns,
     handleCheckCookie,
@@ -97,11 +92,106 @@ export function SteamAccountsCard({
   const report = reportQuery.data ?? null;
   const [showAddAccountModal, setShowAddAccountModal] = useState(false);
 
-  const [showSecureCookie, setShowSecureCookie] = useState<Record<string, boolean>>({});
-  const [showSecureParental, setShowSecureParental] = useState<Record<string, boolean>>({});
-  const [showSecureSessionId, setShowSecureSessionId] = useState<Record<string, boolean>>({});
+  const selectedStorageItemRow = useMemo(() => {
+    if (!selectedStorageItem || !report) return null;
+    const storageUnitIds = new Set(
+      selectedStorageItem.storageUnitItems?.map((item) => item.storageUnitId) ??
+      [],
+    );
 
-  const [useFamilyViewMap, setUseFamilyViewMap] = useState<Record<string, boolean>>({});
+    const matchingRows = report.rows.filter(
+      (row) =>
+        row.case.id === selectedStorageItem.caseId ||
+        row.case.marketHashName === selectedStorageItem.marketHashName,
+    );
+    const storageRow =
+      matchingRows.find((row) =>
+        row.item.storageUnitDetails?.some((detail) =>
+          storageUnitIds.has(detail.storageUnitId),
+        ),
+      ) ?? matchingRows[0];
+
+    return storageRow
+      ? mapTransactionRow(storageRow, buffPricesCny, buffCnyToVndRate)
+      : null;
+  }, [selectedStorageItem, report, buffPricesCny, buffCnyToVndRate]);
+
+  const handleSelectStorageItem = (item: StorageUnitItem) => {
+    const hasMatchingRow = report?.rows.some(
+      (row) =>
+        row.case.id === item.caseId ||
+        row.case.marketHashName === item.marketHashName,
+    );
+
+    if (!hasMatchingRow) {
+      toast.error(t("portfolio.itemDetailNotFound", "Cannot find this item in the portfolio report."));
+      return;
+    }
+    setSelectedStorageItem(item);
+  };
+
+  const handleDeleteStorageUnitItem = async (item: StorageUnitItem) => {
+    const itemKey = getStorageUnitItemKey(item);
+    const sourceItems = item.storageUnitItems ?? [];
+
+    if (sourceItems.length === 0) {
+      toast.error(t("portfolio.storageUnitItemDeleteError", "Cannot remove this storage item."));
+      return;
+    }
+
+    setDeletingStorageUnitItemKey(itemKey);
+    try {
+      const res = await fetch("/api/portfolio/storage-units/items", {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          items: sourceItems.map((sourceItem) => ({
+            storageUnitId: sourceItem.storageUnitId,
+            caseId: item.caseId,
+            marketHashName: item.marketHashName,
+          })),
+        }),
+      });
+      const data = await res.json().catch(() => ({}));
+
+      if (!res.ok) {
+        throw new Error((data as { message?: string }).message ?? "deleteFailed");
+      }
+
+      setSelectedStorageUnit((current) => {
+        if (!current) return current;
+        return {
+          ...current,
+          currentCount: Math.max(0, current.currentCount - item.quantity),
+          items: current.items.filter(
+            (storageItem) => getStorageUnitItemKey(storageItem) !== itemKey,
+          ),
+        };
+      });
+      if (
+        selectedStorageItem &&
+        getStorageUnitItemKey(selectedStorageItem) === itemKey
+      ) {
+        setSelectedStorageItem(null);
+      }
+
+      if (selectedStorageUnit?.steamId64) {
+        await queryClient.invalidateQueries({
+          queryKey: STORAGE_UNITS_QUERY_KEY(selectedStorageUnit.steamId64),
+        });
+      }
+      await reportQuery.refetch();
+      toast.success(
+        t("portfolio.storageUnitItemDeleted", "Removed item from Storage Unit."),
+      );
+    } catch {
+      toast.error(
+        t("portfolio.storageUnitItemDeleteError", "Cannot remove this storage item."),
+      );
+    } finally {
+      setDeletingStorageUnitItemKey(null);
+    }
+  };
 
   useEffect(() => {
     const handleShowGuide = () => setShowCookieGuide(true);
@@ -137,8 +227,6 @@ export function SteamAccountsCard({
             </div>
           </div>
 
-
-
           {(isSyncing || singleScanId) && (
             <div className="space-y-3">
               <div className="space-y-2 rounded-md border border-blue-500/20 bg-blue-500/5 p-3">
@@ -166,19 +254,18 @@ export function SteamAccountsCard({
                   {Array.from(syncAccountProgresses.values()).map((acc) => (
                     <div
                       key={acc.steamId64}
-                      className={`rounded-md border px-3 py-2.5 transition-colors ${
-                        acc.status === "done"
+                      className={`rounded-md border px-3 py-2.5 transition-colors ${acc.status === "done"
                           ? "border-emerald-500/20 bg-emerald-950/20"
                           : acc.status === "error"
                             ? "border-red-500/20 bg-red-950/20"
                             : "border-stone-700 bg-stone-950/50"
-                      }`}
+                        }`}
                     >
                       <div className="flex items-center gap-3">
                         {acc.avatarUrl ? (
                           <img
-                            src={acc.avatarUrl}
-                            alt=""
+                            src={proxySteamUrl(acc.avatarUrl)}
+                            alt={t("steamAccounts.avatarAlt", "{{name}}'s Steam avatar", { name: acc.accountName })}
                             className="size-8 shrink-0 rounded-full border border-stone-700 object-cover"
                           />
                         ) : (
@@ -202,13 +289,12 @@ export function SteamAccountsCard({
                                 <AlertCircle className="size-3.5 text-red-400" />
                               )}
                               <span
-                                className={`text-xs font-medium ${
-                                  acc.status === "done"
+                                className={`text-xs font-medium ${acc.status === "done"
                                     ? "text-emerald-400"
                                     : acc.status === "error"
                                       ? "text-red-400"
                                       : "text-blue-300"
-                                }`}
+                                  }`}
                               >
                                 {acc.status === "done"
                                   ? t("dashboard.done")
@@ -221,7 +307,7 @@ export function SteamAccountsCard({
                           {acc.status === "scanning" && acc.scanProgress && (
                             <>
                               <p className="mt-1 truncate text-[11px] text-stone-400">
-                                {acc.scanProgress.message}
+                                {translateSyncMessage(acc.scanProgress.message, t, acc.scanProgress.detail)}
                               </p>
                               <div className="mt-1.5 h-1 overflow-hidden rounded-full bg-stone-800">
                                 <div
@@ -254,453 +340,30 @@ export function SteamAccountsCard({
             </div>
           )}
 
-          {accountsQuery.isLoading ? (
-            <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
-              {Array.from({ length: 4 }).map((_, i) => (
-                <div
-                  key={i}
-                  className="h-14 animate-pulse rounded-md bg-stone-900/60"
-                />
-              ))}
-            </div>
-          ) : accountsQuery.data && accountsQuery.data.length > 0 ? (
-            <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
-              {accountsQuery.data.map((account) => {
-                const isCookieExpanded = showCookies[account.id] ?? false;
-                const hasCookieSet =
-                  typeof account.steamCookie === "string" &&
-                  account.steamCookie.trim().length > 0;
-
-                const parsed = parseSteamCookies(account.steamCookie || "");
-                const parsedLoginSecure = parsed.steamLoginSecure;
-                const parsedParental = parsed.steamparental || "";
-                const parsedSessionId = parsed.sessionid || "";
-                const isFamilyViewEnabled = useFamilyViewMap[account.id] ?? (!!parsedParental || !!parsedSessionId);
-
-                const hasUnsavedCookieChange =
-                  (cookieInputs[account.id] !== undefined &&
-                    cookieInputs[account.id] !== parsedLoginSecure) ||
-                  (parentalInputs[account.id] !== undefined &&
-                    parentalInputs[account.id] !== parsedParental) ||
-                  (sessionIdInputs[account.id] !== undefined &&
-                    sessionIdInputs[account.id] !== parsedSessionId);
-
-                const isSavedCookieCheckable =
-                  hasCookieSet && !hasUnsavedCookieChange;
-
-                return (
-                  <div
-                    key={account.id}
-                    className="group flex flex-col gap-3 rounded-md border border-stone-800 bg-stone-950/40 p-3.5 transition-all duration-200 hover:border-stone-700"
-                  >
-                    <div className="flex items-center justify-between gap-3 min-w-0">
-                      <div className="flex items-center gap-3 min-w-0">
-                        {account.avatarUrl ? (
-                          <img
-                            src={account.avatarUrl}
-                            alt={account.name}
-                            className="size-10 rounded-full border border-stone-850 object-cover shrink-0"
-                          />
-                        ) : (
-                          <div className="flex size-10 items-center justify-center rounded-full border border-stone-850 bg-stone-900 shrink-0">
-                            <Users className="size-4.5 text-stone-500" />
-                          </div>
-                        )}
-                        <div className="flex min-w-0 flex-col">
-                          <div className="truncate text-sm font-semibold text-stone-200">
-                            {account.name}
-                          </div>
-                          <a
-                            href={account.steamUrl}
-                            target="_blank"
-                            rel="noreferrer"
-                            className="mt-0.5 block truncate text-[11px] text-stone-500 transition-colors hover:text-blue-400 font-mono"
-                          >
-                            {account.steamId64}
-                          </a>
-                        </div>
-                      </div>
-                      
-                      <div className="flex shrink-0 items-center gap-1.5">
-                        <Button
-                          type="button"
-                          variant="outline"
-                          onClick={() =>
-                            startSingleSync(account.id, account.name)
-                          }
-                          disabled={isSyncing || !!singleScanId}
-                          className="h-8 px-2.5 text-[11px] font-semibold hover:border-accent/40 hover:bg-accent/10 hover:text-accent disabled:cursor-wait disabled:opacity-40"
-                          title={t("dashboard.scanSingle")}
-                        >
-                          {singleScanId === account.id ? (
-                            <Loader2 className="size-3.5 animate-spin mr-1" />
-                          ) : (
-                            <Search className="size-3.5 mr-1" />
-                          )}
-                          {singleScanId === account.id
-                            ? t("dashboard.scanningSingle")
-                            : t("dashboard.scanSingle")}
-                        </Button>
-                        <Button
-                          type="button"
-                          variant="ghost"
-                          onClick={() =>
-                            setAccountToDelete({
-                              id: account.id,
-                              name: account.name,
-                            })
-                          }
-                          disabled={deleteAccountMutation.isPending}
-                          className="size-8 p-0 text-stone-500 transition-all hover:text-red-400 hover:bg-red-500/10 disabled:opacity-50"
-                          title={t("dashboard.unlink")}
-                        >
-                          <Trash2 className="size-3.5" />
-                        </Button>
-                      </div>
-                    </div>
-
-                    {account.cookieError && (
-                      <div className="mt-1 flex items-start gap-2 rounded-md border border-red-500/20 bg-red-950/20 p-2.5 text-[11px] text-red-300 shadow-sm leading-relaxed">
-                        <AlertCircle className="size-4 shrink-0 text-red-400 mt-0.5" />
-                        <div className="flex-1 min-w-0">
-                          <p className="font-semibold text-red-200">
-                            {t("dashboard.cookieErrorTitle") || "Yêu cầu cấu hình Cookie"}
-                          </p>
-                          <p className="mt-0.5 text-red-300/95 font-medium whitespace-normal break-words">
-                            {account.cookieError}
-                          </p>
-                        </div>
-                      </div>
-                    )}
-
-                    <div className="rounded border border-stone-800 bg-stone-950/20">
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        onClick={() =>
-                          setShowCookies((prev) => ({
-                            ...prev,
-                            [account.id]: !isCookieExpanded,
-                          }))
-                        }
-                        className="flex w-full items-center justify-between rounded-t px-2.5 py-1.5 text-[11px] font-medium text-stone-400 transition-colors hover:bg-stone-900/20 hover:text-stone-300"
-                      >
-                        <span className="flex items-center gap-1.5">
-                          <span
-                            className={`size-1.5 rounded-full ${hasCookieSet ? "animate-pulse bg-blue-400" : "bg-stone-600"}`}
-                          />
-                          <span>Cookie Config (Held Items)</span>
-                        </span>
-                        {isCookieExpanded ? (
-                          <ChevronUp className="size-3" />
-                        ) : (
-                          <ChevronDown className="size-3" />
-                        )}
-                      </Button>
-
-                      <AnimatePresence initial={false}>
-                        {isCookieExpanded && (
-                          <motion.div
-                            key="cookie-config-content"
-                            initial={{ height: 0, opacity: 0 }}
-                            animate={{ height: "auto", opacity: 1 }}
-                            exit={{ height: 0, opacity: 0 }}
-                            transition={{ duration: 0.22, ease: "easeInOut" }}
-                            className="overflow-hidden"
-                          >
-                            <div className="mt-1 space-y-2 border-t border-stone-800/40 p-2.5 pt-0">
-                          <div>
-                            <div className="mb-1.5 flex items-center justify-between">
-                              <div className="flex items-center gap-1.5">
-                                <label className="block text-[9px] font-bold tracking-wider text-stone-500 uppercase">
-                                  steamLoginSecure (Cookie)
-                                </label>
-                                {cookieStatuses[account.id] && (
-                                  <span
-                                    className={`inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-[8px] font-bold ${
-                                      cookieStatuses[account.id].status ===
-                                      "live"
-                                        ? "border border-emerald-500/20 bg-emerald-500/10 text-emerald-400"
-                                        : cookieStatuses[account.id].status ===
-                                            "expired"
-                                          ? "border border-red-500/20 bg-red-500/10 text-red-400"
-                                          : cookieStatuses[account.id]
-                                                .status === "error"
-                                            ? "border border-amber-500/20 bg-amber-500/10 text-amber-400"
-                                            : "bg-stone-500/10 text-stone-400"
-                                    }`}
-                                  >
-                                    <span
-                                      className={`size-1 rounded-full ${
-                                        cookieStatuses[account.id].status ===
-                                        "live"
-                                          ? "animate-pulse bg-emerald-400"
-                                          : cookieStatuses[account.id]
-                                                .status === "expired"
-                                            ? "bg-red-400"
-                                            : cookieStatuses[account.id]
-                                                  .status === "error"
-                                              ? "bg-amber-400"
-                                              : "bg-stone-400"
-                                      }`}
-                                    />
-                                    {cookieStatuses[account.id].status ===
-                                      "live" && "Live"}
-                                    {cookieStatuses[account.id].status ===
-                                      "expired" && "Hết hạn"}
-                                    {cookieStatuses[account.id].status ===
-                                      "error" &&
-                                      (cookieStatuses[account.id].message ||
-                                        "Lỗi")}
-                                  </span>
-                                )}
-                              </div>
-                              <Button
-                                type="button"
-                                variant="ghost"
-                                onClick={() => setShowCookieGuide(true)}
-                                className="h-auto p-0 text-[9px] font-semibold text-blue-400 hover:text-blue-300 hover:underline hover:bg-transparent"
-                              >
-                                <HelpCircle className="size-2.5" />
-                                {t("dashboard.howToGetCookie")}
-                              </Button>
-                            </div>
-                            <div className="flex flex-col gap-2">
-                              <div className="flex items-center gap-1.5">
-                                <div className="relative flex-grow">
-                                  <input
-                                    type={showSecureCookie[account.id] ? "text" : "password"}
-                                    placeholder="Nhập steamLoginSecure..."
-                                    value={
-                                      cookieInputs[account.id] ??
-                                      parsedLoginSecure
-                                    }
-                                    onChange={(e) =>
-                                      setCookieInputs((prev) => ({
-                                        ...prev,
-                                        [account.id]: e.target.value,
-                                      }))
-                                    }
-                                    className="w-full rounded border border-stone-800 bg-stone-950 pl-2 pr-7 py-1 text-xs text-stone-300 placeholder-stone-700 transition-colors focus:border-stone-700 focus:ring-1 focus:ring-stone-800 focus:outline-none"
-                                  />
-                                  <button
-                                    type="button"
-                                    onClick={() =>
-                                      setShowSecureCookie((prev) => ({
-                                        ...prev,
-                                        [account.id]: !prev[account.id],
-                                      }))
-                                    }
-                                    className="absolute right-2 top-1/2 -translate-y-1/2 text-stone-500 hover:text-stone-300 focus:outline-none cursor-pointer"
-                                  >
-                                    {showSecureCookie[account.id] ? (
-                                      <EyeOff className="size-3.5" />
-                                    ) : (
-                                      <Eye className="size-3.5" />
-                                    )}
-                                  </button>
-                                </div>
-                                <div className="flex gap-1.5 shrink-0">
-                                  <Button
-                                    type="button"
-                                    variant="outline"
-                                    disabled={updateCookieMutation.isPending}
-                                    onClick={() => {
-                                      const sLogin =
-                                        cookieInputs[account.id] ??
-                                        parsedLoginSecure;
-                                      const sParental = isFamilyViewEnabled
-                                        ? (parentalInputs[account.id] ?? parsedParental)
-                                        : "";
-                                      const sSessionId = isFamilyViewEnabled
-                                        ? (sessionIdInputs[account.id] ?? parsedSessionId)
-                                        : "";
-                                      const combined = buildSteamCookie(
-                                        sLogin,
-                                        sSessionId,
-                                        sParental,
-                                      );
-                                      updateCookieMutation.mutate({
-                                        id: account.id,
-                                        steamCookie: combined,
-                                      });
-                                    }}
-                                    className="h-[26px] cursor-pointer px-2.5 py-1 text-[10px] font-semibold text-stone-300 transition-colors hover:text-stone-100 disabled:opacity-50"
-                                  >
-                                    {updateCookieMutation.isPending
-                                      ? t("common.saving")
-                                      : t("common.save")}
-                                  </Button>
-                                  {isSavedCookieCheckable && (
-                                    <Button
-                                      type="button"
-                                      variant="outline"
-                                      disabled={
-                                        cookieStatuses[account.id]?.status ===
-                                          "loading" ||
-                                        checkCooldowns[account.id] > 0
-                                      }
-                                      onClick={() =>
-                                        handleCheckCookie(account.id)
-                                      }
-                                      className="flex h-[26px] min-w-[64px] cursor-pointer items-center justify-center px-2.5 py-1 text-[10px] font-semibold text-stone-300 transition-colors hover:text-stone-100 disabled:opacity-50"
-                                      title="Kiểm tra xem cookie còn hoạt động không"
-                                    >
-                                      {cookieStatuses[account.id]?.status ===
-                                      "loading" ? (
-                                        <span className="size-3 animate-spin rounded-full border-2 border-stone-400 border-t-transparent" />
-                                      ) : checkCooldowns[account.id] > 0 ? (
-                                        <span>{checkCooldowns[account.id]}s</span>
-                                      ) : (
-                                        <span>Kiểm tra</span>
-                                      )}
-                                    </Button>
-                                  )}
-                                </div>
-                              </div>
-
-                              <Button
-                                type="button"
-                                variant="ghost"
-                                onClick={() =>
-                                  setUseFamilyViewMap((prev) => ({
-                                    ...prev,
-                                    [account.id]: !isFamilyViewEnabled,
-                                  }))
-                                }
-                                className="flex w-full items-center justify-between h-7 px-2 text-[10px] font-semibold text-stone-400 hover:bg-stone-900/30 hover:text-stone-300"
-                              >
-                                <span>Tài khoản sử dụng Family View</span>
-                                {isFamilyViewEnabled ? (
-                                  <ChevronUp className="size-3" />
-                                ) : (
-                                  <ChevronDown className="size-3" />
-                                )}
-                              </Button>
-
-                              <AnimatePresence initial={false}>
-                                {isFamilyViewEnabled && (
-                                  <motion.div
-                                    initial={{ height: 0, opacity: 0 }}
-                                    animate={{ height: "auto", opacity: 1 }}
-                                    exit={{ height: 0, opacity: 0 }}
-                                    transition={{ duration: 0.18, ease: "easeInOut" }}
-                                    className="overflow-hidden"
-                                  >
-                                    <div className="flex flex-col gap-1.5 border-l border-stone-800 pl-2 mt-1 space-y-1.5 pb-1">
-                                      <div className="relative w-full">
-                                        <input
-                                          type={showSecureParental[account.id] ? "text" : "password"}
-                                          placeholder="Nhập steamparental (Nếu có bật Family View)..."
-                                          value={
-                                            parentalInputs[account.id] ?? parsedParental
-                                          }
-                                          onChange={(e) =>
-                                            setParentalInputs((prev) => ({
-                                              ...prev,
-                                              [account.id]: e.target.value,
-                                            }))
-                                          }
-                                          className="w-full rounded border border-stone-800 bg-stone-950 pl-2 pr-7 py-1 text-xs text-stone-300 placeholder-stone-700 transition-colors focus:border-stone-700 focus:ring-1 focus:ring-stone-800 focus:outline-none"
-                                        />
-                                        <button
-                                          type="button"
-                                          onClick={() =>
-                                            setShowSecureParental((prev) => ({
-                                              ...prev,
-                                              [account.id]: !prev[account.id],
-                                            }))
-                                          }
-                                          className="absolute right-2 top-1/2 -translate-y-1/2 text-stone-500 hover:text-stone-300 focus:outline-none cursor-pointer"
-                                        >
-                                          {showSecureParental[account.id] ? (
-                                            <EyeOff className="size-3.5" />
-                                          ) : (
-                                            <Eye className="size-3.5" />
-                                          )}
-                                        </button>
-                                      </div>
-                                      <div className="relative w-full">
-                                        <input
-                                          type={showSecureSessionId[account.id] ? "text" : "password"}
-                                          placeholder="Nhập sessionid (Cần thiết khi có bật Family View)..."
-                                          value={
-                                            sessionIdInputs[account.id] ??
-                                            parsedSessionId
-                                          }
-                                          onChange={(e) =>
-                                            setSessionIdInputs((prev) => ({
-                                              ...prev,
-                                              [account.id]: e.target.value,
-                                            }))
-                                          }
-                                          className="w-full rounded border border-stone-800 bg-stone-950 pl-2 pr-7 py-1 text-xs text-stone-300 placeholder-stone-700 transition-colors focus:border-stone-700 focus:ring-1 focus:ring-stone-800 focus:outline-none"
-                                        />
-                                        <button
-                                          type="button"
-                                          onClick={() =>
-                                            setShowSecureSessionId((prev) => ({
-                                              ...prev,
-                                              [account.id]: !prev[account.id],
-                                            }))
-                                          }
-                                          className="absolute right-2 top-1/2 -translate-y-1/2 text-stone-500 hover:text-stone-300 focus:outline-none cursor-pointer"
-                                        >
-                                          {showSecureSessionId[account.id] ? (
-                                            <EyeOff className="size-3.5" />
-                                          ) : (
-                                            <Eye className="size-3.5" />
-                                          )}
-                                        </button>
-                                      </div>
-                                    </div>
-                                  </motion.div>
-                                )}
-                              </AnimatePresence>
-                            </div>
-                          </div>
-                            </div>
-                          </motion.div>
-                        )}
-                      </AnimatePresence>
-                    </div>
-                    <AccountStorageUnits
-                      steamId64={account.steamId64}
-                      onSelectStorageUnit={setSelectedStorageUnit}
-                    />
-                  </div>
-                );
-              })}
-
-              {/* Add Account Card */}
-              <button
-                type="button"
-                onClick={() => setShowAddAccountModal(true)}
-                className="flex flex-col items-center justify-center gap-2 rounded-md border-2 border-dashed border-stone-800 bg-stone-950/20 hover:bg-stone-900/10 hover:border-stone-700 p-6 min-h-[160px] w-full transition-all duration-200 group text-center cursor-pointer select-none"
-              >
-                <Plus className="size-5 text-stone-500 group-hover:text-stone-300 transition-colors" />
-                <span className="text-xs font-semibold text-stone-400 group-hover:text-stone-200 transition-colors">
-                  {t("dashboard.addAccount") || "Thêm tài khoản"}
-                </span>
-              </button>
-            </div>
-          ) : (
-            <div className="flex flex-col items-center justify-center rounded-md border-2 border-dashed border-stone-800 bg-stone-950/20 p-8 min-h-[160px] text-center w-full">
-              <button
-                type="button"
-                onClick={() => setShowAddAccountModal(true)}
-                className="flex flex-col items-center justify-center gap-2 group cursor-pointer"
-              >
-                <Plus className="size-6 text-stone-500 group-hover:text-stone-300 transition-colors" />
-                <span className="text-sm font-semibold text-stone-400 group-hover:text-stone-200 transition-colors">
-                  {t("dashboard.addAccount") || "Thêm tài khoản"}
-                </span>
-              </button>
-              <p className="mt-2 text-[11px] text-stone-500 max-w-sm">
-                {t("dashboard.noAccountsDesc")}
-              </p>
-            </div>
-          )}
+          <AccountList
+            accounts={accountsQuery.data ?? []}
+            isLoading={accountsQuery.isLoading}
+            isSyncing={isSyncing}
+            singleScanId={singleScanId}
+            startSingleSync={startSingleSync}
+            setAccountToDelete={setAccountToDelete}
+            deleteAccountPending={deleteAccountMutation.isPending}
+            showCookies={showCookies}
+            setShowCookies={setShowCookies}
+            updateCookieMutation={updateCookieMutation}
+            cookieStatuses={cookieStatuses}
+            checkCooldowns={checkCooldowns}
+            handleCheckCookie={handleCheckCookie}
+            cookieInputs={cookieInputs}
+            setCookieInputs={setCookieInputs}
+            parentalInputs={parentalInputs}
+            setParentalInputs={setParentalInputs}
+            sessionIdInputs={sessionIdInputs}
+            setSessionIdInputs={setSessionIdInputs}
+            setShowCookieGuide={setShowCookieGuide}
+            onAddAccountClick={() => setShowAddAccountModal(true)}
+            onSelectStorageUnit={setSelectedStorageUnit}
+          />
         </div>
       </FadeIn>
 
@@ -719,10 +382,10 @@ export function SteamAccountsCard({
       <ConfirmDialog
         open={accountToDelete !== null}
         onClose={() => setAccountToDelete(null)}
-        title="Xác nhận hủy liên kết tài khoản"
-        description={`Bạn có chắc chắn muốn hủy liên kết tài khoản Steam "${accountToDelete?.name}"? Thao tác này sẽ xóa toàn bộ các vật phẩm đã đồng bộ từ tài khoản này khỏi portfolio.`}
-        confirmText="Hủy liên kết"
-        cancelText="Quay lại"
+        title={t("steamAccounts.confirmUnlinkTitle", "Confirm Unlink Account")}
+        description={t("steamAccounts.confirmUnlinkDesc", "Are you sure you want to unlink the Steam account \"{{name}}\"? This will remove all items synced from this account from your portfolio.", { name: accountToDelete?.name })}
+        confirmText={t("steamAccounts.unlinkButton", "Unlink")}
+        cancelText={t("common.back", "Back")}
         variant="danger"
         onConfirm={async () => {
           if (accountToDelete) {
@@ -749,23 +412,36 @@ export function SteamAccountsCard({
               },
             );
             if (res.ok) {
-              toast.success("Đã xử lý items biến mất thành công.");
+              const data = await res.json().catch(() => ({}));
+              const msg = (data as { message?: string }).message;
+              toast.success(
+                msg
+                  ? translateAccountError(msg, t)
+                  : t("steamAccounts.resolveMissingSuccess", "Successfully processed missing items.")
+              );
             } else {
               const data = await res.json().catch(() => ({}));
+              const msg = (data as { message?: string }).message;
               toast.error(
-                (data as { message?: string }).message ??
-                  "Không thể xử lý items biến mất.",
+                msg
+                  ? translateAccountError(msg, t)
+                  : t("steamAccounts.resolveMissingError", "Failed to process missing items.")
               );
             }
           } catch {
-            toast.error("Không thể kết nối đến máy chủ.");
+            toast.error(t("common.serverConnectionError", "Cannot connect to server."));
           }
         }}
       />
 
       <SlidePanel
         open={!!selectedStorageUnit}
-        onOpenChange={(open) => !open && setSelectedStorageUnit(null)}
+        onOpenChange={(open) => {
+          if (!open) {
+            setSelectedStorageUnit(null);
+            setSelectedStorageItem(null);
+          }
+        }}
       >
         {selectedStorageUnit && report && (
           <SlidePanelContent
@@ -775,13 +451,41 @@ export function SteamAccountsCard({
                 <span>{selectedStorageUnit.name}</span>
               </span>
             }
-            description="Chi tiết hòm và vật phẩm bên trong Storage Unit"
+            description={t("steamAccounts.storageUnitDetailDesc", "Details of cases and items inside the Storage Unit")}
           >
             <StorageUnitInspectPanel
               storageUnit={selectedStorageUnit}
               report={report}
               buffPricesCny={buffPricesCny}
               buffCnyToVndRate={buffCnyToVndRate}
+              onSelectItem={handleSelectStorageItem}
+              onDeleteItem={handleDeleteStorageUnitItem}
+              deletingItemKey={deletingStorageUnitItemKey}
+            />
+          </SlidePanelContent>
+        )}
+      </SlidePanel>
+
+      <SlidePanel
+        open={!!selectedStorageItemRow}
+        onOpenChange={(open) => !open && setSelectedStorageItem(null)}
+        modal={false}
+      >
+        {selectedStorageItemRow && (
+          <SlidePanelContent
+            title={selectedStorageItemRow.case.name}
+            hideHeader
+            noPadding
+            side="left"
+            showOverlay={false}
+            className="max-w-[440px] overflow-hidden border-stone-800/80 bg-[#0e121a] text-stone-100 shadow-[0_30px_90px_rgba(0,0,0,0.9)] backdrop-blur-3xl"
+          >
+            <ItemHoverCard
+              item={selectedStorageItemRow}
+              relatedRows={[selectedStorageItemRow]}
+              buffCnyToVndRate={buffCnyToVndRate}
+              buffPricesCny={buffPricesCny}
+              embedded
             />
           </SlidePanelContent>
         )}

@@ -2,6 +2,7 @@
 
 import React from "react";
 import { TbUser } from "react-icons/tb";
+import { useTranslation } from "react-i18next";
 import { PortfolioTableRow } from "@/components/portfolio";
 
 interface AccountAllocationBreakdownProps {
@@ -21,6 +22,7 @@ const PALETTES = [
 export function AccountAllocationBreakdown({
   relatedRows,
 }: AccountAllocationBreakdownProps) {
+  const { t } = useTranslation();
   const combinedAccounts = React.useMemo(() => {
     const map = new Map<
       string,
@@ -111,21 +113,22 @@ export function AccountAllocationBreakdown({
     });
   }, [combinedAccounts, totalQuantity]);
 
-  if (combinedAccounts.length <= 1) return null;
+  if (combinedAccounts.length === 0) return null;
+  if (combinedAccounts.length <= 1 && relatedRows.length <= 1) return null;
 
   return (
-    <div className="mb-5 space-y-3 border-b border-slate-800/60 pb-5">
-      <div className="flex items-center justify-between text-[10px] font-bold tracking-wider text-slate-500 uppercase">
+    <div className="mb-5 space-y-3 border-b border-stone-800/40 pb-5">
+      <div className="flex items-center justify-between text-[10px] font-extrabold tracking-wider text-stone-500 uppercase">
         <span className="flex items-center gap-1.5">
-          <TbUser className="size-3.5 text-slate-400" />
-          Phân bổ tài khoản
+          <TbUser className="size-3.5 text-stone-400" />
+          {t("steamAccounts.accountAllocationTitle")}
         </span>
-        <span className="rounded-full bg-slate-800/50 px-2 py-0.5 font-mono text-[10px] font-extrabold text-slate-300">
-          {totalQuantity} tổng
+        <span className="rounded-full bg-stone-800/40 px-2 py-0.5 font-mono text-[9px] font-bold text-stone-300">
+          {totalQuantity} {t("steamAccounts.totalLabel")}
         </span>
       </div>
 
-      <div className="flex items-center gap-5 rounded-xl border border-slate-850 bg-slate-950/20 p-3">
+      <div className="flex items-center gap-5 rounded-xl border border-stone-800/60 bg-gradient-to-b from-stone-950/60 to-stone-950/20 p-3.5 shadow-[inset_0_1px_4px_rgba(0,0,0,0.1)]">
         {/* SVG Donut Chart */}
         <div className="relative flex size-20 shrink-0 items-center justify-center">
           <svg className="size-full -rotate-90" viewBox="0 0 100 100">
@@ -134,7 +137,7 @@ export function AccountAllocationBreakdown({
               cx="50"
               cy="50"
               r="35"
-              className="fill-transparent stroke-slate-900/60"
+              className="fill-transparent stroke-stone-900/60"
               strokeWidth="9"
             />
             {slices.map((slice) => (
@@ -155,11 +158,11 @@ export function AccountAllocationBreakdown({
           </svg>
           {/* Inner Total count */}
           <div className="absolute inset-0 flex flex-col items-center justify-center text-center">
-            <span className="font-mono text-sm font-extrabold text-slate-100 leading-none">
+            <span className="font-mono text-sm font-extrabold text-stone-200 leading-none">
               {totalQuantity}
             </span>
-            <span className="text-[7.5px] font-bold text-slate-500 tracking-wider uppercase mt-0.5">
-              tổng
+            <span className="text-[7.5px] font-bold text-stone-500 tracking-wider uppercase mt-0.5">
+              {t("steamAccounts.totalLabel")}
             </span>
           </div>
         </div>
@@ -176,18 +179,18 @@ export function AccountAllocationBreakdown({
                   className="size-2 shrink-0 rounded-full"
                   style={{ backgroundColor: slice.palette.barColor }}
                 />
-                <span className="font-bold text-slate-300 truncate" title={slice.name}>
+                <span className="font-bold text-stone-300 truncate" title={slice.name}>
                   {slice.name}
                 </span>
               </div>
-              <div className="flex items-center gap-1.5 shrink-0 font-mono text-[10px] text-slate-400 font-medium">
-                <span className="text-slate-100 font-bold">{slice.total}</span>
+              <div className="flex items-center gap-1.5 shrink-0 font-mono text-[10px] text-stone-400 font-medium">
+                <span className="text-stone-150 font-bold">{slice.total}</span>
                 <span>({slice.percent.toFixed(0)}%)</span>
                 
                 {/* Breakdown badges */}
                 <div className="flex items-center gap-0.5 ml-1">
                   {slice.tradeable > 0 && (
-                    <span className="text-[8px] font-extrabold text-emerald-450 text-emerald-400/80" title={`${slice.tradeable} Tradeable`}>
+                    <span className="text-[8px] font-extrabold text-emerald-400/90" title={`${slice.tradeable} Tradeable`}>
                       {slice.tradeable}T
                     </span>
                   )}
