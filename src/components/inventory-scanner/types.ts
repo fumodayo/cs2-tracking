@@ -1,3 +1,6 @@
+import type { PatternInfo } from '@/domain/pattern-info';
+import type { Cs2InventoryItemType } from '@/utils/cs2-item-type';
+
 export type CaseItemData = {
   id: string;
   name: string;
@@ -5,9 +8,8 @@ export type CaseItemData = {
   imageUrl: string | null;
   isActive: boolean;
 };
-export type InventoryItemType = 'Case' | 'Capsule' | 'Sticker' | 'Skin';
 
-import type { PatternInfo } from '@/domain/pattern-info';
+export type InventoryItemType = Cs2InventoryItemType;
 
 export type ScanResultItem = {
   caseItem: CaseItemData;
@@ -103,6 +105,7 @@ export type AccountEntry = {
   url: string;
   steamCookie?: string;
   steamSessionId?: string;
+  scanJobId?: string | null;
   status: 'idle' | 'scanning' | 'done' | 'error';
   result: ScanResponse | null;
   error: string | null;

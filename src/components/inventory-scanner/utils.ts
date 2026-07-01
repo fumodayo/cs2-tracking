@@ -1,4 +1,5 @@
 import { AccountEntry, InventoryItemType, ScanResponse, SourceAccount } from './types';
+import { inferInventoryItemType } from '@/utils/cs2-item-type';
 
 export const LS_RATE_ALL = 'cs2t_rateAll';
 export const LS_RATE_LE = 'cs2t_rateLe';
@@ -30,6 +31,7 @@ export function createAccount(url: string): AccountEntry {
     url,
     steamCookie: '',
     steamSessionId: '',
+    scanJobId: null,
     status: 'idle',
     result: null,
     error: null,
@@ -96,12 +98,8 @@ export function formatProgressDetail(
 /**
  * Derives an InventoryItemType enum value based on name conventions.
  */
-export function getInventoryItemType(name: string): InventoryItemType {
-  const nameLower = name.toLowerCase();
-  if (nameLower.includes('capsule') || nameLower.includes('package')) return 'Capsule';
-  if (nameLower.startsWith('sticker |')) return 'Sticker';
-  if (nameLower.includes(' | ')) return 'Skin';
-  return 'Case';
+export function getInventoryItemType(name: string, marketHashName = name): InventoryItemType {
+  return inferInventoryItemType({ name, marketHashName });
 }
 
 /**
@@ -133,6 +131,12 @@ export function getItemTypeColor(type: string): string {
       return '#4b69ff';
     case 'Capsule':
     case 'Case':
+    case 'Graffiti':
+    case 'Agent':
+    case 'Music Kit':
+    case 'Patch':
+    case 'Pin':
+    case 'Charm':
     default:
       return '#b0c3d9'; // ALWAYS Consumer grade color
   }

@@ -1,12 +1,12 @@
-import { getDatabase } from "@/infrastructure/db/mongo-client";
-import type { StorageUnitInfo } from "@/domain/storage-unit";
+import { getDatabase } from '@/infrastructure/db/mongo-client';
+import type { StorageUnitInfo } from '@/domain/storage-unit';
+import type { PatternInfo } from '@/domain/pattern-info';
+import type { Cs2InventoryItemType } from '@/utils/cs2-item-type';
 
 export type SteamProfile = {
   name: string;
   avatarUrl: string | null;
 };
-
-import type { PatternInfo } from "@/domain/pattern-info";
 
 export type ScanItem = {
   caseItem: {
@@ -16,7 +16,7 @@ export type ScanItem = {
     imageUrl: string | null;
     isActive: boolean;
   };
-  type: "Case" | "Capsule" | "Sticker" | "Skin";
+  type: Cs2InventoryItemType;
   rarity?: {
     name: string;
     color: string;
@@ -57,7 +57,7 @@ export type ScanCacheScope = {
   hasCookie: boolean;
 };
 
-const COLLECTION_NAME = "inventory_scan_cache";
+const COLLECTION_NAME = 'inventory_scan_cache';
 
 /**
  * Calculates the next 14:00 (UTC+7) after the current moment.
@@ -73,15 +73,7 @@ export function getNextExpiry(): Date {
 
   // Build "today 14:00" in Vietnam time, then convert back to UTC
   const todayVN14 = new Date(
-    Date.UTC(
-      nowVN.getUTCFullYear(),
-      nowVN.getUTCMonth(),
-      nowVN.getUTCDate(),
-      14,
-      0,
-      0,
-      0,
-    ),
+    Date.UTC(nowVN.getUTCFullYear(), nowVN.getUTCMonth(), nowVN.getUTCDate(), 14, 0, 0, 0)
   );
   // todayVN14 is in "VN wall-clock as UTC", subtract offset to get real UTC
   const todayUtc14 = new Date(todayVN14.getTime() - VN_OFFSET_MS);
@@ -96,9 +88,7 @@ export async function ensureCacheIndexes() {
   const db = await getDatabase();
   const col = db.collection(COLLECTION_NAME);
   // TTL index — MongoDB checks every ~60s and deletes docs whose expiresAt < now
-  await col
-    .createIndex({ expiresAt: 1 }, { expireAfterSeconds: 0 })
-    .catch(() => {});
+  await col.createIndex({ expiresAt: 1 }, { expireAfterSeconds: 0 }).catch(() => {});
   await col.createIndex({ steamId64: 1 }).catch(() => {});
   await col.createIndex({ cacheKey: 1 }).catch(() => {});
   await col.createIndex({ ownerId: 1, steamId64: 1, hasCookie: 1 }).catch(() => {});
@@ -106,14 +96,14 @@ export async function ensureCacheIndexes() {
 
 export async function getCachedScan(
   scopeOrSteamId: ScanCacheScope | string,
-  optionsOrIgnoreExpiry: { ignoreExpiry?: boolean } | boolean = {},
+  optionsOrIgnoreExpiry: { ignoreExpiry?: boolean } | boolean = {}
 ): Promise<CachedScanResult | null> {
   const scope =
-    typeof scopeOrSteamId === "string"
+    typeof scopeOrSteamId === 'string'
       ? { steamId64: scopeOrSteamId, hasCookie: false }
       : scopeOrSteamId;
   const ignoreExpiry =
-    typeof optionsOrIgnoreExpiry === "boolean"
+    typeof optionsOrIgnoreExpiry === 'boolean'
       ? optionsOrIgnoreExpiry
       : optionsOrIgnoreExpiry.ignoreExpiry === true;
   const cacheKey = buildCacheKey(scope);
@@ -137,7 +127,7 @@ export async function getCachedScan(
 
 export async function saveScanToCache(
   scopeOrResult: ScanCacheScope | CachedScanResult,
-  maybeResult?: CachedScanResult,
+  maybeResult?: CachedScanResult
 ): Promise<void> {
   const scope =
     maybeResult === undefined
@@ -163,21 +153,19 @@ export async function saveScanToCache(
     ...(scope.hasCookie && ownerId ? { ownerId } : {}),
   };
 
-  await db
-    .collection(COLLECTION_NAME)
-    .updateOne(
-      { cacheKey },
-      {
-        $set: doc,
-        ...(scope.hasCookie ? {} : { $unset: { ownerId: "" } }),
-      },
-      { upsert: true },
-    );
+  await db.collection(COLLECTION_NAME).updateOne(
+    { cacheKey },
+    {
+      $set: doc,
+      ...(scope.hasCookie ? {} : { $unset: { ownerId: '' } }),
+    },
+    { upsert: true }
+  );
 }
 
 function normalizeOwnerId(ownerId?: string): string | undefined {
   const trimmed = ownerId?.trim();
-  return trimmed && trimmed !== "guest" ? trimmed : undefined;
+  return trimmed && trimmed !== 'guest' ? trimmed : undefined;
 }
 
 function buildCacheKey(scope: ScanCacheScope): string | null {

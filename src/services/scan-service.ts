@@ -24,6 +24,7 @@ import { buildInspectLink } from '@/services/pattern/inspect-link-builder';
 import { mapWithConcurrency } from '@/services/parser/utils';
 import type { CaseItem } from '@/domain/case-item';
 import type { PatternInfo } from '@/domain/pattern-info';
+import { inferInventoryItemType, type Cs2InventoryItemType } from '@/utils/cs2-item-type';
 
 const STEAM_IMAGE_CDN = 'https://community.cloudflare.steamstatic.com/economy/image';
 const INVENTORY_PRICE_CONCURRENCY = 4;
@@ -88,6 +89,7 @@ export async function runScanJob(
     if (!forceRefresh) {
       const cached = await getCachedScan(cacheScope);
       if (cached) {
+        const cachedItems = normalizeScanItemTypes(cached.items);
         updateScanJob(jobId, {
           status: 'done',
           percent: 100,
@@ -95,7 +97,7 @@ export async function runScanJob(
           result: {
             steamId64: cached.steamId64,
             profile: cached.profile ?? profile,
-            items: cached.items,
+            items: cachedItems,
             totalPrice: cached.totalPrice,
             totalQuantity: cached.totalQuantity,
             totalInventoryCount: cached.totalInventoryCount,
@@ -557,7 +559,7 @@ export async function runScanJob(
       {
         marketHashName: string;
         count: number;
-        itemType: 'Case' | 'Capsule' | 'Sticker' | 'Skin';
+        itemType: Cs2InventoryItemType;
         iconUrl: string | null;
         rarity?: { name: string; color: string };
         holdDays: number;
@@ -653,14 +655,12 @@ export async function runScanJob(
 
       if (!desc.marketable && !isSpecialState && !isKey) continue;
 
-      let itemType: 'Case' | 'Capsule' | 'Sticker' | 'Skin' = 'Skin';
-      if (nameLower.includes('capsule') || nameLower.includes('package')) {
-        itemType = 'Capsule';
-      } else if (nameLower.includes('sticker')) {
-        itemType = 'Sticker';
-      } else if (nameLower.includes('case') || typeLower.includes('container')) {
-        itemType = 'Case';
-      }
+      const itemType = inferInventoryItemType({
+        name: desc.name,
+        marketHashName: desc.market_hash_name,
+        steamType: desc.type,
+        tags: desc.tags,
+      });
 
       let rarity: { name: string; color: string } | undefined;
       if (desc.tags) {
@@ -1121,6 +1121,17 @@ export async function runScanJob(
       error: err instanceof Error ? err.message : 'errScanInventory',
     });
   }
+}
+
+function normalizeScanItemTypes(items: ScanItem[]): ScanItem[] {
+  return items.map((item) => {
+    const inferredType = inferInventoryItemType({
+      name: item.caseItem.name,
+      marketHashName: item.caseItem.marketHashName,
+    });
+
+    return item.type === inferredType ? item : { ...item, type: inferredType };
+  });
 }
 
 function parseAccessoryDescriptions(descriptions: SteamDescription[]): {
