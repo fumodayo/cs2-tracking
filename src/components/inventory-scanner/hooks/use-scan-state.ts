@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback } from 'react';
+import { useCallback, useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import { toast } from '@/stores';
 import { AccountEntry, ScanProgress } from '../types';
@@ -15,6 +15,7 @@ interface UseScanStateProps {
 
 export function useScanState({ state, dispatch, scanAbortControllerRef }: UseScanStateProps) {
   const { t } = useTranslation();
+  const activePollKeysRef = useRef<Set<string>>(new Set());
   const updateAccountUrl = useCallback(
     (id: string, url: string) => {
       dispatch({ type: 'UPDATE_ACCOUNT_URL', id, url });
@@ -153,6 +154,70 @@ export function useScanState({ state, dispatch, scanAbortControllerRef }: UseSca
     [dispatch, t]
   );
 
+  const getScanProgressError = useCallback(
+    (scanProgress: ScanProgress) => {
+      const rawErr = scanProgress.error ?? scanProgress.message;
+      if (!rawErr) {
+        return t('inventoryScanner.apiErrors.errScanInventory', 'Cannot scan inventory.');
+      }
+
+      const translationKey = `inventoryScanner.apiErrors.${rawErr}`;
+      const translated = t(translationKey);
+      return translated !== translationKey ? translated : rawErr;
+    },
+    [t]
+  );
+
+  useEffect(() => {
+    for (const account of state.accounts) {
+      if (account.status !== 'scanning' || !account.scanJobId) continue;
+
+      const jobId = account.scanJobId;
+      const pollKey = `${account.id}:${jobId}`;
+      if (activePollKeysRef.current.has(pollKey)) continue;
+
+      const controller = new AbortController();
+      activePollKeysRef.current.add(pollKey);
+      scanAbortControllerRef.current = controller;
+
+      void (async () => {
+        try {
+          const scanProgress = await pollScanProgress(jobId, account.id, controller.signal);
+          if (scanProgress.status === 'error' || !scanProgress.result) {
+            dispatch({
+              type: 'SCAN_FAILURE',
+              accountId: account.id,
+              error: getScanProgressError(scanProgress),
+            });
+            return;
+          }
+
+          dispatch({
+            type: 'SCAN_SUCCESS',
+            accountId: account.id,
+            result: scanProgress.result,
+            progress: scanProgress,
+          });
+        } catch (err) {
+          if (err instanceof DOMException && err.name === 'AbortError') {
+            dispatch({ type: 'CANCEL_SCAN', accountId: account.id });
+          } else {
+            dispatch({
+              type: 'SCAN_FAILURE',
+              accountId: account.id,
+              error: err instanceof Error ? err.message : t('common.error', 'Error'),
+            });
+          }
+        } finally {
+          activePollKeysRef.current.delete(pollKey);
+          if (scanAbortControllerRef.current === controller) {
+            scanAbortControllerRef.current = null;
+          }
+        }
+      })();
+    }
+  }, [dispatch, getScanProgressError, pollScanProgress, scanAbortControllerRef, state.accounts, t]);
+
   const doScan = useCallback(
     async (
       accountId: string,
@@ -247,18 +312,26 @@ export function useScanState({ state, dispatch, scanAbortControllerRef }: UseSca
           );
         }
 
-        const scanProgress = await pollScanProgress(String(data.jobId), accountId, activeSignal);
-        if (scanProgress.status === 'error' || !scanProgress.result) {
-          const rawErr = scanProgress.error ?? scanProgress.message;
-          const translatedErr = rawErr
-            ? t(`inventoryScanner.apiErrors.${rawErr}`) !== `inventoryScanner.apiErrors.${rawErr}`
-              ? t(`inventoryScanner.apiErrors.${rawErr}`)
-              : rawErr
-            : null;
+        if (!data.jobId) {
           throw new Error(
-            translatedErr ??
-              t('inventoryScanner.apiErrors.errScanInventory', 'Cannot scan inventory.')
+            t('inventoryScanner.apiErrors.errReadProgress', 'Cannot read scan progress.')
           );
+        }
+
+        const jobId = String(data.jobId);
+        const pollKey = `${accountId}:${jobId}`;
+        activePollKeysRef.current.add(pollKey);
+        dispatch({ type: 'REGISTER_SCAN_JOB', accountId, jobId });
+
+        let scanProgress: ScanProgress;
+        try {
+          scanProgress = await pollScanProgress(jobId, accountId, activeSignal);
+        } finally {
+          activePollKeysRef.current.delete(pollKey);
+        }
+
+        if (scanProgress.status === 'error' || !scanProgress.result) {
+          throw new Error(getScanProgressError(scanProgress));
         }
         const scanResult = scanProgress.result;
 
@@ -311,7 +384,7 @@ export function useScanState({ state, dispatch, scanAbortControllerRef }: UseSca
         }
       }
     },
-    [dispatch, findUrlDuplicate, pollScanProgress, scanAbortControllerRef, t]
+    [dispatch, findUrlDuplicate, getScanProgressError, pollScanProgress, scanAbortControllerRef, t]
   );
 
   const scanAll = useCallback(

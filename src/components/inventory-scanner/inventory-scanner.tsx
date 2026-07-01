@@ -1,7 +1,7 @@
-"use client";
+'use client';
 
-import React, { useMemo, useState, useEffect, useCallback } from "react";
-import { useTranslation } from "react-i18next";
+import React, { useMemo, useState, useEffect, useCallback } from 'react';
+import { useTranslation } from 'react-i18next';
 import {
   getCoreRowModel,
   getFilteredRowModel,
@@ -9,36 +9,43 @@ import {
   getSortedRowModel,
   useReactTable,
   type ColumnDef,
-} from "@tanstack/react-table";
+} from '@tanstack/react-table';
 
-import { useInventoryScanner } from "./use-inventory-scanner";
-import { usePatternInspect } from "./hooks/use-pattern-inspect";
+import { useInventoryScanner } from './use-inventory-scanner';
+import { usePatternInspect } from './hooks/use-pattern-inspect';
 
-import { AddCaseSearch } from "./add-case-search";
-import { CookieGuideModal } from "@/components/shared/cookie-guide-modal";
-import { ScanResultItem } from "./types";
-import { buildInventoryColumns } from "./inventory-scanner-columns";
-import { groupItemsForSummary } from "./hooks/use-scanner-data-merged";
+import { AddCaseSearch } from './add-case-search';
+import { CookieGuideModal } from '@/components/shared/cookie-guide-modal';
+import { ScanResultItem } from './types';
+import { buildInventoryColumns } from './inventory-scanner-columns';
+import { groupItemsForSummary } from './hooks/use-scanner-data-merged';
 
-import { AccountsSection } from "./components/accounts-section";
-import { CS2CapModal } from "@/components/auth/cs2cap-modal";
-import { ConfirmDialog } from "@/components/ui/confirm-dialog";
-import { SellSelectedDialog } from "../portfolio/sell-selected-dialog";
-import type { PortfolioTableRow } from "../portfolio/portfolio-table-model";
-import type { PortfolioReportRowDto, PriceChangeDto } from "@/types/report";
-import type { PriceRange } from "@/domain/price";
+import { AccountsSection } from './components/accounts-section';
+import { CS2CapModal } from '@/components/auth/cs2cap-modal';
+import { ConfirmDialog } from '@/components/ui/confirm-dialog';
+import { SellSelectedDialog } from '../portfolio/sell-selected-dialog';
+import type { PortfolioTableRow } from '../portfolio/portfolio-table-model';
+import type { PortfolioReportRowDto, PriceChangeDto } from '@/types/report';
+import type { PriceRange } from '@/domain/price';
+import { toPortfolioItemType } from '@/utils/cs2-item-type';
 
-import { ScannerToolbar } from "./components/scanner-toolbar";
-import { ScannerResults } from "./components/scanner-results";
-import { SlidePanel, SlidePanelContent } from "@/components/ui/slide-panel";
-import { ItemHoverCard } from "../portfolio/item-hover-card";
-
-
+import { ScannerToolbar } from './components/scanner-toolbar';
+import { ScannerResults } from './components/scanner-results';
+import { SlidePanel, SlidePanelContent } from '@/components/ui/slide-panel';
+import { ItemHoverCard } from '../portfolio/item-hover-card';
 
 export function InventoryScanner() {
   const { t } = useTranslation();
   const [showGuestKeyModal, setShowGuestKeyModal] = useState(false);
   const [selectedItemForPanel, setSelectedItemForPanel] = useState<ScanResultItem | null>(null);
+
+  const [isMobile, setIsMobile] = useState(false);
+  useEffect(() => {
+    const checkMobile = () => setIsMobile(window.innerWidth < 768);
+    checkMobile();
+    window.addEventListener('resize', checkMobile);
+    return () => window.removeEventListener('resize', checkMobile);
+  }, []);
 
   const {
     state,
@@ -87,6 +94,8 @@ export function InventoryScanner() {
     debouncedUrlState,
   } = useInventoryScanner();
 
+  const activeMode = isMobile ? 'transactions' : mode;
+
   const { inspectingKeys, patternResults, inspectPattern } = usePatternInspect();
 
   // Trigger automatic portfolio import after Gmail login redirect
@@ -94,16 +103,16 @@ export function InventoryScanner() {
     if (
       isLoaded &&
       user &&
-      typeof window !== "undefined" &&
-      localStorage.getItem("pending_portfolio_sync") === "true"
+      typeof window !== 'undefined' &&
+      localStorage.getItem('pending_portfolio_sync') === 'true'
     ) {
       if (mergedRaw && mergedRaw.items.length > 0) {
-        localStorage.removeItem("pending_portfolio_sync");
-        localStorage.setItem("pending_portfolio_sync_redirect", "true");
+        localStorage.removeItem('pending_portfolio_sync');
+        localStorage.setItem('pending_portfolio_sync_redirect', 'true');
         importInventoryToPortfolio();
       } else {
-        localStorage.removeItem("pending_portfolio_sync");
-        window.location.href = "/portfolio";
+        localStorage.removeItem('pending_portfolio_sync');
+        window.location.href = '/portfolio';
       }
     }
   }, [isLoaded, user, mergedRaw, importInventoryToPortfolio]);
@@ -112,11 +121,11 @@ export function InventoryScanner() {
   useEffect(() => {
     if (
       state.portfolioImportMessage &&
-      typeof window !== "undefined" &&
-      localStorage.getItem("pending_portfolio_sync_redirect") === "true"
+      typeof window !== 'undefined' &&
+      localStorage.getItem('pending_portfolio_sync_redirect') === 'true'
     ) {
-      localStorage.removeItem("pending_portfolio_sync_redirect");
-      window.location.href = "/portfolio";
+      localStorage.removeItem('pending_portfolio_sync_redirect');
+      window.location.href = '/portfolio';
     }
   }, [state.portfolioImportMessage]);
 
@@ -124,17 +133,14 @@ export function InventoryScanner() {
   useEffect(() => {
     if (
       state.portfolioImportError &&
-      typeof window !== "undefined" &&
-      localStorage.getItem("pending_portfolio_sync_redirect") === "true"
+      typeof window !== 'undefined' &&
+      localStorage.getItem('pending_portfolio_sync_redirect') === 'true'
     ) {
-      localStorage.removeItem("pending_portfolio_sync_redirect");
+      localStorage.removeItem('pending_portfolio_sync_redirect');
     }
   }, [state.portfolioImportError]);
 
-  const hasScannedAccount = useMemo(
-    () => state.accounts.some((a) => a.status === "done" && a.result),
-    [state.accounts],
-  );
+  const hasScannedAccount = useMemo(() => state.accounts.some((a) => a.result), [state.accounts]);
 
   const selectedAccounts = urlState.accounts;
   const setSelectedAccounts = setters.accounts;
@@ -147,7 +153,7 @@ export function InventoryScanner() {
       pageIndex: urlState.page - 1,
       pageSize: urlState.pageSize,
     }),
-    [urlState.page, urlState.pageSize],
+    [urlState.page, urlState.pageSize]
   );
 
   const setPagination = useCallback(
@@ -157,9 +163,9 @@ export function InventoryScanner() {
         | ((prev: { pageIndex: number; pageSize: number }) => {
             pageIndex: number;
             pageSize: number;
-          }),
+          })
     ) => {
-      if (typeof value === "function") {
+      if (typeof value === 'function') {
         const next = value({
           pageIndex: urlState.page - 1,
           pageSize: urlState.pageSize,
@@ -171,7 +177,7 @@ export function InventoryScanner() {
         setters.pageSize(value.pageSize);
       }
     },
-    [urlState.page, urlState.pageSize, setters],
+    [urlState.page, urlState.pageSize, setters]
   );
 
   // Reset pagination to first page when search filters change
@@ -186,13 +192,13 @@ export function InventoryScanner() {
   const accountOptions = useMemo(
     () =>
       state.accounts
-        .filter((account) => account.status === "done" && account.result)
+        .filter((account) => account.result)
         .map((account) => ({
           steamId64: account.result!.steamId64,
           name: account.result!.profile?.name || account.result!.steamId64,
         }))
         .sort((first, second) => first.name.localeCompare(second.name)),
-    [state.accounts],
+    [state.accounts]
   );
 
   const filteredScannedItems = useMemo(
@@ -201,9 +207,8 @@ export function InventoryScanner() {
         // Account filter
         if (selectedAccounts.length > 0) {
           const matchesAccount =
-            item.sourceAccounts?.some((account) =>
-              selectedAccounts.includes(account.steamId64),
-            ) ?? false;
+            item.sourceAccounts?.some((account) => selectedAccounts.includes(account.steamId64)) ??
+            false;
           if (!matchesAccount) return false;
         }
         // Hold status filter
@@ -212,39 +217,44 @@ export function InventoryScanner() {
           if (item.sourceAccounts) {
             for (const acc of item.sourceAccounts) {
               if (acc.breakdown) {
-                if (acc.breakdown.tradeable > 0) statuses.add("tradeable");
-                if (acc.breakdown.onMarket > 0) statuses.add("market");
-                if (acc.breakdown.tradeProtected > 0) statuses.add("protected");
-                if (acc.breakdown.hold > 0) statuses.add("hold");
+                if (acc.breakdown.tradeable > 0) statuses.add('tradeable');
+                if (acc.breakdown.onMarket > 0) statuses.add('market');
+                if (acc.breakdown.tradeProtected > 0) statuses.add('protected');
+                if (acc.breakdown.hold > 0) statuses.add('hold');
               }
             }
           }
           // If no breakdown data, treat as tradeable
-          if (statuses.size === 0) statuses.add("tradeable");
+          if (statuses.size === 0) statuses.add('tradeable');
           const matchesStatus = selectedStatuses.some((s) => statuses.has(s));
           if (!matchesStatus) return false;
         }
         return true;
       }),
-    [selectedAccounts, selectedStatuses, merged?.scannedItems],
+    [selectedAccounts, selectedStatuses, merged?.scannedItems]
   );
 
   const visibleManualItems = useMemo(() => {
     return selectedAccounts.length === 0 ? filteredManualItems : [];
   }, [selectedAccounts, filteredManualItems]);
 
+  const sellDialogSourceItems = useMemo(
+    () => [...visibleManualItems, ...filteredScannedItems],
+    [visibleManualItems, filteredScannedItems]
+  );
+
   const tableData = useMemo(() => {
-    const rawData = [...visibleManualItems, ...filteredScannedItems];
-    if (mode === "case-summary") {
+    const rawData = sellDialogSourceItems;
+    if (activeMode === 'case-summary') {
       return groupItemsForSummary(rawData);
     }
     return rawData;
-  }, [visibleManualItems, filteredScannedItems, mode]);
+  }, [sellDialogSourceItems, activeMode]);
 
   const [rowSelection, setRowSelection] = useState<Record<string, boolean>>({});
 
   useEffect(() => {
-    console.log("DEBUG SCANNER - mode:", mode, "rowSelection:", rowSelection);
+    console.log('DEBUG SCANNER - mode:', mode, 'rowSelection:', rowSelection);
   }, [mode, rowSelection]);
 
   const [sellDialogOpen, setSellDialogOpen] = useState(false);
@@ -252,18 +262,18 @@ export function InventoryScanner() {
   const [isDeleteListExpanded, setIsDeleteListExpanded] = useState(false);
 
   const handleModeChange = useCallback(
-    (newMode: "case-summary" | "transactions") => {
+    (newMode: 'case-summary' | 'transactions') => {
       if (newMode === mode) return;
 
       const rawData = [...visibleManualItems, ...filteredScannedItems];
-      const currentRows = mode === "case-summary" ? groupItemsForSummary(rawData) : rawData;
-      const nextRows = newMode === "case-summary" ? groupItemsForSummary(rawData) : rawData;
+      const currentRows = mode === 'case-summary' ? groupItemsForSummary(rawData) : rawData;
+      const nextRows = newMode === 'case-summary' ? groupItemsForSummary(rawData) : rawData;
 
       setRowSelection((selection) => {
         const selectedUnderlyingIds = new Set<string>();
         const currentRowsMap = new Map(
           currentRows.map((row) => [
-            row.isManual && row.id ? row.id : (row.identityKey || row.caseItem.marketHashName),
+            row.isManual && row.id ? row.id : row.identityKey || row.caseItem.marketHashName,
             row,
           ])
         );
@@ -281,7 +291,8 @@ export function InventoryScanner() {
 
         const nextSelection: Record<string, boolean> = {};
         for (const row of nextRows) {
-          const rowId = row.isManual && row.id ? row.id : (row.identityKey || row.caseItem.marketHashName);
+          const rowId =
+            row.isManual && row.id ? row.id : row.identityKey || row.caseItem.marketHashName;
           const ids = row.underlyingIds || [rowId];
           if (ids.some((id) => selectedUnderlyingIds.has(id))) {
             nextSelection[rowId] = true;
@@ -292,7 +303,7 @@ export function InventoryScanner() {
 
       setMode(newMode);
     },
-    [mode, visibleManualItems, filteredScannedItems, setMode, setRowSelection],
+    [mode, visibleManualItems, filteredScannedItems, setMode, setRowSelection]
   );
 
   useEffect(() => {
@@ -301,94 +312,100 @@ export function InventoryScanner() {
     }
   }, [deleteConfirmOpen]);
 
-  const mapScannerItemToPortfolioRow = useCallback((item: ScanResultItem): PortfolioTableRow => {
-    const itemTypeMap: Record<string, "case" | "capsule" | "sticker" | "skin"> = {
-      Case: "case",
-      Capsule: "capsule",
-      Sticker: "sticker",
-      Skin: "skin",
-    };
-    const id = item.isManual && item.id ? item.id : (item.identityKey || item.caseItem.marketHashName);
-    const marketHashName = item.caseItem.marketHashName;
+  const mapScannerItemToPortfolioRow = useCallback(
+    (item: ScanResultItem): PortfolioTableRow => {
+      const id =
+        item.isManual && item.id ? item.id : item.identityKey || item.caseItem.marketHashName;
+      const itemIds =
+        item.underlyingIds && item.underlyingIds.length > 0 ? item.underlyingIds : [id];
+      const marketHashName = item.caseItem.marketHashName;
 
-    const rawItem = mergedRaw?.items.find(
-      (i) => i.caseItem.marketHashName === marketHashName,
-    );
-    const steamPrice = rawItem?.price ?? item.price;
-    const currentPrice = item.price;
+      const rawItem = mergedRaw?.items.find((i) => i.caseItem.marketHashName === marketHashName);
+      const steamPrice = rawItem?.price ?? item.price;
+      const currentPrice = item.price;
 
-    return {
-      id,
-      mode: "case-summary",
-      case: {
-        id: item.caseItem.id,
-        name: item.caseItem.name,
-        marketHashName: item.caseItem.marketHashName,
-        imageUrl: item.caseItem.imageUrl ?? undefined,
-        isActive: true,
-        rarity: item.rarity,
-      },
-      itemIds: [id],
-      quantity: item.quantity,
-      lotCount: 1,
-      buyPrice: item.buyPrice ?? 0,
-      buyDate: item.buyDate ?? null,
-      createdAt: null,
-      note: item.note ?? (item.isManual ? t("common.manual") : undefined),
-      sourceType: item.isManual ? "manual" : "existing",
-      itemType: itemTypeMap[item.type] ?? "case",
-      sourceAccounts: (item.sourceAccounts ?? []).map((sa) => ({
-        steamId64: sa.steamId64,
-        name: sa.name,
-        breakdown: sa.breakdown,
-      })),
-      currentPrice,
-      steamPrice,
-      currentPriceCapturedAt: null,
-      investedValue: (item.buyPrice ?? 0) * item.quantity,
-      currentValue: currentPrice * item.quantity,
-      profitAmount: 0,
-      profitPercent: 0,
-      marketChanges: {} as Record<PriceRange, PriceChangeDto>,
-      tradeHoldUntil: null,
-      isTemporaryPrice: false,
-      storageUnitQuantity: 0,
-      patternInfo: item.patternInfo,
-      dopplerPhase: item.dopplerPhase,
-      inspectLink: item.inspectLink,
-    };
-  }, [mergedRaw, t]);
+      return {
+        id,
+        mode: 'case-summary',
+        case: {
+          id: item.caseItem.id,
+          name: item.caseItem.name,
+          marketHashName: item.caseItem.marketHashName,
+          imageUrl: item.caseItem.imageUrl ?? undefined,
+          isActive: true,
+          rarity: item.rarity,
+        },
+        itemIds,
+        quantity: item.quantity,
+        lotCount: 1,
+        buyPrice: item.buyPrice ?? 0,
+        buyDate: item.buyDate ?? null,
+        createdAt: null,
+        note: item.note ?? (item.isManual ? t('common.manual') : undefined),
+        sourceType: item.isManual ? 'manual' : 'existing',
+        itemType: toPortfolioItemType(item.type),
+        sourceAccounts: (item.sourceAccounts ?? []).map((sa) => ({
+          steamId64: sa.steamId64,
+          name: sa.name,
+          breakdown: sa.breakdown,
+        })),
+        currentPrice,
+        steamPrice,
+        currentPriceCapturedAt: null,
+        investedValue: (item.buyPrice ?? 0) * item.quantity,
+        currentValue: currentPrice * item.quantity,
+        profitAmount: 0,
+        profitPercent: 0,
+        marketChanges: {} as Record<PriceRange, PriceChangeDto>,
+        tradeHoldUntil: null,
+        isTemporaryPrice: false,
+        storageUnitQuantity: 0,
+        patternInfo: item.patternInfo,
+        dopplerPhase: item.dopplerPhase,
+        inspectLink: item.inspectLink,
+      };
+    },
+    [mergedRaw, t]
+  );
 
   const currentSelectedItemForPanel = useMemo(() => {
     if (!selectedItemForPanel) return null;
-    const targetId = selectedItemForPanel.isManual && selectedItemForPanel.id
-      ? selectedItemForPanel.id
-      : (selectedItemForPanel.identityKey || selectedItemForPanel.caseItem.marketHashName);
+    const targetId =
+      selectedItemForPanel.isManual && selectedItemForPanel.id
+        ? selectedItemForPanel.id
+        : selectedItemForPanel.identityKey || selectedItemForPanel.caseItem.marketHashName;
 
-    return tableData.find((item) => {
-      const id = item.isManual && item.id ? item.id : (item.identityKey || item.caseItem.marketHashName);
-      return id === targetId;
-    }) ?? selectedItemForPanel;
+    return (
+      tableData.find((item) => {
+        const id =
+          item.isManual && item.id ? item.id : item.identityKey || item.caseItem.marketHashName;
+        return id === targetId;
+      }) ?? selectedItemForPanel
+    );
   }, [selectedItemForPanel, tableData]);
 
   const selectedPortfolioRowForPanel = useMemo(() => {
-    return currentSelectedItemForPanel ? mapScannerItemToPortfolioRow(currentSelectedItemForPanel) : null;
+    return currentSelectedItemForPanel
+      ? mapScannerItemToPortfolioRow(currentSelectedItemForPanel)
+      : null;
   }, [currentSelectedItemForPanel, mapScannerItemToPortfolioRow]);
 
   const relatedPortfolioRowsForPanel = useMemo(() => {
     if (!selectedItemForPanel || !currentSelectedItemForPanel) return [];
-    if (mode === "transactions") {
+    if (mode === 'transactions') {
       return selectedPortfolioRowForPanel ? [selectedPortfolioRowForPanel] : [];
     }
 
     const rawData = [...visibleManualItems, ...filteredScannedItems];
     const targetMarketHashName = currentSelectedItemForPanel.caseItem.marketHashName;
-    const targetDoppler = currentSelectedItemForPanel.dopplerPhase ?? "normal";
+    const targetDoppler = currentSelectedItemForPanel.dopplerPhase ?? 'normal';
 
     return rawData
       .filter((item) => {
-        const itemDoppler = item.dopplerPhase ?? "normal";
-        return item.caseItem.marketHashName === targetMarketHashName && itemDoppler === targetDoppler;
+        const itemDoppler = item.dopplerPhase ?? 'normal';
+        return (
+          item.caseItem.marketHashName === targetMarketHashName && itemDoppler === targetDoppler
+        );
       })
       .map(mapScannerItemToPortfolioRow);
   }, [
@@ -403,7 +420,8 @@ export function InventoryScanner() {
 
   const selectedRows = useMemo(() => {
     return tableData.filter((item) => {
-      const id = item.isManual && item.id ? item.id : (item.identityKey || item.caseItem.marketHashName);
+      const id =
+        item.isManual && item.id ? item.id : item.identityKey || item.caseItem.marketHashName;
       return rowSelection[id];
     });
   }, [tableData, rowSelection]);
@@ -417,8 +435,9 @@ export function InventoryScanner() {
   }, [tableData, mapScannerItemToPortfolioRow]);
 
   const sellDialogOriginalRows = useMemo(() => {
-    return tableData.map((item) => {
-      const id = item.isManual && item.id ? item.id : (item.identityKey || item.caseItem.marketHashName);
+    return sellDialogSourceItems.map((item) => {
+      const id =
+        item.isManual && item.id ? item.id : item.identityKey || item.caseItem.marketHashName;
       return {
         item: {
           id,
@@ -426,7 +445,7 @@ export function InventoryScanner() {
           buyPrice: item.buyPrice ?? 0,
           buyDate: item.buyDate ?? null,
           createdAt: null,
-          note: item.isManual ? t("common.manual") : t("inventoryScanner.scanned"),
+          note: item.isManual ? t('common.manual') : t('inventoryScanner.scanned'),
           sourceAccounts: item.sourceAccounts,
           storageUnitId: item.storageUnitId,
           storageUnitQuantity: item.storageUnitId ? item.quantity : 0,
@@ -445,38 +464,46 @@ export function InventoryScanner() {
         marketChanges: {} as Record<PriceRange, PriceChangeDto>,
       };
     }) as unknown as PortfolioReportRowDto[];
-  }, [tableData, t]);
+  }, [sellDialogSourceItems, t]);
 
-  const handleSellDelete = useCallback((id: string) => {
-    if (id.startsWith("manual-")) {
-      removeItem("", true, id);
-    } else {
-      removeItem("", false, id);
-    }
-  }, [removeItem]);
-
-  const handleSellUpdateQuantity = useCallback((id: string, newQty: number) => {
-    if (id.startsWith("manual-")) {
-      updateManualItemQty(id, newQty);
-    } else {
-      const scannedItem = tableData.find((item) => !item.isManual && (item.identityKey || item.caseItem.marketHashName) === id);
-      if (scannedItem) {
-        removeItem("", false, id);
-        addManualItem(
-          scannedItem.caseItem,
-          scannedItem.price,
-          newQty,
-          scannedItem.buyPrice,
-          scannedItem.buyDate,
-          scannedItem.sourceAccounts,
-          scannedItem.storageUnitId,
-          scannedItem.buffPriceManual,
-          scannedItem.buffRateManual,
-          scannedItem.storageUnitName
-        );
+  const handleSellDelete = useCallback(
+    (id: string) => {
+      if (id.startsWith('manual-')) {
+        removeItem('', true, id);
+      } else {
+        removeItem('', false, id);
       }
-    }
-  }, [removeItem, updateManualItemQty, addManualItem, tableData]);
+    },
+    [removeItem]
+  );
+
+  const handleSellUpdateQuantity = useCallback(
+    (id: string, newQty: number) => {
+      if (id.startsWith('manual-')) {
+        updateManualItemQty(id, newQty);
+      } else {
+        const scannedItem = sellDialogSourceItems.find(
+          (item) => !item.isManual && (item.identityKey || item.caseItem.marketHashName) === id
+        );
+        if (scannedItem) {
+          removeItem('', false, id);
+          addManualItem(
+            scannedItem.caseItem,
+            scannedItem.price,
+            newQty,
+            scannedItem.buyPrice,
+            scannedItem.buyDate,
+            scannedItem.sourceAccounts,
+            scannedItem.storageUnitId,
+            scannedItem.buffPriceManual,
+            scannedItem.buffRateManual,
+            scannedItem.storageUnitName
+          );
+        }
+      }
+    },
+    [removeItem, updateManualItemQty, addManualItem, sellDialogSourceItems]
+  );
 
   const handleUpdateLot = useCallback(
     async (
@@ -492,9 +519,9 @@ export function InventoryScanner() {
         dopplerPhase?: string;
         patternInfo?: any;
         inspectLink?: string;
-      },
+      }
     ) => {
-      if (id.startsWith("manual-")) {
+      if (id.startsWith('manual-')) {
         updateManualItem(id, {
           quantity: payload.quantity,
           buyPrice: payload.buyPrice,
@@ -509,10 +536,10 @@ export function InventoryScanner() {
         });
       } else {
         const scannedItem = tableData.find(
-          (item) => !item.isManual && (item.identityKey || item.caseItem.marketHashName) === id,
+          (item) => !item.isManual && (item.identityKey || item.caseItem.marketHashName) === id
         );
         if (scannedItem) {
-          removeItem("", false, id);
+          removeItem('', false, id);
           addManualItem(
             scannedItem.caseItem,
             scannedItem.price,
@@ -527,24 +554,24 @@ export function InventoryScanner() {
             payload.stickerPriceRate ?? scannedItem.buffRateManual,
             payload.stickerBuyPriceRate ?? scannedItem.buffRateManual,
             id,
-            payload.note ?? scannedItem.note,
+            payload.note ?? scannedItem.note
           );
         }
       }
     },
-    [removeItem, addManualItem, updateManualItem, tableData],
+    [removeItem, addManualItem, updateManualItem, tableData]
   );
 
   const handleUpdateQuantity = useCallback(
     (id: string, newQty: number) => {
-      if (id.startsWith("manual-")) {
+      if (id.startsWith('manual-')) {
         updateManualItemQty(id, newQty);
       } else {
         const scannedItem = tableData.find(
-          (item) => !item.isManual && (item.identityKey || item.caseItem.marketHashName) === id,
+          (item) => !item.isManual && (item.identityKey || item.caseItem.marketHashName) === id
         );
         if (scannedItem) {
-          removeItem("", false, id);
+          removeItem('', false, id);
           addManualItem(
             scannedItem.caseItem,
             scannedItem.price,
@@ -559,24 +586,24 @@ export function InventoryScanner() {
             scannedItem.stickerPriceRate,
             scannedItem.stickerBuyPriceRate,
             id,
-            scannedItem.note,
+            scannedItem.note
           );
         }
       }
     },
-    [removeItem, updateManualItemQty, addManualItem, tableData],
+    [removeItem, updateManualItemQty, addManualItem, tableData]
   );
 
   const handleUpdateBuyPrice = useCallback(
     (id: string, newBuyPrice: number) => {
-      if (id.startsWith("manual-")) {
+      if (id.startsWith('manual-')) {
         updateManualItem(id, { buyPrice: newBuyPrice });
       } else {
         const scannedItem = tableData.find(
-          (item) => !item.isManual && (item.identityKey || item.caseItem.marketHashName) === id,
+          (item) => !item.isManual && (item.identityKey || item.caseItem.marketHashName) === id
         );
         if (scannedItem) {
-          removeItem("", false, id);
+          removeItem('', false, id);
           addManualItem(
             scannedItem.caseItem,
             scannedItem.price,
@@ -591,24 +618,24 @@ export function InventoryScanner() {
             scannedItem.stickerPriceRate,
             scannedItem.stickerBuyPriceRate,
             id,
-            scannedItem.note,
+            scannedItem.note
           );
         }
       }
     },
-    [removeItem, updateManualItem, addManualItem, tableData],
+    [removeItem, updateManualItem, addManualItem, tableData]
   );
 
   const handleUpdateNote = useCallback(
     (id: string, newNote: string) => {
-      if (id.startsWith("manual-")) {
+      if (id.startsWith('manual-')) {
         updateManualItem(id, { note: newNote });
       } else {
         const scannedItem = tableData.find(
-          (item) => !item.isManual && (item.identityKey || item.caseItem.marketHashName) === id,
+          (item) => !item.isManual && (item.identityKey || item.caseItem.marketHashName) === id
         );
         if (scannedItem) {
-          removeItem("", false, id);
+          removeItem('', false, id);
           addManualItem(
             scannedItem.caseItem,
             scannedItem.price,
@@ -623,22 +650,22 @@ export function InventoryScanner() {
             scannedItem.stickerPriceRate,
             scannedItem.stickerBuyPriceRate,
             id,
-            newNote,
+            newNote
           );
         }
       }
     },
-    [removeItem, updateManualItem, addManualItem, tableData],
+    [removeItem, updateManualItem, addManualItem, tableData]
   );
 
   const handleDelete = useCallback(
     (id: string) => {
       handleSellDelete(id);
-      if (relatedPortfolioRowsForPanel.length <= 1 || mode === "transactions") {
+      if (relatedPortfolioRowsForPanel.length <= 1 || mode === 'transactions') {
         setSelectedItemForPanel(null);
       }
     },
-    [handleSellDelete, relatedPortfolioRowsForPanel.length, mode],
+    [handleSellDelete, relatedPortfolioRowsForPanel.length, mode]
   );
 
   const handleDeleteSelected = useCallback(() => {
@@ -650,12 +677,12 @@ export function InventoryScanner() {
     for (const item of selectedRows) {
       if (item.underlyingIds && item.underlyingIds.length > 0) {
         for (const uid of item.underlyingIds) {
-          removeItem("", item.isManual, uid);
+          removeItem('', item.isManual, uid);
         }
       } else {
         const itemId = item.id || item.identityKey;
         if (itemId) {
-          removeItem("", item.isManual, itemId);
+          removeItem('', item.isManual, itemId);
         } else {
           removeItem(item.caseItem.marketHashName, item.isManual);
         }
@@ -669,31 +696,44 @@ export function InventoryScanner() {
   const handleSellAll = useCallback(() => {
     if (!currentSelectedItemForPanel) return;
     const targetMarketHashName = currentSelectedItemForPanel.caseItem.marketHashName;
-    const targetDoppler = currentSelectedItemForPanel.dopplerPhase ?? "normal";
+    const targetDoppler = currentSelectedItemForPanel.dopplerPhase ?? 'normal';
 
     const newSelection: Record<string, boolean> = {};
     tableData.forEach((row) => {
-      const itemDoppler = row.dopplerPhase ?? "normal";
+      const itemDoppler = row.dopplerPhase ?? 'normal';
       if (row.caseItem.marketHashName === targetMarketHashName && itemDoppler === targetDoppler) {
-        const id = row.isManual && row.id ? row.id : (row.identityKey || row.caseItem.marketHashName);
+        const id = row.isManual && row.id ? row.id : row.identityKey || row.caseItem.marketHashName;
         newSelection[id] = true;
       }
     });
 
     setRowSelection(newSelection);
     setSellDialogOpen(true);
-  }, [currentSelectedItemForPanel, tableData]);
+    setSelectedItemForPanel(null);
+  }, [currentSelectedItemForPanel, tableData, setSelectedItemForPanel]);
+
+  const handleSellItem = useCallback(
+    (id: string) => {
+      setRowSelection((prev) => ({
+        ...prev,
+        [id]: true,
+      }));
+      setSellDialogOpen(true);
+      setSelectedItemForPanel(null);
+    },
+    [setRowSelection, setSellDialogOpen, setSelectedItemForPanel]
+  );
 
   const handleDeleteAll = useCallback(() => {
     if (!currentSelectedItemForPanel) return;
     const targetMarketHashName = currentSelectedItemForPanel.caseItem.marketHashName;
-    const targetDoppler = currentSelectedItemForPanel.dopplerPhase ?? "normal";
+    const targetDoppler = currentSelectedItemForPanel.dopplerPhase ?? 'normal';
 
     const newSelection: Record<string, boolean> = {};
     tableData.forEach((row) => {
-      const itemDoppler = row.dopplerPhase ?? "normal";
+      const itemDoppler = row.dopplerPhase ?? 'normal';
       if (row.caseItem.marketHashName === targetMarketHashName && itemDoppler === targetDoppler) {
-        const id = row.isManual && row.id ? row.id : (row.identityKey || row.caseItem.marketHashName);
+        const id = row.isManual && row.id ? row.id : row.identityKey || row.caseItem.marketHashName;
         newSelection[id] = true;
       }
     });
@@ -704,7 +744,7 @@ export function InventoryScanner() {
 
   const totalWalletVnd = useMemo(() => {
     return state.accounts.reduce((sum, acc) => {
-      if (acc.status === "done" && acc.result?.walletBalanceVnd) {
+      if (acc.result?.walletBalanceVnd) {
         return sum + acc.result.walletBalanceVnd;
       }
       return sum;
@@ -732,8 +772,9 @@ export function InventoryScanner() {
         inspectingKeys,
         patternResults,
         inspectPattern,
-        mode,
+        mode: activeMode,
         onSelectItem: setSelectedItemForPanel,
+        isMobile,
       }),
     [
       t,
@@ -750,29 +791,27 @@ export function InventoryScanner() {
       inspectingKeys,
       patternResults,
       inspectPattern,
-      mode,
+      activeMode,
       setSelectedItemForPanel,
-    ],
+      isMobile,
+    ]
   );
 
-  const [columnVisibility, setColumnVisibility] = useState<
-    Record<string, boolean>
-  >({
+  const [columnVisibility, setColumnVisibility] = useState<Record<string, boolean>>({
     rateAll: false,
     rateLe: false,
   });
-  const [isColumnVisibilityLoaded, setIsColumnVisibilityLoaded] =
-    useState(false);
+  const [isColumnVisibilityLoaded, setIsColumnVisibilityLoaded] = useState(false);
 
   // Load column visibility from localStorage after mount
   useEffect(() => {
     try {
-      const saved = localStorage.getItem("cs2t_scanner_columnVisibility");
+      const saved = localStorage.getItem('cs2t_scanner_columnVisibility');
       if (saved) {
         setColumnVisibility(JSON.parse(saved));
       }
     } catch (e) {
-      console.error("Failed to load scanner column visibility", e);
+      console.error('Failed to load scanner column visibility', e);
     }
     setIsColumnVisibilityLoaded(true);
   }, []);
@@ -780,10 +819,7 @@ export function InventoryScanner() {
   // Save column visibility to localStorage when it changes
   useEffect(() => {
     if (isColumnVisibilityLoaded) {
-      localStorage.setItem(
-        "cs2t_scanner_columnVisibility",
-        JSON.stringify(columnVisibility),
-      );
+      localStorage.setItem('cs2t_scanner_columnVisibility', JSON.stringify(columnVisibility));
     }
   }, [columnVisibility, isColumnVisibilityLoaded]);
 
@@ -800,10 +836,11 @@ export function InventoryScanner() {
     onColumnVisibilityChange: setColumnVisibility,
     onPaginationChange: setPagination,
     onRowSelectionChange: setRowSelection,
-    getRowId: (row) => row.isManual && row.id ? row.id : (row.identityKey || row.caseItem.marketHashName),
+    getRowId: (row) =>
+      row.isManual && row.id ? row.id : row.identityKey || row.caseItem.marketHashName,
     enableRowSelection: true,
     initialState: {
-      sorting: [{ id: "total", desc: true }],
+      sorting: [{ id: 'total', desc: true }],
     },
     onGlobalFilterChange: setGlobalFilter,
     globalFilterFn: (row, _columnId, filterValue) => {
@@ -826,10 +863,7 @@ export function InventoryScanner() {
 
   return (
     <main className="min-h-screen">
-      <ScannerToolbar
-        user={user}
-        onShowGuestKeyModal={() => setShowGuestKeyModal(true)}
-      />
+      <ScannerToolbar user={user} onShowGuestKeyModal={() => setShowGuestKeyModal(true)} />
 
       <section className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
         <AccountsSection
@@ -852,8 +886,10 @@ export function InventoryScanner() {
         />
 
         <ScannerResults
-          mode={mode}
+          mode={activeMode}
           setMode={handleModeChange}
+          isMobile={isMobile}
+          onSelectItem={setSelectedItemForPanel}
           merged={merged}
           state={state}
           isAnyScanPending={isAnyScanPending}
@@ -899,16 +935,9 @@ export function InventoryScanner() {
         </section>
       )}
 
-      <CookieGuideModal
-        open={showCookieGuide}
-        onClose={() => setShowCookieGuide(false)}
-      />
+      <CookieGuideModal open={showCookieGuide} onClose={() => setShowCookieGuide(false)} />
 
-      <CS2CapModal
-        open={showGuestKeyModal}
-        onOpenChange={setShowGuestKeyModal}
-        mode="guest"
-      />
+      <CS2CapModal open={showGuestKeyModal} onOpenChange={setShowGuestKeyModal} mode="guest" />
 
       {sellDialogOpen && (
         <SellSelectedDialog
@@ -931,17 +960,17 @@ export function InventoryScanner() {
       <ConfirmDialog
         open={deleteConfirmOpen}
         onClose={() => setDeleteConfirmOpen(false)}
-        title={t("inventoryScanner.confirmDeleteTitle")}
-        description={t("inventoryScanner.confirmDeleteDesc", { count: selectedRows.length })}
-        confirmText={t("common.delete")}
-        cancelText={t("common.cancel")}
+        title={t('inventoryScanner.confirmDeleteTitle')}
+        description={t('inventoryScanner.confirmDeleteDesc', { count: selectedRows.length })}
+        confirmText={t('common.delete')}
+        cancelText={t('common.cancel')}
         onConfirm={executeDeleteSelected}
         variant="danger"
       >
         {selectedRows.length > 0 && (
           <div className="mt-4 rounded-xl border border-red-500/10 bg-red-950/5 p-4 text-xs">
-            <p className="mb-2.5 font-bold text-red-400/90 uppercase tracking-wider text-[10px]">
-              {t("portfolio.deleteSelectedConfirmListHeader", "Items to be deleted:")}
+            <p className="mb-2.5 text-[10px] font-bold tracking-wider text-red-400/90 uppercase">
+              {t('portfolio.deleteSelectedConfirmListHeader', 'Items to be deleted:')}
             </p>
             {(() => {
               const summaryMap = new Map<string, number>();
@@ -950,17 +979,25 @@ export function InventoryScanner() {
                 const currentQty = summaryMap.get(name) || 0;
                 summaryMap.set(name, currentQty + row.quantity);
               });
-              const summaryList = Array.from(summaryMap.entries()).map(([name, qty]) => ({ name, qty }));
+              const summaryList = Array.from(summaryMap.entries()).map(([name, qty]) => ({
+                name,
+                qty,
+              }));
               const visibleList = isDeleteListExpanded ? summaryList : summaryList.slice(0, 5);
               const remainingCount = summaryList.length - 5;
 
               return (
                 <div className="space-y-2">
-                  <ul className={`space-y-2 text-stone-300 ${isDeleteListExpanded ? "max-h-[200px] overflow-y-auto pr-1.5 scrollbar-thin scrollbar-thumb-stone-800 scrollbar-track-transparent" : ""}`}>
+                  <ul
+                    className={`space-y-2 text-stone-300 ${isDeleteListExpanded ? 'max-h-[200px] scrollbar-thin scrollbar-thumb-stone-800 scrollbar-track-transparent overflow-y-auto pr-1.5' : ''}`}
+                  >
                     {visibleList.map((item, idx) => (
-                      <li key={idx} className="flex items-center justify-between border-b border-stone-900 pb-1.5 last:border-b-0 last:pb-0">
+                      <li
+                        key={idx}
+                        className="flex items-center justify-between border-b border-stone-900 pb-1.5 last:border-b-0 last:pb-0"
+                      >
                         <span className="truncate font-semibold text-stone-200">{item.name}</span>
-                        <span className="ml-2 size-5 shrink-0 inline-flex items-center justify-center rounded-full bg-red-500/10 text-[10.5px] font-extrabold text-red-400">
+                        <span className="ml-2 inline-flex size-5 shrink-0 items-center justify-center rounded-full bg-red-500/10 text-[10.5px] font-extrabold text-red-400">
                           {item.qty}
                         </span>
                       </li>
@@ -970,17 +1007,19 @@ export function InventoryScanner() {
                     <button
                       type="button"
                       onClick={() => setIsDeleteListExpanded(!isDeleteListExpanded)}
-                      className="w-full text-left text-stone-400 hover:text-stone-200 transition-colors font-semibold italic mt-2.5 pt-2 border-t border-stone-900 flex items-center justify-between"
+                      className="mt-2.5 flex w-full items-center justify-between border-t border-stone-900 pt-2 text-left font-semibold text-stone-400 italic transition-colors hover:text-stone-200"
                     >
                       <span>
                         {isDeleteListExpanded
-                          ? t("portfolio.deleteSelectedConfirmListCollapse", "Collapse list")
-                          : t("portfolio.deleteSelectedConfirmListRemaining", "... and {{count}} other items", { count: remainingCount })}
+                          ? t('portfolio.deleteSelectedConfirmListCollapse', 'Collapse list')
+                          : t(
+                              'portfolio.deleteSelectedConfirmListRemaining',
+                              '... and {{count}} other items',
+                              { count: remainingCount }
+                            )}
                       </span>
-                      <span className="text-[10px] uppercase not-italic tracking-wider text-red-400/80 bg-red-500/5 px-2 py-0.5 rounded border border-red-500/10 hover:bg-red-500/10">
-                        {isDeleteListExpanded
-                          ? t("common.collapse")
-                          : t("common.expand")}
+                      <span className="rounded border border-red-500/10 bg-red-500/5 px-2 py-0.5 text-[10px] tracking-wider text-red-400/80 uppercase not-italic hover:bg-red-500/10">
+                        {isDeleteListExpanded ? t('common.collapse') : t('common.expand')}
                       </span>
                     </button>
                   )}
@@ -1000,7 +1039,7 @@ export function InventoryScanner() {
             title={selectedPortfolioRowForPanel.case.name}
             hideHeader
             noPadding
-            className="border-stone-850/80 max-w-[440px] overflow-hidden border-l border-border bg-[#0e121a] text-stone-100 shadow-[0_30px_90px_rgba(0,0,0,0.9)] backdrop-blur-3xl"
+            className="border-stone-850/80 border-border max-w-[440px] overflow-hidden border-l bg-[#0e121a] text-stone-100 shadow-[0_30px_90px_rgba(0,0,0,0.9)] backdrop-blur-3xl"
           >
             <ItemHoverCard
               item={selectedPortfolioRowForPanel}
@@ -1009,11 +1048,13 @@ export function InventoryScanner() {
               buffPricesCny={state.buffPricesCny}
               embedded
               useSellLabel
+              isGuest={!user}
               onUpdateLot={handleUpdateLot}
               onUpdateQuantity={handleUpdateQuantity}
               onUpdateBuyPrice={handleUpdateBuyPrice}
               onUpdateNote={handleUpdateNote}
               onDelete={handleDelete}
+              onSellItem={handleSellItem}
               onSellAll={handleSellAll}
               onDeleteAll={handleDeleteAll}
             />

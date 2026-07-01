@@ -1,8 +1,8 @@
-"use client";
+'use client';
 
-import { useCallback, useMemo } from "react";
-import type { AccountEntry, ScanResponse, ScanResultItem } from "../types";
-import { buildItemIdentityKey, buildItemVariantKey } from "@/utils/item-identity";
+import { useCallback, useMemo } from 'react';
+import type { AccountEntry, ScanResponse, ScanResultItem } from '../types';
+import { buildItemIdentityKey, buildItemVariantKey } from '@/utils/item-identity';
 
 interface UseScannerDataMergedProps {
   accounts: AccountEntry[];
@@ -14,13 +14,13 @@ interface UseScannerDataMergedProps {
   buffCnyToVndRate: number;
   rateAll: number;
   rateLe: number;
-  mode?: "case-summary" | "transactions";
+  mode?: 'case-summary' | 'transactions';
 }
 
 export function groupItemsForSummary(items: ScanResultItem[]): ScanResultItem[] {
   const map = new Map<string, ScanResultItem[]>();
   for (const item of items) {
-    const key = `${item.caseItem.marketHashName}:${item.dopplerPhase ?? "normal"}`;
+    const key = `${item.caseItem.marketHashName}:${item.dopplerPhase ?? 'normal'}`;
     const list = map.get(key) ?? [];
     list.push(item);
     map.set(key, list);
@@ -34,8 +34,13 @@ export function groupItemsForSummary(items: ScanResultItem[]): ScanResultItem[] 
         identityKey: key,
         variantCount: 1,
         hasMixedVariants: false,
-        underlyingIds: [first.isManual && first.id ? first.id : (first.identityKey || first.caseItem.marketHashName)],
-        storageUnitQuantity: first.storageUnitQuantity ?? (first.storageUnitId ? first.quantity : undefined),
+        underlyingIds: [
+          first.isManual && first.id
+            ? first.id
+            : first.identityKey || first.caseItem.marketHashName,
+        ],
+        storageUnitQuantity:
+          first.storageUnitQuantity ?? (first.storageUnitId ? first.quantity : undefined),
       };
     }
 
@@ -59,7 +64,13 @@ export function groupItemsForSummary(items: ScanResultItem[]): ScanResultItem[] 
             ex.quantity = (ex.quantity ?? 0) + (sa.quantity ?? 0);
             if (sa.breakdown) {
               if (!ex.breakdown) {
-                ex.breakdown = { tradeable: 0, onMarket: 0, tradeProtected: 0, hold: 0, holdDetails: [] };
+                ex.breakdown = {
+                  tradeable: 0,
+                  onMarket: 0,
+                  tradeProtected: 0,
+                  hold: 0,
+                  holdDetails: [],
+                };
               }
               ex.breakdown.tradeable += sa.breakdown.tradeable ?? 0;
               ex.breakdown.onMarket += sa.breakdown.onMarket ?? 0;
@@ -108,7 +119,9 @@ export function groupItemsForSummary(items: ScanResultItem[]): ScanResultItem[] 
       isManual: group.every((item) => item.isManual),
       variantCount: variantKeys.size,
       hasMixedVariants: variantKeys.size > 1,
-      underlyingIds: group.map((item) => item.isManual && item.id ? item.id : (item.identityKey || item.caseItem.marketHashName)),
+      underlyingIds: group.map((item) =>
+        item.isManual && item.id ? item.id : item.identityKey || item.caseItem.marketHashName
+      ),
       storageUnitQuantity: totalStorageUnitQuantity || undefined,
     };
   });
@@ -131,7 +144,7 @@ export function useScannerDataMerged({
    */
   const applyBuffPricing = useCallback(
     (item: ScanResultItem): ScanResultItem => {
-      if (item.type !== "Skin") {
+      if (item.type !== 'Skin') {
         return item;
       }
 
@@ -146,17 +159,15 @@ export function useScannerDataMerged({
         price,
         total: price * item.quantity,
         buffPriceCny,
-        priceSource: "buff163",
+        priceSource: 'buff163',
       };
     },
-    [buffCnyToVndRate, buffPricesCny],
+    [buffCnyToVndRate, buffPricesCny]
   );
 
   // Aggregated data derivation using useMemo
   const mergedRaw = useMemo(() => {
-    const done = accounts
-      .filter((a) => a.status === "done" && a.result)
-      .map((a) => a.result!);
+    const done = accounts.filter((a) => a.result).map((a) => a.result!);
     const hasScanned = done.length > 0;
     const hasManual = manualItems.length > 0;
     if (!hasScanned && !hasManual) return null;
@@ -202,8 +213,7 @@ export function useScannerDataMerged({
         if (ex) {
           ex.quantity += item.quantity;
           ex.total += item.total;
-          ex.holdDays =
-            Math.max(ex.holdDays ?? 0, item.holdDays ?? 0) || undefined;
+          ex.holdDays = Math.max(ex.holdDays ?? 0, item.holdDays ?? 0) || undefined;
 
           if (r.scannedAt && (!ex.scannedAt || new Date(r.scannedAt) > new Date(ex.scannedAt))) {
             ex.scannedAt = r.scannedAt;
@@ -214,11 +224,10 @@ export function useScannerDataMerged({
 
           const sourceAccounts = [...(ex.sourceAccounts ?? [])];
           const existingAccount = sourceAccounts.find(
-            (account) => account.steamId64 === sourceAccount.steamId64,
+            (account) => account.steamId64 === sourceAccount.steamId64
           );
           if (existingAccount) {
-            existingAccount.quantity =
-              (existingAccount.quantity ?? 0) + item.quantity;
+            existingAccount.quantity = (existingAccount.quantity ?? 0) + item.quantity;
             if (!existingAccount.breakdown) {
               existingAccount.breakdown = {
                 tradeable: 0,
@@ -228,12 +237,9 @@ export function useScannerDataMerged({
                 holdDetails: [],
               };
             }
-            existingAccount.breakdown.tradeable +=
-              sourceAccount.breakdown.tradeable;
-            existingAccount.breakdown.onMarket +=
-              sourceAccount.breakdown.onMarket;
-            existingAccount.breakdown.tradeProtected +=
-              sourceAccount.breakdown.tradeProtected;
+            existingAccount.breakdown.tradeable += sourceAccount.breakdown.tradeable;
+            existingAccount.breakdown.onMarket += sourceAccount.breakdown.onMarket;
+            existingAccount.breakdown.tradeProtected += sourceAccount.breakdown.tradeProtected;
             existingAccount.breakdown.hold += sourceAccount.breakdown.hold;
             if (sourceAccount.breakdown.holdDetails.length > 0) {
               existingAccount.breakdown.holdDetails = [
@@ -265,7 +271,7 @@ export function useScannerDataMerged({
       scannedItems,
       totalInventoryCount: done.reduce(
         (s: number, r: ScanResponse) => s + r.totalInventoryCount,
-        0,
+        0
       ),
       accountCount: done.length,
     };
@@ -275,71 +281,45 @@ export function useScannerDataMerged({
     if (!mergedRaw) return null;
     const pricedItems = mergedRaw.items.map(applyBuffPricing);
     const pricedScannedItems = mergedRaw.scannedItems.map(applyBuffPricing);
-    const items = pricedItems.filter(
-      (i) => selectedTypes.size === 0 || selectedTypes.has(i.type),
-    );
+    const items = pricedItems.filter((i) => selectedTypes.size === 0 || selectedTypes.has(i.type));
     const scannedItems = pricedScannedItems.filter(
-      (i) => selectedTypes.size === 0 || selectedTypes.has(i.type),
+      (i) => selectedTypes.size === 0 || selectedTypes.has(i.type)
     );
     return {
       ...mergedRaw,
       items,
       scannedItems,
-      totalPrice: items.reduce(
-        (s: number, i: ScanResultItem) => s + i.total,
-        0,
-      ),
-      totalQuantity: items.reduce(
-        (s: number, i: ScanResultItem) => s + i.quantity,
-        0,
-      ),
+      totalPrice: items.reduce((s: number, i: ScanResultItem) => s + i.total, 0),
+      totalQuantity: items.reduce((s: number, i: ScanResultItem) => s + i.quantity, 0),
     };
   }, [applyBuffPricing, mergedRaw, selectedTypes]);
 
   const totalSi = useMemo(() => {
     if (!merged?.items) return 0;
     return merged.items.reduce((sum: number, item: ScanResultItem) => {
-      return (
-        sum +
-        (item.priceSource === "buff163"
-          ? item.total
-          : (item.total * rateAll) / 100)
-      );
+      return sum + (item.priceSource === 'buff163' ? item.total : (item.total * rateAll) / 100);
     }, 0);
   }, [merged, rateAll]);
 
   const totalLe = useMemo(() => {
     if (!merged?.items) return 0;
     return merged.items.reduce((sum: number, item: ScanResultItem) => {
-      return (
-        sum +
-        (item.priceSource === "buff163"
-          ? item.total
-          : (item.total * rateLe) / 100)
-      );
+      return sum + (item.priceSource === 'buff163' ? item.total : (item.total * rateLe) / 100);
     }, 0);
   }, [merged, rateLe]);
 
   const filteredManualItems = useMemo(() => {
     const query = globalFilter.trim().toLowerCase();
     const items = manualItems
-      .filter(
-        (i) =>
-          selectedTypes.size === 0 || selectedTypes.has(i.type),
-      )
+      .filter((i) => selectedTypes.size === 0 || selectedTypes.has(i.type))
       .map(applyBuffPricing);
     if (!query) return items;
     return items.filter((i) => i.caseItem.name.toLowerCase().includes(query));
-  }, [
-    manualItems,
-    globalFilter,
-    selectedTypes,
-    applyBuffPricing,
-  ]);
+  }, [manualItems, globalFilter, selectedTypes, applyBuffPricing]);
 
   const zeroPricedItems = useMemo(
     () => merged?.items.filter((item: ScanResultItem) => item.price <= 0) ?? [],
-    [merged],
+    [merged]
   );
 
   return {

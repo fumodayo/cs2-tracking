@@ -1,14 +1,5 @@
-import {
-  AccountEntry,
-  CaseItemData,
-  ScanProgress,
-  ScanResponse,
-  ScanResultItem,
-} from "./types";
-import {
-  createAccount,
-  getInventoryItemType,
-} from "./utils";
+import { AccountEntry, CaseItemData, ScanProgress, ScanResponse, ScanResultItem } from './types';
+import { createAccount, getInventoryItemType } from './utils';
 
 export interface ScannerState {
   accounts: AccountEntry[];
@@ -31,33 +22,34 @@ export interface ScannerState {
 
 export type ScannerAction =
   | {
-      type: "INIT_LOAD";
+      type: 'INIT_LOAD';
       accounts: AccountEntry[];
       manualItems: ScanResultItem[];
       buffPricesCny: Record<string, number>;
     }
-  | { type: "ADD_ACCOUNT" }
-  | { type: "REMOVE_ACCOUNT"; id: string }
-  | { type: "UPDATE_ACCOUNT_URL"; id: string; url: string }
-  | { type: "UPDATE_ACCOUNT_COOKIE"; id: string; cookie: string }
-  | { type: "UPDATE_ACCOUNT_SESSION_ID"; id: string; sessionId: string }
-  | { type: "START_SCAN"; accountId: string }
-  | { type: "UPDATE_SCAN_PROGRESS"; accountId: string; progress: ScanProgress }
+  | { type: 'ADD_ACCOUNT' }
+  | { type: 'REMOVE_ACCOUNT'; id: string }
+  | { type: 'UPDATE_ACCOUNT_URL'; id: string; url: string }
+  | { type: 'UPDATE_ACCOUNT_COOKIE'; id: string; cookie: string }
+  | { type: 'UPDATE_ACCOUNT_SESSION_ID'; id: string; sessionId: string }
+  | { type: 'START_SCAN'; accountId: string }
+  | { type: 'REGISTER_SCAN_JOB'; accountId: string; jobId: string }
+  | { type: 'UPDATE_SCAN_PROGRESS'; accountId: string; progress: ScanProgress }
   | {
-      type: "SCAN_SUCCESS";
+      type: 'SCAN_SUCCESS';
       accountId: string;
       result: ScanResponse;
       progress: ScanProgress;
     }
-  | { type: "SCAN_FAILURE"; accountId: string; error: string }
-  | { type: "CANCEL_SCAN"; accountId: string }
-  | { type: "SET_SCANNING_ALL"; scanning: boolean }
-  | { type: "SET_EXPANDED_ACCOUNT"; id: string | null }
-  | { type: "TOGGLE_TYPE_FILTER"; itemType: string }
-  | { type: "CLEAR_TYPE_FILTERS" }
-  | { type: "SET_GLOBAL_FILTER"; filter: string }
+  | { type: 'SCAN_FAILURE'; accountId: string; error: string }
+  | { type: 'CANCEL_SCAN'; accountId: string }
+  | { type: 'SET_SCANNING_ALL'; scanning: boolean }
+  | { type: 'SET_EXPANDED_ACCOUNT'; id: string | null }
+  | { type: 'TOGGLE_TYPE_FILTER'; itemType: string }
+  | { type: 'CLEAR_TYPE_FILTERS' }
+  | { type: 'SET_GLOBAL_FILTER'; filter: string }
   | {
-      type: "ADD_MANUAL_ITEM";
+      type: 'ADD_MANUAL_ITEM';
       caseItem: CaseItemData;
       price: number;
       quantity: number;
@@ -78,31 +70,31 @@ export type ScannerAction =
       dopplerPhase?: string;
       inspectLink?: string;
     }
-  | { type: "UPDATE_MANUAL_QTY"; idOrName: string; qty: number }
+  | { type: 'UPDATE_MANUAL_QTY'; idOrName: string; qty: number }
   | {
-      type: "UPDATE_MANUAL_ITEM";
+      type: 'UPDATE_MANUAL_ITEM';
       id: string;
       payload: Partial<ScanResultItem>;
     }
   | {
-      type: "REMOVE_ITEM";
+      type: 'REMOVE_ITEM';
       marketHashName: string;
       isManual?: boolean;
       id?: string;
     }
-  | { type: "RESET_REMOVED_KEYS" }
-  | { type: "START_BUFF_FETCH"; marketHashName: string }
-  | { type: "BUFF_FETCH_SUCCESS"; marketHashName: string; priceCny: number }
-  | { type: "BUFF_FETCH_FAILURE"; marketHashName: string; error: string }
-  | { type: "UPDATE_BUFF_PRICE_CNY"; marketHashName: string; rawValue: string }
-  | { type: "START_PORTFOLIO_IMPORT" }
-  | { type: "UPDATE_PORTFOLIO_IMPORT_STATUS"; status: string }
-  | { type: "PORTFOLIO_IMPORT_SUCCESS"; message: string }
-  | { type: "PORTFOLIO_IMPORT_FAILURE"; error: string }
-  | { type: "START_PRICE_RETRY" }
-  | { type: "PRICE_RETRY_STATUS"; status: string }
+  | { type: 'RESET_REMOVED_KEYS' }
+  | { type: 'START_BUFF_FETCH'; marketHashName: string }
+  | { type: 'BUFF_FETCH_SUCCESS'; marketHashName: string; priceCny: number }
+  | { type: 'BUFF_FETCH_FAILURE'; marketHashName: string; error: string }
+  | { type: 'UPDATE_BUFF_PRICE_CNY'; marketHashName: string; rawValue: string }
+  | { type: 'START_PORTFOLIO_IMPORT' }
+  | { type: 'UPDATE_PORTFOLIO_IMPORT_STATUS'; status: string }
+  | { type: 'PORTFOLIO_IMPORT_SUCCESS'; message: string }
+  | { type: 'PORTFOLIO_IMPORT_FAILURE'; error: string }
+  | { type: 'START_PRICE_RETRY' }
+  | { type: 'PRICE_RETRY_STATUS'; status: string }
   | {
-      type: "PRICE_RETRY_SUCCESS";
+      type: 'PRICE_RETRY_SUCCESS';
       results: {
         marketHashName: string;
         price: number;
@@ -110,12 +102,12 @@ export type ScannerAction =
       }[];
       status: string;
     }
-  | { type: "PRICE_RETRY_FAILURE"; status: string }
-  | { type: "RESET_STATE_POST_IMPORT" };
+  | { type: 'PRICE_RETRY_FAILURE'; status: string }
+  | { type: 'RESET_STATE_POST_IMPORT' };
 
 export function initScannerState(): ScannerState {
   return {
-    accounts: [createAccount("")],
+    accounts: [createAccount('')],
     manualItems: [],
     removedKeys: new Set<string>(),
     buffPricesCny: {},
@@ -124,7 +116,7 @@ export function initScannerState(): ScannerState {
     scanningAll: false,
     expandedAccId: null,
     selectedTypes: new Set<string>(),
-    globalFilter: "",
+    globalFilter: '',
     portfolioImporting: false,
     portfolioImportStatus: null,
     portfolioImportMessage: null,
@@ -134,36 +126,73 @@ export function initScannerState(): ScannerState {
   };
 }
 
-export function scannerReducer(
-  state: ScannerState,
-  action: ScannerAction,
-): ScannerState {
+function normalizeScanItemType(item: ScanResultItem): ScanResultItem {
+  const inferredType = getInventoryItemType(item.caseItem.name, item.caseItem.marketHashName);
+
+  return item.type === inferredType ? item : { ...item, type: inferredType };
+}
+
+function normalizeAccountItemTypes(account: AccountEntry): AccountEntry {
+  if (!account.result) return account;
+
+  return {
+    ...account,
+    result: {
+      ...account.result,
+      items: account.result.items.map(normalizeScanItemType),
+    },
+  };
+}
+
+export function scannerReducer(state: ScannerState, action: ScannerAction): ScannerState {
   switch (action.type) {
-    case "INIT_LOAD":
+    case 'INIT_LOAD':
       return {
         ...state,
-        accounts: action.accounts.map((a) =>
-          a.status === "scanning" ? { ...a, status: "idle", progress: null } : a,
-        ),
-        manualItems: action.manualItems,
+        accounts: action.accounts.map((account) => {
+          const a = normalizeAccountItemTypes(account);
+          if (a.status === 'scanning' && a.scanJobId) {
+            return {
+              ...a,
+              error: null,
+              progress: a.progress ?? {
+                status: 'queued',
+                stage: 'queued',
+                message: 'waitingScan',
+                percent: 0,
+              },
+            };
+          }
+
+          if (a.status === 'scanning') {
+            return {
+              ...a,
+              status: a.result ? 'done' : 'idle',
+              progress: null,
+              scanJobId: null,
+            };
+          }
+
+          return { ...a, scanJobId: null };
+        }),
+        manualItems: action.manualItems.map(normalizeScanItemType),
         buffPricesCny: action.buffPricesCny,
       };
 
-    case "ADD_ACCOUNT":
+    case 'ADD_ACCOUNT':
       return {
         ...state,
-        accounts: [...state.accounts, createAccount("")],
+        accounts: [...state.accounts, createAccount('')],
       };
 
-    case "REMOVE_ACCOUNT":
+    case 'REMOVE_ACCOUNT':
       return {
         ...state,
         accounts: state.accounts.filter((a) => a.id !== action.id),
-        expandedAccId:
-          state.expandedAccId === action.id ? null : state.expandedAccId,
+        expandedAccId: state.expandedAccId === action.id ? null : state.expandedAccId,
       };
 
-    case "UPDATE_ACCOUNT_URL":
+    case 'UPDATE_ACCOUNT_URL':
       return {
         ...state,
         accounts: state.accounts.map((a) =>
@@ -171,66 +200,90 @@ export function scannerReducer(
             ? {
                 ...a,
                 url: action.url,
-                status: "idle",
+                status: 'idle',
                 result: null,
                 error: null,
+                progress: null,
+                scanJobId: null,
               }
-            : a,
+            : a
         ),
       };
 
-    case "UPDATE_ACCOUNT_COOKIE":
+    case 'UPDATE_ACCOUNT_COOKIE':
       return {
         ...state,
         accounts: state.accounts.map((a) =>
-          a.id === action.id ? { ...a, steamCookie: action.cookie } : a,
+          a.id === action.id ? { ...a, steamCookie: action.cookie } : a
         ),
       };
 
-    case "UPDATE_ACCOUNT_SESSION_ID":
+    case 'UPDATE_ACCOUNT_SESSION_ID':
       return {
         ...state,
         accounts: state.accounts.map((a) =>
-          a.id === action.id ? { ...a, steamSessionId: action.sessionId } : a,
+          a.id === action.id ? { ...a, steamSessionId: action.sessionId } : a
         ),
       };
 
-    case "START_SCAN":
+    case 'START_SCAN':
       return {
         ...state,
         accounts: state.accounts.map((a) =>
           a.id === action.accountId
             ? {
                 ...a,
-                status: "scanning",
+                status: 'scanning',
                 error: null,
-                result: null,
+                scanJobId: null,
                 progress: {
-                  status: "queued",
-                  stage: "queued",
-                  message: "creatingScanJob",
+                  status: 'queued',
+                  stage: 'queued',
+                  message: 'creatingScanJob',
                   percent: 0,
                 },
               }
-            : a,
+            : a
         ),
       };
 
-    case "UPDATE_SCAN_PROGRESS":
+    case 'REGISTER_SCAN_JOB':
       return {
         ...state,
         accounts: state.accounts.map((a) =>
-          a.id === action.accountId ? { ...a, progress: action.progress } : a,
+          a.id === action.accountId
+            ? {
+                ...a,
+                status: 'scanning',
+                error: null,
+                scanJobId: action.jobId,
+                progress: a.progress ?? {
+                  status: 'queued',
+                  stage: 'queued',
+                  message: 'waitingScan',
+                  percent: 0,
+                },
+              }
+            : a
         ),
       };
 
-    case "SCAN_SUCCESS": {
-      const { accountId, result, progress } = action;
+    case 'UPDATE_SCAN_PROGRESS':
+      return {
+        ...state,
+        accounts: state.accounts.map((a) =>
+          a.id === action.accountId ? { ...a, progress: action.progress } : a
+        ),
+      };
+
+    case 'SCAN_SUCCESS': {
+      const { accountId, progress } = action;
+      const result: ScanResponse = {
+        ...action.result,
+        items: action.result.items.map(normalizeScanItemType),
+      };
       const existingDupe = state.accounts.find(
-        (a) =>
-          a.id !== accountId &&
-          a.status === "done" &&
-          a.result?.steamId64 === result.steamId64,
+        (a) => a.id !== accountId && a.status === 'done' && a.result?.steamId64 === result.steamId64
       );
 
       if (existingDupe) {
@@ -242,11 +295,11 @@ export function scannerReducer(
             a.id === accountId
               ? {
                   ...a,
-                  status: "error",
+                  status: 'error',
                   error: `Trùng lặp với "${dupeName}" (cùng SteamID64: ${result.steamId64}). Vui lòng nhập tài khoản khác.`,
-                  result: null,
+                  scanJobId: null,
                 }
-              : a,
+              : a
           ),
         };
       }
@@ -262,40 +315,46 @@ export function scannerReducer(
         ...state,
         accounts: state.accounts.map((a) =>
           a.id === accountId
-            ? { ...a, status: "done", result, error: null, progress }
-            : a,
+            ? { ...a, status: 'done', result, error: null, progress, scanJobId: null }
+            : a
         ),
         removedKeys: nextRemovedKeys,
       };
     }
 
-    case "SCAN_FAILURE":
+    case 'SCAN_FAILURE':
       return {
         ...state,
         accounts: state.accounts.map((a) =>
           a.id === action.accountId
-            ? { ...a, status: "error", error: action.error }
-            : a,
+            ? { ...a, status: 'error', error: action.error, scanJobId: null }
+            : a
         ),
       };
 
-    case "CANCEL_SCAN":
+    case 'CANCEL_SCAN':
       return {
         ...state,
         accounts: state.accounts.map((a) =>
           a.id === action.accountId
-            ? { ...a, status: "idle", progress: null, error: null }
-            : a,
+            ? {
+                ...a,
+                status: a.result ? 'done' : 'idle',
+                progress: null,
+                error: null,
+                scanJobId: null,
+              }
+            : a
         ),
       };
 
-    case "SET_SCANNING_ALL":
+    case 'SET_SCANNING_ALL':
       return { ...state, scanningAll: action.scanning };
 
-    case "SET_EXPANDED_ACCOUNT":
+    case 'SET_EXPANDED_ACCOUNT':
       return { ...state, expandedAccId: action.id };
 
-    case "TOGGLE_TYPE_FILTER": {
+    case 'TOGGLE_TYPE_FILTER': {
       const next = new Set(state.selectedTypes);
       if (next.has(action.itemType)) {
         next.delete(action.itemType);
@@ -305,13 +364,13 @@ export function scannerReducer(
       return { ...state, selectedTypes: next };
     }
 
-    case "CLEAR_TYPE_FILTERS":
+    case 'CLEAR_TYPE_FILTERS':
       return { ...state, selectedTypes: new Set<string>() };
 
-    case "SET_GLOBAL_FILTER":
+    case 'SET_GLOBAL_FILTER':
       return { ...state, globalFilter: action.filter };
 
-    case "ADD_MANUAL_ITEM": {
+    case 'ADD_MANUAL_ITEM': {
       const {
         caseItem,
         price,
@@ -333,7 +392,7 @@ export function scannerReducer(
         dopplerPhase,
         inspectLink,
       } = action;
-      const type = getInventoryItemType(caseItem.name);
+      const type = getInventoryItemType(caseItem.name, caseItem.marketHashName);
 
       const existingIdx = state.manualItems.findIndex(
         (i) =>
@@ -341,7 +400,7 @@ export function scannerReducer(
           i.buyPrice === buyPrice &&
           i.buyDate === buyDate &&
           i.storageUnitId === storageUnitId &&
-          JSON.stringify(i.sourceAccounts) === JSON.stringify(sourceAccounts),
+          JSON.stringify(i.sourceAccounts) === JSON.stringify(sourceAccounts)
       );
 
       let nextManualItems: ScanResultItem[];
@@ -353,7 +412,7 @@ export function scannerReducer(
                 quantity: item.quantity + quantity,
                 total: item.price * (item.quantity + quantity),
               }
-            : item,
+            : item
         );
       } else {
         nextManualItems = [
@@ -395,7 +454,7 @@ export function scannerReducer(
       };
     }
 
-    case "UPDATE_MANUAL_ITEM":
+    case 'UPDATE_MANUAL_ITEM':
       return {
         ...state,
         manualItems: state.manualItems.map((item) =>
@@ -405,39 +464,37 @@ export function scannerReducer(
                 ...action.payload,
                 total: item.price * (action.payload.quantity ?? item.quantity),
               }
-            : item,
+            : item
         ),
       };
 
-    case "UPDATE_MANUAL_QTY":
+    case 'UPDATE_MANUAL_QTY':
       return {
         ...state,
         manualItems:
           action.qty <= 0
             ? state.manualItems.filter((i) =>
-                action.idOrName.startsWith("manual-")
+                action.idOrName.startsWith('manual-')
                   ? i.id !== action.idOrName
-                  : i.caseItem.marketHashName !== action.idOrName,
+                  : i.caseItem.marketHashName !== action.idOrName
               )
             : state.manualItems.map((i) =>
                 (
-                  action.idOrName.startsWith("manual-")
+                  action.idOrName.startsWith('manual-')
                     ? i.id === action.idOrName
                     : i.caseItem.marketHashName === action.idOrName
                 )
                   ? { ...i, quantity: action.qty, total: i.price * action.qty }
-                  : i,
+                  : i
               ),
       };
 
-    case "REMOVE_ITEM": {
+    case 'REMOVE_ITEM': {
       if (action.isManual) {
         return {
           ...state,
           manualItems: state.manualItems.filter((i) =>
-            action.id
-              ? i.id !== action.id
-              : i.caseItem.marketHashName !== action.marketHashName,
+            action.id ? i.id !== action.id : i.caseItem.marketHashName !== action.marketHashName
           ),
         };
       }
@@ -449,10 +506,10 @@ export function scannerReducer(
       };
     }
 
-    case "RESET_REMOVED_KEYS":
+    case 'RESET_REMOVED_KEYS':
       return { ...state, removedKeys: new Set<string>() };
 
-    case "START_BUFF_FETCH": {
+    case 'START_BUFF_FETCH': {
       const nextLoading = new Set(state.buffLoadingKeys);
       nextLoading.add(action.marketHashName);
       const nextErrors = { ...state.buffPriceErrors };
@@ -465,7 +522,7 @@ export function scannerReducer(
       };
     }
 
-    case "BUFF_FETCH_SUCCESS": {
+    case 'BUFF_FETCH_SUCCESS': {
       const nextLoading = new Set(state.buffLoadingKeys);
       nextLoading.delete(action.marketHashName);
 
@@ -479,7 +536,7 @@ export function scannerReducer(
       };
     }
 
-    case "BUFF_FETCH_FAILURE": {
+    case 'BUFF_FETCH_FAILURE': {
       const nextLoading = new Set(state.buffLoadingKeys);
       nextLoading.delete(action.marketHashName);
 
@@ -493,9 +550,9 @@ export function scannerReducer(
       };
     }
 
-    case "UPDATE_BUFF_PRICE_CNY": {
+    case 'UPDATE_BUFF_PRICE_CNY': {
       const { marketHashName, rawValue } = action;
-      const nextPrice = Number(rawValue.replace(",", "."));
+      const nextPrice = Number(rawValue.replace(',', '.'));
       const nextBuffPrices = { ...state.buffPricesCny };
 
       if (!rawValue || !Number.isFinite(nextPrice) || nextPrice <= 0) {
@@ -510,36 +567,36 @@ export function scannerReducer(
       };
     }
 
-    case "START_PORTFOLIO_IMPORT":
+    case 'START_PORTFOLIO_IMPORT':
       return {
         ...state,
         portfolioImporting: true,
-        portfolioImportStatus: "starting",
+        portfolioImportStatus: 'starting',
         portfolioImportMessage: null,
         portfolioImportError: null,
       };
 
-    case "UPDATE_PORTFOLIO_IMPORT_STATUS":
+    case 'UPDATE_PORTFOLIO_IMPORT_STATUS':
       return {
         ...state,
         portfolioImportStatus: action.status,
       };
 
-    case "PORTFOLIO_IMPORT_SUCCESS":
+    case 'PORTFOLIO_IMPORT_SUCCESS':
       return {
         ...state,
         portfolioImporting: false,
         portfolioImportStatus: null,
         portfolioImportMessage: action.message,
-        accounts: [createAccount("")],
+        accounts: [createAccount('')],
         manualItems: [],
         removedKeys: new Set<string>(),
         selectedTypes: new Set<string>(),
-        globalFilter: "",
+        globalFilter: '',
         expandedAccId: null,
       };
 
-    case "PORTFOLIO_IMPORT_FAILURE":
+    case 'PORTFOLIO_IMPORT_FAILURE':
       return {
         ...state,
         portfolioImporting: false,
@@ -547,41 +604,38 @@ export function scannerReducer(
         portfolioImportError: action.error,
       };
 
-    case "RESET_STATE_POST_IMPORT":
+    case 'RESET_STATE_POST_IMPORT':
       return {
         ...state,
-        accounts: [createAccount("")],
+        accounts: [createAccount('')],
         manualItems: [],
         removedKeys: new Set<string>(),
         selectedTypes: new Set<string>(),
-        globalFilter: "",
+        globalFilter: '',
         expandedAccId: null,
       };
 
-    case "START_PRICE_RETRY":
+    case 'START_PRICE_RETRY':
       return {
         ...state,
         retryingPrices: true,
       };
 
-    case "PRICE_RETRY_STATUS":
+    case 'PRICE_RETRY_STATUS':
       return {
         ...state,
         retryStatus: action.status,
       };
 
-    case "PRICE_RETRY_SUCCESS": {
+    case 'PRICE_RETRY_SUCCESS': {
       const { results, status } = action;
-      const priceMap = new Map<
-        string,
-        { price: number; priceSource?: string }
-      >();
+      const priceMap = new Map<string, { price: number; priceSource?: string }>();
       for (const r of results) {
         if (r.price > 0) priceMap.set(r.marketHashName, r);
       }
 
       const updatedAccounts = state.accounts.map((acc) => {
-        if (acc.status !== "done" || !acc.result) return acc;
+        if (!acc.result) return acc;
         const updatedItems = acc.result.items.map((scanItem) => {
           const found = priceMap.get(scanItem.caseItem.marketHashName);
           if (!found) return scanItem;
@@ -589,7 +643,7 @@ export function scannerReducer(
             ...scanItem,
             price: found.price,
             total: found.price * scanItem.quantity,
-            priceSource: found.priceSource as ScanResultItem["priceSource"],
+            priceSource: found.priceSource as ScanResultItem['priceSource'],
           };
         });
         return {
@@ -597,10 +651,7 @@ export function scannerReducer(
           result: {
             ...acc.result,
             items: updatedItems,
-            totalPrice: updatedItems.reduce(
-              (s: number, it: ScanResultItem) => s + it.total,
-              0,
-            ),
+            totalPrice: updatedItems.reduce((s: number, it: ScanResultItem) => s + it.total, 0),
           },
         };
       });
@@ -612,7 +663,7 @@ export function scannerReducer(
           ...mi,
           price: found.price,
           total: found.price * mi.quantity,
-          priceSource: found.priceSource as ScanResultItem["priceSource"],
+          priceSource: found.priceSource as ScanResultItem['priceSource'],
         };
       });
 
@@ -625,7 +676,7 @@ export function scannerReducer(
       };
     }
 
-    case "PRICE_RETRY_FAILURE":
+    case 'PRICE_RETRY_FAILURE':
       return {
         ...state,
         retryingPrices: false,
