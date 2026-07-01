@@ -1,30 +1,43 @@
-import { Column } from "@tanstack/react-table";
-import { ArrowDown, ArrowUp, ArrowUpDown, EyeOff } from "lucide-react";
-import { useTranslation } from "react-i18next";
-import { cn } from "@/utils/cn";
-import { Button } from "@/components/ui/button";
+import { useState, useEffect } from 'react';
+import { Column } from '@tanstack/react-table';
+import { ArrowDown, ArrowUp, ArrowUpDown, EyeOff } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
+import { cn } from '@/utils/cn';
+import { Button } from '@/components/ui/button';
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
+} from '@/components/ui/dropdown-menu';
 
-interface DataTableColumnHeaderProps<TData, TValue>
-  extends React.HTMLAttributes<HTMLDivElement> {
+interface DataTableColumnHeaderProps<TData, TValue> extends React.HTMLAttributes<HTMLDivElement> {
   column: Column<TData, TValue>;
   title: string;
-  align?: "left" | "right";
+  align?: 'left' | 'right';
+  isMobile?: boolean;
 }
 
 export function DataTableColumnHeader<TData, TValue>({
   column,
   title,
-  align = "left",
+  align = 'left',
   className,
+  isMobile: isMobileProp,
 }: DataTableColumnHeaderProps<TData, TValue>) {
   const { t } = useTranslation();
+  const [isMobileState, setIsMobileState] = useState(false);
+
+  useEffect(() => {
+    if (isMobileProp !== undefined) return;
+    const checkMobile = () => setIsMobileState(window.innerWidth < 768);
+    checkMobile();
+    window.addEventListener('resize', checkMobile);
+    return () => window.removeEventListener('resize', checkMobile);
+  }, [isMobileProp]);
+
+  const isMobile = isMobileProp ?? isMobileState;
 
   if (!column.getCanSort()) {
     return <div className={cn(className)}>{title}</div>;
@@ -32,52 +45,90 @@ export function DataTableColumnHeader<TData, TValue>({
 
   const isSorted = column.getIsSorted();
 
+  const handleSort = () => {
+    if (!isSorted) {
+      column.toggleSorting(true); // 1st click: Descending
+    } else if (isSorted === 'desc') {
+      column.toggleSorting(false); // 2nd click: Ascending
+    } else {
+      column.clearSorting(); // 3rd click: Clear
+    }
+  };
+
+  if (isMobile) {
+    return (
+      <div className={cn('flex items-center', align === 'right' && 'justify-end', className)}>
+        <Button
+          variant="ghost"
+          size="sm"
+          onClick={handleSort}
+          className={cn(
+            '-mx-2 h-8 cursor-pointer px-2 font-medium hover:bg-stone-800/80 hover:text-white focus:outline-none',
+            align === 'right' ? 'w-full justify-end text-right' : 'justify-start text-left'
+          )}
+        >
+          <span>{title}</span>
+          {isSorted === 'desc' ? (
+            <ArrowDown className="text-accent ml-1 size-3 shrink-0" />
+          ) : isSorted === 'asc' ? (
+            <ArrowUp className="text-accent ml-1 size-3 shrink-0" />
+          ) : (
+            <ArrowUpDown className="ml-1 size-3 shrink-0 text-stone-500" />
+          )}
+        </Button>
+      </div>
+    );
+  }
+
   return (
-    <div className={cn("flex items-center", align === "right" && "justify-end", className)}>
+    <div className={cn('flex items-center', align === 'right' && 'justify-end', className)}>
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
           <Button
             variant="ghost"
             size="sm"
             className={cn(
-              "h-8 px-2 -mx-2 font-medium hover:bg-stone-800/80 hover:text-white focus:outline-none cursor-pointer data-[state=open]:bg-stone-800/80",
-              align === "right" ? "w-full justify-end text-right" : "justify-start text-left"
+              '-mx-2 h-8 cursor-pointer px-2 font-medium hover:bg-stone-800/80 hover:text-white focus:outline-none data-[state=open]:bg-stone-800/80',
+              align === 'right' ? 'w-full justify-end text-right' : 'justify-start text-left'
             )}
           >
             <span>{title}</span>
-            {isSorted === "desc" ? (
-              <ArrowDown className="ml-1 size-3 text-accent shrink-0" />
-            ) : isSorted === "asc" ? (
-              <ArrowUp className="ml-1 size-3 text-accent shrink-0" />
+            {isSorted === 'desc' ? (
+              <ArrowDown className="text-accent ml-1 size-3 shrink-0" />
+            ) : isSorted === 'asc' ? (
+              <ArrowUp className="text-accent ml-1 size-3 shrink-0" />
             ) : (
-              <ArrowUpDown className="ml-1 size-3 text-stone-500 shrink-0" />
+              <ArrowUpDown className="ml-1 size-3 shrink-0 text-stone-500" />
             )}
           </Button>
         </DropdownMenuTrigger>
-        <DropdownMenuContent align={align === "right" ? "end" : "start"} className="w-32 bg-stone-950 border-stone-800">
+        <DropdownMenuContent
+          align={align === 'right' ? 'end' : 'start'}
+          className="w-32 border-stone-800 bg-stone-950"
+        >
           <DropdownMenuItem
             onClick={() => column.toggleSorting(false)}
-            className="flex items-center gap-2 cursor-pointer text-stone-200 focus:bg-stone-900 focus:text-stone-100"
+            className="flex cursor-pointer items-center gap-2 text-stone-200 focus:bg-stone-900 focus:text-stone-100"
           >
             <ArrowUp className="size-3.5 text-stone-400" />
-            <span>{t("common.sortAsc", "Asc")}</span>
+            <span>{t('common.sortAsc', 'Tăng dần')}</span>
           </DropdownMenuItem>
           <DropdownMenuItem
             onClick={() => column.toggleSorting(true)}
-            className="flex items-center gap-2 cursor-pointer text-stone-200 focus:bg-stone-900 focus:text-stone-100"
+            className="flex cursor-pointer items-center gap-2 text-stone-200 focus:bg-stone-900 focus:text-stone-100"
           >
             <ArrowDown className="size-3.5 text-stone-400" />
-            <span>{t("common.sortDesc", "Desc")}</span>
+            <span>{t('common.sortDesc', 'Giảm dần')}</span>
           </DropdownMenuItem>
           {column.getCanHide() && (
             <>
               <DropdownMenuSeparator />
               <DropdownMenuItem
                 onClick={() => column.toggleVisibility(false)}
-                className="flex items-center gap-2 cursor-pointer text-stone-200 focus:bg-stone-900 focus:text-stone-100"
+                className="flex cursor-pointer items-center gap-2 text-stone-200 focus:bg-stone-900 focus:text-stone-100"
               >
                 <EyeOff className="size-3.5 text-stone-400" />
-                <span>{t("common.hideColumn", "Hide")}</span>
+                <span>{t('common.hideColumn', 'Ẩn')}</span>
               </DropdownMenuItem>
             </>
           )}

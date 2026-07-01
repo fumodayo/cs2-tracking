@@ -1,45 +1,50 @@
-"use client";
+'use client';
 
-import React, { useState, useMemo, useEffect } from "react";
-import { useQuery } from "@tanstack/react-query";
-import { useTranslation } from "react-i18next";
-import { usePatternInspect } from "@/components/inventory-scanner/hooks/use-pattern-inspect";
+import React, { useState, useMemo, useEffect } from 'react';
+import { useQuery } from '@tanstack/react-query';
+import { useTranslation } from 'react-i18next';
+import { usePatternInspect } from '@/components/inventory-scanner/hooks/use-pattern-inspect';
 import {
   STEAM_ACCOUNTS_QUERY_KEY,
   STORAGE_UNITS_QUERY_KEY,
   fetchSteamAccounts,
   fetchAccountStorageUnits,
-} from "@/lib/api-client/steam-accounts-api";
-import { TbPackage } from "react-icons/tb";
-import { SlidePanel, SlidePanelContent } from "@/components/ui/slide-panel";
+} from '@/lib/api-client/steam-accounts-api';
+import { TbPackage } from 'react-icons/tb';
+import { SlidePanel, SlidePanelContent } from '@/components/ui/slide-panel';
 
-import { CaseThumbnail } from "../case-thumbnail";
+import { CaseThumbnail } from '../case-thumbnail';
 import {
   formatIntegerViInput,
   formatDecimalViInput,
   parseViFloat,
   formatVND,
-} from "@/utils/format";
-import { DopplerBadge, FadeBadge, BlueGemBadge, MarbleFadeBadge } from "@/components/shared/pattern-badge";
-import { estimateOverpay } from "@/services/pattern/overpay-calculator";
+} from '@/utils/format';
+import {
+  DopplerBadge,
+  FadeBadge,
+  BlueGemBadge,
+  MarbleFadeBadge,
+} from '@/components/shared/pattern-badge';
+import { estimateOverpay } from '@/services/pattern/overpay-calculator';
 
-import { PortfolioTableRow } from "../portfolio-table-model";
+import { PortfolioTableRow } from '../portfolio-table-model';
 import {
   getItemTypeColor,
   getItemTypeLabel,
   colorWithAlpha,
   toInputNumber,
-} from "../portfolio-table-utils";
+} from '../portfolio-table-utils';
 
-import { VirtualItemCard } from "../components/virtual-item-card";
-import { AccountAllocationBreakdown } from "@/components/steam-accounts";
-import { ItemLotsList } from "../components/item-lots-list";
-import { calculateTradeHoldUntil } from "@/utils/date";
+import { VirtualItemCard } from '../components/virtual-item-card';
+import { AccountAllocationBreakdown } from '@/components/steam-accounts';
+import { ItemLotsList } from '../components/item-lots-list';
+import { calculateTradeHoldUntil } from '@/utils/date';
 
-import { ItemHoldSection } from "./item-hold-section";
-import { ItemPriceSection } from "./item-price-section";
-import { ItemActions } from "./item-actions";
-import { StickerCharmSection } from "./sticker-charm-section";
+import { ItemHoldSection } from './item-hold-section';
+import { ItemPriceSection } from './item-price-section';
+import { ItemActions } from './item-actions';
+import { StickerCharmSection } from './sticker-charm-section';
 
 export function ItemHoverCard({
   item,
@@ -66,6 +71,7 @@ export function ItemHoverCard({
   onSellItem,
   onSellAll,
   onDeleteAll,
+  isGuest = false,
 }: {
   item: PortfolioTableRow;
   relatedRows: PortfolioTableRow[];
@@ -87,7 +93,7 @@ export function ItemHoverCard({
       stickerBuyPriceRate?: number;
       stickerScanTotalPrice?: number;
       stickerScanPriceCapturedAt?: string;
-    },
+    }
   ) => Promise<void> | void;
   onUpdateBuffRate?: (rate: number) => void;
   fetchBuffPrice?: (marketHashName: string) => void;
@@ -108,6 +114,7 @@ export function ItemHoverCard({
   onSellItem?: (id: string) => void;
   onSellAll?: () => void;
   onDeleteAll?: () => void;
+  isGuest?: boolean;
 }) {
   const { t } = useTranslation();
   const [isEditing, setIsEditing] = useState(defaultEditing ?? false);
@@ -115,10 +122,11 @@ export function ItemHoverCard({
 
   const hasBuff = useMemo(() => {
     const hasBuffPrice = Boolean(buffPricesCny?.[item.case.marketHashName]);
-    const isSkin = item.itemType === "skin";
+    const isSkin = item.itemType === 'skin';
     const steamVal = item.steamPrice ?? item.currentPrice ?? 0;
     const currentVal = item.currentPrice ?? 0;
-    const currentDiffersFromSteam = isSkin && currentVal > 0 && steamVal > 0 && currentVal !== steamVal;
+    const currentDiffersFromSteam =
+      isSkin && currentVal > 0 && steamVal > 0 && currentVal !== steamVal;
     return hasBuffPrice || currentDiffersFromSteam;
   }, [item, buffPricesCny]);
 
@@ -148,32 +156,26 @@ export function ItemHoverCard({
           return String(Math.round((item.buyPrice / defaultMarket) * 100));
         }
       }
-      return "100";
+      return '100';
     }
   });
   const [priceVnd, setPriceVnd] = useState(() => {
     const defaultVnd = item.buyPrice || item.steamPrice || item.currentPrice || 0;
     return formatIntegerViInput(defaultVnd);
   });
-  const [note, setNote] = useState(() => item.note ?? "");
+  const [note, setNote] = useState(() => item.note ?? '');
   const [saving, setSaving] = useState(false);
   const [isResetting, setIsResetting] = useState(false);
-  const [sellRate, setSellRate] = useState(() =>
-    formatIntegerViInput(buffCnyToVndRate ?? 3600),
-  );
+  const [sellRate, setSellRate] = useState(() => formatIntegerViInput(buffCnyToVndRate ?? 3600));
 
-  const [stickerRate, setStickerRate] = useState(() =>
-    String(item.stickerPriceRate ?? 0),
-  );
-  const [stickerBuyRate, setStickerBuyRate] = useState(() =>
-    String(item.stickerBuyPriceRate ?? 0),
-  );
+  const [stickerRate, setStickerRate] = useState(() => String(item.stickerPriceRate ?? 0));
+  const [stickerBuyRate, setStickerBuyRate] = useState(() => String(item.stickerBuyPriceRate ?? 0));
   const [stickerFormulaTotal, setStickerFormulaTotal] = useState<number | null>(null);
   const [capturedScanTotal, setCapturedScanTotal] = useState<number | null>(
-    () => item.stickerScanTotalPrice ?? null,
+    () => item.stickerScanTotalPrice ?? null
   );
   const [capturedScanDate, setCapturedScanDate] = useState<string | undefined>(
-    () => item.stickerScanPriceCapturedAt,
+    () => item.stickerScanPriceCapturedAt
   );
 
   const { inspectingKeys, inspectPattern } = usePatternInspect();
@@ -182,11 +184,7 @@ export function ItemHoverCard({
   const handleInspect = async () => {
     if (!item.inspectLink) return;
     setInspectError(null);
-    const res = await inspectPattern(
-      item.inspectLink,
-      item.case.marketHashName,
-      item.dopplerPhase
-    );
+    const res = await inspectPattern(item.inspectLink, item.case.marketHashName, item.dopplerPhase);
     if (res.success && res.data?.patternInfo) {
       const updatePayload = {
         dopplerPhase: res.data.patternInfo.dopplerPhase || item.dopplerPhase,
@@ -200,11 +198,11 @@ export function ItemHoverCard({
         await onUpdateLot?.(item.id, updatePayload);
       }
     } else {
-      setInspectError(res.error || "failedToInspectFromCSFloat");
+      setInspectError(res.error || 'failedToInspectFromCSFloat');
     }
   };
 
-  const [manualInspectLink, setManualInspectLink] = useState("");
+  const [manualInspectLink, setManualInspectLink] = useState('');
 
   const handleManualInspect = async () => {
     if (!manualInspectLink.trim()) return;
@@ -228,16 +226,16 @@ export function ItemHoverCard({
         await onUpdateLot?.(item.id, updatePayload);
       }
     } else {
-      setInspectError(res.error || "failedToInspectFromCSFloat");
+      setInspectError(res.error || 'failedToInspectFromCSFloat');
     }
   };
 
   const [isFindingLink, setIsFindingLink] = useState(false);
-  const [findStatus, setFindStatus] = useState<"idle" | "success" | "error">("idle");
+  const [findStatus, setFindStatus] = useState<'idle' | 'success' | 'error'>('idle');
 
   const handleAutoFind = async () => {
     setIsFindingLink(true);
-    setFindStatus("idle");
+    setFindStatus('idle');
     setInspectError(null);
     try {
       const res = await fetch(
@@ -245,10 +243,10 @@ export function ItemHoverCard({
           item.case.marketHashName
         )}`
       );
-      if (!res.ok) throw new Error("failedToFind");
+      if (!res.ok) throw new Error('failedToFind');
       const data = await res.json();
       if (data.inspectLink) {
-        setFindStatus("success");
+        setFindStatus('success');
         setManualInspectLink(data.inspectLink);
 
         // Auto-run inspect pattern with the link found
@@ -271,14 +269,14 @@ export function ItemHoverCard({
             await onUpdateLot?.(item.id, updatePayload);
           }
         } else {
-          setInspectError(scanRes.error || "failedToInspectFromCSFloat");
-          setFindStatus("error");
+          setInspectError(scanRes.error || 'failedToInspectFromCSFloat');
+          setFindStatus('error');
         }
       } else {
-        setFindStatus("error");
+        setFindStatus('error');
       }
     } catch (err) {
-      setFindStatus("error");
+      setFindStatus('error');
     } finally {
       setIsFindingLink(false);
     }
@@ -295,26 +293,18 @@ export function ItemHoverCard({
 
   const initialIsProtected = Boolean(
     item.sourceAccounts?.[0]?.breakdown?.tradeProtected &&
-    item.sourceAccounts[0].breakdown.tradeProtected > 0,
+    item.sourceAccounts[0].breakdown.tradeProtected > 0
   );
 
   const [editAccountId, setEditAccountId] = useState(
-    () => item.sourceAccounts?.[0]?.steamId64 ?? "",
+    () => item.sourceAccounts?.[0]?.steamId64 ?? ''
   );
-  const [editStorageUnitId, setEditStorageUnitId] = useState(
-    () => item.storageUnitId ?? "",
-  );
-  const [editState, setEditState] = useState<
-    "tradeable" | "hold" | "protected"
-  >(() =>
-    initialIsProtected
-      ? "protected"
-      : initialHoldDays > 0
-        ? "hold"
-        : "tradeable",
+  const [editStorageUnitId, setEditStorageUnitId] = useState(() => item.storageUnitId ?? '');
+  const [editState, setEditState] = useState<'tradeable' | 'hold' | 'protected'>(() =>
+    initialIsProtected ? 'protected' : initialHoldDays > 0 ? 'hold' : 'tradeable'
   );
   const [editHoldDays, setEditHoldDays] = useState(() =>
-    initialHoldDays > 0 ? String(initialHoldDays) : "",
+    initialHoldDays > 0 ? String(initialHoldDays) : ''
   );
 
   const accountsQuery = useQuery({
@@ -330,7 +320,30 @@ export function ItemHoverCard({
     staleTime: 5 * 60 * 1000,
   });
 
-  const isVirtual = item.sourceType === "existing" && item.isVirtual;
+  const accountOptions = useMemo(() => {
+    const map = new Map<string, { id: string; steamId64: string; name: string }>();
+
+    for (const account of accountsQuery.data ?? []) {
+      map.set(account.steamId64, {
+        id: account.id,
+        steamId64: account.steamId64,
+        name: account.name,
+      });
+    }
+
+    for (const account of item.sourceAccounts ?? []) {
+      if (!account.steamId64 || map.has(account.steamId64)) continue;
+      map.set(account.steamId64, {
+        id: account.steamId64,
+        steamId64: account.steamId64,
+        name: account.name || account.steamId64,
+      });
+    }
+
+    return Array.from(map.values());
+  }, [accountsQuery.data, item.sourceAccounts]);
+
+  const isVirtual = item.sourceType === 'existing' && item.isVirtual;
 
   // Load draft from localStorage on mount/props changes, falling back to props values
   useEffect(() => {
@@ -343,24 +356,34 @@ export function ItemHoverCard({
           const defaultVnd = item.buyPrice || item.steamPrice || item.currentPrice || 0;
           setQuantity(formatIntegerViInput(draft.quantity ?? String(item.quantity)));
           setPriceVnd(formatIntegerViInput(draft.priceVnd ?? toInputNumber(defaultVnd)));
-          
+
           if (hasBuff) {
-            setPriceCny(formatDecimalViInput(draft.priceCny ?? toInputNumber(defaultVnd / (buffCnyToVndRate ?? 3600))));
-            setBuyRate(formatIntegerViInput(draft.buyRate ?? toInputNumber(buffCnyToVndRate ?? 3600)));
+            setPriceCny(
+              formatDecimalViInput(
+                draft.priceCny ?? toInputNumber(defaultVnd / (buffCnyToVndRate ?? 3600))
+              )
+            );
+            setBuyRate(
+              formatIntegerViInput(draft.buyRate ?? toInputNumber(buffCnyToVndRate ?? 3600))
+            );
           } else {
             const defaultMarket = item.steamPrice || item.currentPrice || 0;
             setPriceCny(formatIntegerViInput(draft.priceCny ?? toInputNumber(defaultMarket)));
             if (item.buyPrice > 0 && defaultMarket > 0) {
-              setBuyRate(formatIntegerViInput(draft.buyRate ?? String(Math.round((item.buyPrice / defaultMarket) * 100))));
+              setBuyRate(
+                formatIntegerViInput(
+                  draft.buyRate ?? String(Math.round((item.buyPrice / defaultMarket) * 100))
+                )
+              );
             } else {
-              setBuyRate(formatIntegerViInput(draft.buyRate ?? "100"));
+              setBuyRate(formatIntegerViInput(draft.buyRate ?? '100'));
             }
           }
-          setNote(draft.note ?? (item.note ?? ""));
-          setEditAccountId(draft.editAccountId ?? (item.sourceAccounts?.[0]?.steamId64 ?? ""));
-          setEditStorageUnitId(draft.editStorageUnitId ?? (item.storageUnitId ?? ""));
-          setEditState(draft.editState ?? "tradeable");
-          setEditHoldDays(draft.editHoldDays ?? "");
+          setNote(draft.note ?? item.note ?? '');
+          setEditAccountId(draft.editAccountId ?? item.sourceAccounts?.[0]?.steamId64 ?? '');
+          setEditStorageUnitId(draft.editStorageUnitId ?? item.storageUnitId ?? '');
+          setEditState(draft.editState ?? 'tradeable');
+          setEditHoldDays(draft.editHoldDays ?? '');
           setStickerRate(draft.stickerRate ?? String(item.stickerPriceRate ?? 0));
           setStickerBuyRate(draft.stickerBuyRate ?? String(item.stickerBuyPriceRate ?? 0));
           setCapturedScanTotal(draft.capturedScanTotal ?? item.stickerScanTotalPrice ?? null);
@@ -369,7 +392,7 @@ export function ItemHoverCard({
         }
       }
     } catch (e) {
-      console.error("Failed to parse item draft from localStorage", e);
+      console.error('Failed to parse item draft from localStorage', e);
     }
 
     if (!loadedFromDraft) {
@@ -385,15 +408,15 @@ export function ItemHoverCard({
         if (item.buyPrice > 0 && defaultMarket > 0) {
           setBuyRate(String(Math.round((item.buyPrice / defaultMarket) * 100)));
         } else {
-          setBuyRate("100");
+          setBuyRate('100');
         }
       }
-      setNote(item.note ?? "");
+      setNote(item.note ?? '');
       setSellRate(formatIntegerViInput(buffCnyToVndRate ?? 3600));
 
-      const steamId = item.sourceAccounts?.[0]?.steamId64 ?? "";
+      const steamId = item.sourceAccounts?.[0]?.steamId64 ?? '';
       setEditAccountId(steamId);
-      setEditStorageUnitId(item.storageUnitId ?? "");
+      setEditStorageUnitId(item.storageUnitId ?? '');
 
       const lotHoldDays = (() => {
         if (!item.tradeHoldUntil) return 0;
@@ -406,17 +429,17 @@ export function ItemHoverCard({
 
       const isProtected = Boolean(
         item.sourceAccounts?.[0]?.breakdown?.tradeProtected &&
-        item.sourceAccounts[0].breakdown.tradeProtected > 0,
+        item.sourceAccounts[0].breakdown.tradeProtected > 0
       );
       if (isProtected) {
-        setEditState("protected");
-        setEditHoldDays("");
+        setEditState('protected');
+        setEditHoldDays('');
       } else if (lotHoldDays > 0) {
-        setEditState("hold");
+        setEditState('hold');
         setEditHoldDays(String(lotHoldDays));
       } else {
-        setEditState("tradeable");
-        setEditHoldDays("");
+        setEditState('tradeable');
+        setEditHoldDays('');
       }
 
       setStickerRate(String(item.stickerPriceRate ?? 0));
@@ -452,34 +475,30 @@ export function ItemHoverCard({
     })();
     const isProtected = Boolean(
       item.sourceAccounts?.[0]?.breakdown?.tradeProtected &&
-      item.sourceAccounts[0].breakdown.tradeProtected > 0,
+      item.sourceAccounts[0].breakdown.tradeProtected > 0
     );
-    const defaultEditState = isProtected
-      ? "protected"
-      : lotHoldDays > 0
-        ? "hold"
-        : "tradeable";
+    const defaultEditState = isProtected ? 'protected' : lotHoldDays > 0 ? 'hold' : 'tradeable';
 
     const defaultMarket = hasBuff
       ? (item.buyPrice || item.steamPrice || item.currentPrice || 0) / (buffCnyToVndRate ?? 3600)
-      : (item.steamPrice || item.currentPrice || 0);
+      : item.steamPrice || item.currentPrice || 0;
 
     const defaultRate = hasBuff
       ? (buffCnyToVndRate ?? 3600)
-      : (item.buyPrice > 0 && (item.steamPrice || item.currentPrice || 0) > 0
-          ? Math.round((item.buyPrice / (item.steamPrice || item.currentPrice || 1)) * 100)
-          : 100);
+      : item.buyPrice > 0 && (item.steamPrice || item.currentPrice || 0) > 0
+        ? Math.round((item.buyPrice / (item.steamPrice || item.currentPrice || 1)) * 100)
+        : 100;
 
     return (
       parseViFloat(quantity) === item.quantity &&
       parseViFloat(priceVnd) === (item.buyPrice || item.steamPrice || item.currentPrice || 0) &&
       parseViFloat(priceCny) === defaultMarket &&
       parseViFloat(buyRate) === defaultRate &&
-      note === (item.note ?? "") &&
-      editAccountId === (item.sourceAccounts?.[0]?.steamId64 ?? "") &&
-      editStorageUnitId === (item.storageUnitId ?? "") &&
+      note === (item.note ?? '') &&
+      editAccountId === (item.sourceAccounts?.[0]?.steamId64 ?? '') &&
+      editStorageUnitId === (item.storageUnitId ?? '') &&
       editState === defaultEditState &&
-      (editState !== "hold" || editHoldDays === String(lotHoldDays)) &&
+      (editState !== 'hold' || editHoldDays === String(lotHoldDays)) &&
       parseViFloat(stickerRate) === (item.stickerPriceRate ?? 0) &&
       parseViFloat(stickerBuyRate) === (item.stickerBuyPriceRate ?? 0) &&
       capturedScanTotal === (item.stickerScanTotalPrice ?? null) &&
@@ -529,7 +548,7 @@ export function ItemHoverCard({
         localStorage.setItem(`item_hover_card_draft_${item.id}`, JSON.stringify(draft));
       }
     } catch (e) {
-      console.error("Failed to save draft to localStorage", e);
+      console.error('Failed to save draft to localStorage', e);
     }
   }, [
     item.id,
@@ -616,23 +635,21 @@ export function ItemHoverCard({
       if (onUpdateLot) {
         let sourceAccounts = undefined;
         if (editAccountId) {
-          const selectedAccount = accountsQuery.data?.find(
-            (acc) => acc.steamId64 === editAccountId,
-          );
+          const selectedAccount = accountOptions.find((acc) => acc.steamId64 === editAccountId);
           if (selectedAccount) {
             const breakdown = {
-              tradeable: editState === "tradeable" ? nextQuantity : 0,
+              tradeable: editState === 'tradeable' ? nextQuantity : 0,
               onMarket: 0,
-              tradeProtected: editState === "protected" ? nextQuantity : 0,
-              hold: editState === "hold" ? nextQuantity : 0,
+              tradeProtected: editState === 'protected' ? nextQuantity : 0,
+              hold: editState === 'hold' ? nextQuantity : 0,
               holdDetails:
-                editState === "hold" || editState === "protected"
+                editState === 'hold' || editState === 'protected'
                   ? [
-                    {
-                      quantity: nextQuantity,
-                      holdDays: Number(editHoldDays) || 0,
-                    },
-                  ]
+                      {
+                        quantity: nextQuantity,
+                        holdDays: Number(editHoldDays) || 0,
+                      },
+                    ]
                   : [],
             };
             sourceAccounts = [
@@ -648,10 +665,7 @@ export function ItemHoverCard({
         }
 
         let tradeHoldUntil = null;
-        if (
-          (editState === "hold" || editState === "protected") &&
-          editHoldDays
-        ) {
+        if ((editState === 'hold' || editState === 'protected') && editHoldDays) {
           const days = Number(editHoldDays) || 0;
           if (days > 0) {
             const baseDate = item.buyDate ? new Date(item.buyDate) : new Date();
@@ -669,10 +683,12 @@ export function ItemHoverCard({
           buyPrice: nextBuyPrice,
           note: note,
           sourceAccounts,
-          storageUnitId: editStorageUnitId || "",
+          storageUnitId: editStorageUnitId || '',
           tradeHoldUntil,
           stickerPriceRate: Number.isFinite(stickerPriceRateVal) ? stickerPriceRateVal : undefined,
-          stickerBuyPriceRate: Number.isFinite(stickerBuyPriceRateVal) ? stickerBuyPriceRateVal : undefined,
+          stickerBuyPriceRate: Number.isFinite(stickerBuyPriceRateVal)
+            ? stickerBuyPriceRateVal
+            : undefined,
           stickerScanTotalPrice: capturedScanTotal !== null ? capturedScanTotal : undefined,
           stickerScanPriceCapturedAt: capturedScanDate,
         });
@@ -684,13 +700,15 @@ export function ItemHoverCard({
         if (onUpdateBuyPrice && nextBuyPrice !== item.buyPrice) {
           await onUpdateBuyPrice(targetId, nextBuyPrice);
         }
-        if (onUpdateNote && note !== (item.note ?? "")) {
+        if (onUpdateNote && note !== (item.note ?? '')) {
           await onUpdateNote(targetId, note);
         }
       }
       try {
         localStorage.removeItem(`item_hover_card_draft_${item.id}`);
-      } catch { /* ignore */ }
+      } catch {
+        /* ignore */
+      }
       onClose?.();
     } finally {
       setSaving(false);
@@ -701,9 +719,11 @@ export function ItemHoverCard({
     setIsResetting(true);
     try {
       localStorage.removeItem(`item_hover_card_draft_${item.id}`);
-    } catch { /* ignore */ }
+    } catch {
+      /* ignore */
+    }
     setQuantity(formatIntegerViInput(item.quantity));
-    
+
     const defaultVnd = item.buyPrice || item.steamPrice || item.currentPrice || 0;
     setPriceVnd(formatIntegerViInput(defaultVnd));
     if (hasBuff) {
@@ -715,14 +735,14 @@ export function ItemHoverCard({
       if (item.buyPrice > 0 && defaultMarket > 0) {
         setBuyRate(String(Math.round((item.buyPrice / defaultMarket) * 100)));
       } else {
-        setBuyRate("100");
+        setBuyRate('100');
       }
     }
-    setNote(item.note ?? "");
+    setNote(item.note ?? '');
     setSellRate(formatIntegerViInput(buffCnyToVndRate ?? 3600));
-    const steamId = item.sourceAccounts?.[0]?.steamId64 ?? "";
+    const steamId = item.sourceAccounts?.[0]?.steamId64 ?? '';
     setEditAccountId(steamId);
-    setEditStorageUnitId(item.storageUnitId ?? "");
+    setEditStorageUnitId(item.storageUnitId ?? '');
     setStickerRate(String(item.stickerPriceRate ?? 0));
     setStickerBuyRate(String(item.stickerBuyPriceRate ?? 0));
     setCapturedScanTotal(item.stickerScanTotalPrice ?? null);
@@ -738,17 +758,17 @@ export function ItemHoverCard({
     })();
     const isProtected = Boolean(
       item.sourceAccounts?.[0]?.breakdown?.tradeProtected &&
-      item.sourceAccounts[0].breakdown.tradeProtected > 0,
+      item.sourceAccounts[0].breakdown.tradeProtected > 0
     );
     if (isProtected) {
-      setEditState("protected");
-      setEditHoldDays("");
+      setEditState('protected');
+      setEditHoldDays('');
     } else if (lotHoldDays > 0) {
-      setEditState("hold");
+      setEditState('hold');
       setEditHoldDays(String(lotHoldDays));
     } else {
-      setEditState("tradeable");
-      setEditHoldDays("");
+      setEditState('tradeable');
+      setEditHoldDays('');
     }
     setTimeout(() => {
       setIsResetting(false);
@@ -758,28 +778,27 @@ export function ItemHoverCard({
   const isLoadingBuff = Boolean(buffLoadingKeys?.has(item.case.marketHashName));
 
   const typeColor =
-    item.itemType === "capsule" || item.itemType === "case"
-      ? "#b0c3d9"
+    item.itemType === 'capsule' || item.itemType === 'case'
+      ? '#b0c3d9'
       : (item.case.rarity?.color ?? getItemTypeColor(item.itemType));
 
   const hasBuffPrice = Boolean(buffPricesCny?.[item.case.marketHashName]);
   const steamPriceVal = item.steamPrice ?? item.currentPrice ?? 0;
   const showBuffButton = Boolean(
-    item.itemType === "skin" &&
-    steamPriceVal > 5000 &&
-    (!hasBuffPrice || isLoadingBuff)
+    item.itemType === 'skin' && steamPriceVal > 5000 && (!hasBuffPrice || isLoadingBuff)
   );
   if (isVirtual) {
-    return <VirtualItemCard item={item} typeColor={typeColor} accounts={accountsQuery.data} />;
+    return <VirtualItemCard item={item} typeColor={typeColor} accounts={accountOptions} />;
   }
 
   return (
-    <div className={embedded ? "w-full text-left min-h-full flex flex-col" : "w-[25rem] text-left"}>
+    <div className={embedded ? 'flex min-h-full w-full flex-col text-left' : 'w-[25rem] text-left'}>
       <div
-        className={`relative overflow-hidden text-stone-100 transition-all duration-300 ${embedded
-            ? "min-h-full flex flex-col flex-1 bg-stone-950"
-            : "rounded-2xl border border-stone-800/80 bg-stone-950 shadow-[0_20px_50px_rgba(0,0,0,0.65)] backdrop-blur-xl hover:border-stone-700/80"
-          }`}
+        className={`relative overflow-hidden text-stone-100 transition-all duration-300 ${
+          embedded
+            ? 'flex min-h-full flex-1 flex-col bg-stone-950'
+            : 'rounded-2xl border border-stone-800/80 bg-stone-950 shadow-[0_20px_50px_rgba(0,0,0,0.65)] backdrop-blur-xl hover:border-stone-700/80'
+        }`}
       >
         {!embedded && (
           <div
@@ -789,18 +808,15 @@ export function ItemHoverCard({
         )}
 
         <div
-          className={`flex items-center gap-4 border-b border-stone-800/40 px-4 py-4 ${embedded ? "sticky top-0 z-10 bg-stone-950/95 backdrop-blur-md pt-5" : ""
-            }`}
+          className={`flex items-center gap-4 border-b border-stone-800/40 px-4 py-4 ${
+            embedded ? 'sticky top-0 z-10 bg-stone-950/95 pt-5 backdrop-blur-md' : ''
+          }`}
           style={{
             backgroundImage: `linear-gradient(to right, ${colorWithAlpha(typeColor, 0.08)}, var(--card) 95%)`,
           }}
         >
           <div className="group relative flex shrink-0 items-center justify-center rounded-xl border border-stone-800 bg-stone-950/80 p-1.5 shadow-[inset_0_1.5px_3px_rgba(255,255,255,0.05)] transition-all duration-200">
-            <CaseThumbnail
-              imageUrl={item.case.imageUrl}
-              name={item.case.name}
-              size="lg"
-            />
+            <CaseThumbnail imageUrl={item.case.imageUrl} name={item.case.name} size="lg" />
             <div
               className="absolute inset-0 -z-10 rounded-xl opacity-20 blur-md transition-opacity duration-300 group-hover:opacity-30"
               style={{ backgroundColor: typeColor }}
@@ -815,7 +831,7 @@ export function ItemHoverCard({
             </p>
             <div className="mt-1.5 flex flex-wrap items-center gap-1.5 text-xs">
               <span
-                className="inline-flex rounded-md border px-2 py-0.5 text-[9px] font-extrabold uppercase tracking-wider"
+                className="inline-flex rounded-md border px-2 py-0.5 text-[9px] font-extrabold tracking-wider uppercase"
                 style={{
                   backgroundColor: colorWithAlpha(typeColor, 0.12),
                   borderColor: colorWithAlpha(typeColor, 0.25),
@@ -828,10 +844,10 @@ export function ItemHoverCard({
               {item.patternInfo?.fadePercentage !== undefined && (
                 <FadeBadge percentage={item.patternInfo.fadePercentage} />
               )}
-              {item.patternInfo?.blueGemTier && item.patternInfo.blueGemTier !== "Normal" && (
+              {item.patternInfo?.blueGemTier && item.patternInfo.blueGemTier !== 'Normal' && (
                 <BlueGemBadge tier={item.patternInfo.blueGemTier} />
               )}
-              {item.patternInfo?.marbleFadeTier && item.patternInfo.marbleFadeTier !== "Normal" && (
+              {item.patternInfo?.marbleFadeTier && item.patternInfo.marbleFadeTier !== 'Normal' && (
                 <MarbleFadeBadge tier={item.patternInfo.marbleFadeTier} />
               )}
               {item.case.rarity ? (
@@ -847,108 +863,147 @@ export function ItemHoverCard({
           </div>
         </div>
 
-        <div className={`p-4 ${embedded ? "flex-1" : "max-h-[440px] overflow-y-auto [&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar-track]:bg-transparent [&::-webkit-scrollbar-thumb]:bg-stone-800/80 [&::-webkit-scrollbar-thumb]:rounded-full hover:[&::-webkit-scrollbar-thumb]:bg-stone-700/80"}`}>
+        <div
+          className={`p-4 ${embedded ? 'flex-1' : 'max-h-[440px] overflow-y-auto [&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-stone-800/80 hover:[&::-webkit-scrollbar-thumb]:bg-stone-700/80 [&::-webkit-scrollbar-track]:bg-transparent'}`}
+        >
           <AccountAllocationBreakdown relatedRows={relatedRows} />
 
           {/* Interactive Pattern Inspect (if inspectLink is available) */}
-          {relatedRows.length <= 1 && item.itemType === "skin" && (item.inspectLink ? (
-            <div className="mb-5 space-y-3 border-b border-stone-800/60 pb-5 text-xs">
-              <div className="text-[10px] font-bold tracking-wider text-stone-500 uppercase">
-                {t("inventoryScanner.patternInfo", "Thông tin Pattern")}
-              </div>
+          {relatedRows.length <= 1 &&
+            item.itemType === 'skin' &&
+            (item.inspectLink ? (
+              <div className="mb-5 space-y-3 border-b border-stone-800/60 pb-5 text-xs">
+                <div className="text-[10px] font-bold tracking-wider text-stone-500 uppercase">
+                  {t('inventoryScanner.patternInfo', 'Thông tin Pattern')}
+                </div>
 
-              {!item.patternInfo ? (
-                <div className="rounded-xl bg-stone-900/60 border border-stone-800 p-3.5 flex flex-col items-center text-center gap-3">
-                  <div className="text-stone-300 text-[11px] leading-relaxed">
-                    {t("portfolio.patternInspectPrompt", "Vật phẩm này có link inspect từ Steam. Bạn có muốn quét Pattern & Overpay không?")}
-                  </div>
-                  <button
-                    onClick={handleInspect}
-                    disabled={isInspecting}
-                    className="w-full h-8 flex items-center justify-center rounded-lg bg-blue-650 hover:bg-blue-600 text-white font-bold text-xs shadow-md transition-all active:scale-[0.98] disabled:opacity-50 disabled:pointer-events-none"
-                  >
-                    {isInspecting ? (
-                      <span className="flex items-center gap-1.5 justify-center">
-                        <svg className="animate-spin h-3.5 w-3.5 text-white" fill="none" viewBox="0 0 24 24">
-                          <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                          <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
-                        </svg>
-                        {t("inventoryScanner.scanningPattern", "Đang kiểm tra...")}
-                      </span>
-                    ) : (
-                      t("inventoryScanner.inspectPatternButton", "Kiểm tra Pattern")
+                {!item.patternInfo ? (
+                  <div className="flex flex-col items-center gap-3 rounded-xl border border-stone-800 bg-stone-900/60 p-3.5 text-center">
+                    <div className="text-[11px] leading-relaxed text-stone-300">
+                      {t(
+                        'portfolio.patternInspectPrompt',
+                        'Vật phẩm này có link inspect từ Steam. Bạn có muốn quét Pattern & Overpay không?'
+                      )}
+                    </div>
+                    <button
+                      onClick={handleInspect}
+                      disabled={isInspecting}
+                      className="bg-blue-650 flex h-8 w-full items-center justify-center rounded-lg text-xs font-bold text-white shadow-md transition-all hover:bg-blue-600 active:scale-[0.98] disabled:pointer-events-none disabled:opacity-50"
+                    >
+                      {isInspecting ? (
+                        <span className="flex items-center justify-center gap-1.5">
+                          <svg
+                            className="h-3.5 w-3.5 animate-spin text-white"
+                            fill="none"
+                            viewBox="0 0 24 24"
+                          >
+                            <circle
+                              className="opacity-25"
+                              cx="12"
+                              cy="12"
+                              r="10"
+                              stroke="currentColor"
+                              strokeWidth="4"
+                            />
+                            <path
+                              className="opacity-75"
+                              fill="currentColor"
+                              d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"
+                            />
+                          </svg>
+                          {t('inventoryScanner.scanningPattern', 'Đang kiểm tra...')}
+                        </span>
+                      ) : (
+                        t('inventoryScanner.inspectPatternButton', 'Kiểm tra Pattern')
+                      )}
+                    </button>
+                    {inspectError && (
+                      <div className="mt-1 text-[10px] font-semibold text-red-400">
+                        {t(`inventoryScanner.apiErrors.${inspectError}`, inspectError)}
+                      </div>
                     )}
-                  </button>
-                  {inspectError && (
-                    <div className="text-[10px] text-red-400 font-semibold mt-1">
-                      {t(`inventoryScanner.apiErrors.${inspectError}`, inspectError)}
-                    </div>
-                  )}
-                </div>
-              ) : (
-                <div className="grid gap-2">
-                  {item.patternInfo.paintSeed !== undefined && (
-                    <div className="flex justify-between text-stone-300">
-                      <span>{t("inventoryScanner.paintSeed", "Paint Seed")}</span>
-                      <span className="font-semibold text-stone-100">{item.patternInfo.paintSeed}</span>
-                    </div>
-                  )}
-                  {item.patternInfo.floatValue !== undefined && (
-                    <div className="flex justify-between text-stone-300">
-                      <span>{t("inventoryScanner.floatValue", "Float Value")}</span>
-                      <span className="font-semibold text-stone-100">{item.patternInfo.floatValue.toFixed(8)}</span>
-                    </div>
-                  )}
-                  {(() => {
-                    const buffPriceCny = buffPricesCny?.[item.case.marketHashName];
-                    if (buffPriceCny && buffCnyToVndRate) {
-                      const overpay = estimateOverpay(item.patternInfo, buffPriceCny);
-                      if (overpay) {
-                        return (
-                          <div className="mt-2 rounded-xl bg-emerald-500/10 border border-emerald-500/20 p-3 text-emerald-450">
-                            <div className="font-bold text-[10px] uppercase tracking-wider text-emerald-500">
-                              {t("inventoryScanner.overpayEstimate", "Ước tính Overpay")} ({overpay.multiplierSource})
-                            </div>
-                            <div className="flex justify-between mt-1 text-[11px] font-semibold">
-                              <span>BUFF + Overpay:</span>
-                              <span className="font-mono">
-                                {formatVND(Math.round(overpay.estimatedTypical * buffCnyToVndRate))}{" "}
-                                <span className="text-[10px] text-stone-400 font-normal font-sans">
-                                  ({new Intl.NumberFormat("vi-VN").format(overpay.estimatedTypical)} x {new Intl.NumberFormat("vi-VN").format(buffCnyToVndRate)})
+                  </div>
+                ) : (
+                  <div className="grid gap-2">
+                    {item.patternInfo.paintSeed !== undefined && (
+                      <div className="flex justify-between text-stone-300">
+                        <span>{t('inventoryScanner.paintSeed', 'Paint Seed')}</span>
+                        <span className="font-semibold text-stone-100">
+                          {item.patternInfo.paintSeed}
+                        </span>
+                      </div>
+                    )}
+                    {item.patternInfo.floatValue !== undefined && (
+                      <div className="flex justify-between text-stone-300">
+                        <span>{t('inventoryScanner.floatValue', 'Float Value')}</span>
+                        <span className="font-semibold text-stone-100">
+                          {item.patternInfo.floatValue.toFixed(8)}
+                        </span>
+                      </div>
+                    )}
+                    {(() => {
+                      const buffPriceCny = buffPricesCny?.[item.case.marketHashName];
+                      if (buffPriceCny && buffCnyToVndRate) {
+                        const overpay = estimateOverpay(item.patternInfo, buffPriceCny);
+                        if (overpay) {
+                          return (
+                            <div className="text-emerald-450 mt-2 rounded-xl border border-emerald-500/20 bg-emerald-500/10 p-3">
+                              <div className="text-[10px] font-bold tracking-wider text-emerald-500 uppercase">
+                                {t('inventoryScanner.overpayEstimate', 'Ước tính Overpay')} (
+                                {overpay.multiplierSource})
+                              </div>
+                              <div className="mt-1 flex justify-between text-[11px] font-semibold">
+                                <span>BUFF + Overpay:</span>
+                                <span className="font-mono">
+                                  {formatVND(
+                                    Math.round(overpay.estimatedTypical * buffCnyToVndRate)
+                                  )}{' '}
+                                  <span className="font-sans text-[10px] font-normal text-stone-400">
+                                    (
+                                    {new Intl.NumberFormat('vi-VN').format(
+                                      overpay.estimatedTypical
+                                    )}{' '}
+                                    x {new Intl.NumberFormat('vi-VN').format(buffCnyToVndRate)})
+                                  </span>
                                 </span>
-                              </span>
+                              </div>
+                              <div className="mt-1 text-[9px] text-stone-400">
+                                {t(
+                                  'inventoryScanner.overpayDisclaimer',
+                                  'Giá trị chỉ mang tính chất tham khảo dựa trên pattern.'
+                                )}
+                              </div>
                             </div>
-                            <div className="text-[9px] text-stone-400 mt-1">
-                              {t("inventoryScanner.overpayDisclaimer", "Giá trị chỉ mang tính chất tham khảo dựa trên pattern.")}
-                            </div>
-                          </div>
-                        );
+                          );
+                        }
                       }
-                    }
-                    return null;
-                  })()}
-                </div>
-              )}
-            </div>
-          ) : (
-            /* Paste Inspect Link section (if no inspectLink but is a skin) */
+                      return null;
+                    })()}
+                  </div>
+                )}
+              </div>
+            ) : /* Paste Inspect Link section (if no inspectLink but is a skin) */
             item.patternInfo ? (
               /* If patternInfo is already scanned/present, display it statically */
               <div className="mb-5 space-y-3 border-b border-stone-800/60 pb-5 text-xs">
                 <div className="text-[10px] font-bold tracking-wider text-stone-500 uppercase">
-                  {t("inventoryScanner.patternInfo", "Thông tin Pattern")}
+                  {t('inventoryScanner.patternInfo', 'Thông tin Pattern')}
                 </div>
                 <div className="grid gap-2">
                   {item.patternInfo.paintSeed !== undefined && (
                     <div className="flex justify-between text-stone-300">
-                      <span>{t("inventoryScanner.paintSeed", "Paint Seed")}</span>
-                      <span className="font-semibold text-stone-100">{item.patternInfo.paintSeed}</span>
+                      <span>{t('inventoryScanner.paintSeed', 'Paint Seed')}</span>
+                      <span className="font-semibold text-stone-100">
+                        {item.patternInfo.paintSeed}
+                      </span>
                     </div>
                   )}
                   {item.patternInfo.floatValue !== undefined && (
                     <div className="flex justify-between text-stone-300">
-                      <span>{t("inventoryScanner.floatValue", "Float Value")}</span>
-                      <span className="font-semibold text-stone-100">{item.patternInfo.floatValue.toFixed(8)}</span>
+                      <span>{t('inventoryScanner.floatValue', 'Float Value')}</span>
+                      <span className="font-semibold text-stone-100">
+                        {item.patternInfo.floatValue.toFixed(8)}
+                      </span>
                     </div>
                   )}
                   {(() => {
@@ -957,21 +1012,26 @@ export function ItemHoverCard({
                       const overpay = estimateOverpay(item.patternInfo, buffPriceCny);
                       if (overpay) {
                         return (
-                          <div className="mt-2 rounded-xl bg-emerald-500/10 border border-emerald-500/20 p-3 text-emerald-450">
-                            <div className="font-bold text-[10px] uppercase tracking-wider text-emerald-500">
-                              {t("inventoryScanner.overpayEstimate", "Ước tính Overpay")} ({overpay.multiplierSource})
+                          <div className="text-emerald-450 mt-2 rounded-xl border border-emerald-500/20 bg-emerald-500/10 p-3">
+                            <div className="text-[10px] font-bold tracking-wider text-emerald-500 uppercase">
+                              {t('inventoryScanner.overpayEstimate', 'Ước tính Overpay')} (
+                              {overpay.multiplierSource})
                             </div>
-                            <div className="flex justify-between mt-1 text-[11px] font-semibold">
+                            <div className="mt-1 flex justify-between text-[11px] font-semibold">
                               <span>BUFF + Overpay:</span>
                               <span className="font-mono">
-                                {formatVND(Math.round(overpay.estimatedTypical * buffCnyToVndRate))}{" "}
-                                <span className="text-[10px] text-stone-400 font-normal font-sans">
-                                  ({new Intl.NumberFormat("vi-VN").format(overpay.estimatedTypical)} x {new Intl.NumberFormat("vi-VN").format(buffCnyToVndRate)})
+                                {formatVND(Math.round(overpay.estimatedTypical * buffCnyToVndRate))}{' '}
+                                <span className="font-sans text-[10px] font-normal text-stone-400">
+                                  ({new Intl.NumberFormat('vi-VN').format(overpay.estimatedTypical)}{' '}
+                                  x {new Intl.NumberFormat('vi-VN').format(buffCnyToVndRate)})
                                 </span>
                               </span>
                             </div>
-                            <div className="text-[9px] text-stone-400 mt-1">
-                              {t("inventoryScanner.overpayDisclaimer", "Giá trị chỉ mang tính chất tham khảo dựa trên pattern.")}
+                            <div className="mt-1 text-[9px] text-stone-400">
+                              {t(
+                                'inventoryScanner.overpayDisclaimer',
+                                'Giá trị chỉ mang tính chất tham khảo dựa trên pattern.'
+                              )}
                             </div>
                           </div>
                         );
@@ -981,34 +1041,52 @@ export function ItemHoverCard({
                   })()}
                 </div>
               </div>
-            ) : item.itemType === "skin" ? (
+            ) : item.itemType === 'skin' ? (
               /* If no inspectLink, no patternInfo, and it is a skin, let the user enter manual inspectLink */
               <div className="mb-5 space-y-3 border-b border-stone-800/60 pb-5 text-xs">
                 <div className="flex items-center justify-between">
                   <div className="text-[10px] font-bold tracking-wider text-stone-500 uppercase">
-                    {t("inventoryScanner.patternInfo", "Thông tin Pattern")}
+                    {t('inventoryScanner.patternInfo', 'Thông tin Pattern')}
                   </div>
                   <button
                     onClick={handleAutoFind}
                     disabled={isFindingLink || isInspecting}
-                    className="text-[10px] font-semibold text-blue-450 hover:text-blue-350 disabled:opacity-50 flex items-center gap-1"
+                    className="text-blue-450 hover:text-blue-350 flex items-center gap-1 text-[10px] font-semibold disabled:opacity-50"
                   >
                     {isFindingLink ? (
                       <>
-                        <svg className="animate-spin h-3 w-3 text-blue-450" fill="none" viewBox="0 0 24 24">
-                          <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                          <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                        <svg
+                          className="text-blue-450 h-3 w-3 animate-spin"
+                          fill="none"
+                          viewBox="0 0 24 24"
+                        >
+                          <circle
+                            className="opacity-25"
+                            cx="12"
+                            cy="12"
+                            r="10"
+                            stroke="currentColor"
+                            strokeWidth="4"
+                          />
+                          <path
+                            className="opacity-75"
+                            fill="currentColor"
+                            d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"
+                          />
                         </svg>
-                        {t("portfolio.findingLink", "Đang tìm...")}
+                        {t('portfolio.findingLink', 'Đang tìm...')}
                       </>
                     ) : (
-                      t("portfolio.autoFindInspectLink", "Tự động tìm link")
+                      t('portfolio.autoFindInspectLink', 'Tự động tìm link')
                     )}
                   </button>
                 </div>
-                <div className="rounded-xl bg-stone-900/60 border border-stone-800 p-3.5 flex flex-col gap-3">
-                  <div className="text-stone-300 text-[11px] leading-relaxed text-center">
-                    {t("portfolio.noInspectLinkPrompt", "Dán Inspect Link từ Steam để kiểm tra Pattern & Overpay:")}
+                <div className="flex flex-col gap-3 rounded-xl border border-stone-800 bg-stone-900/60 p-3.5">
+                  <div className="text-center text-[11px] leading-relaxed text-stone-300">
+                    {t(
+                      'portfolio.noInspectLinkPrompt',
+                      'Dán Inspect Link từ Steam để kiểm tra Pattern & Overpay:'
+                    )}
                   </div>
                   <div className="space-y-2">
                     <input
@@ -1016,76 +1094,93 @@ export function ItemHoverCard({
                       placeholder="steam://rungame/730/... +csgo_econ_action_preview%20..."
                       value={manualInspectLink}
                       onChange={(e) => setManualInspectLink(e.target.value)}
-                      className="w-full h-9 rounded-lg bg-stone-950 border border-stone-805 px-3 text-xs text-stone-200 placeholder:text-stone-600 focus:outline-none focus:border-blue-500/50 focus:ring-1 focus:ring-blue-500/50 transition-all"
+                      className="border-stone-805 h-9 w-full rounded-lg border bg-stone-950 px-3 text-xs text-stone-200 transition-all placeholder:text-stone-600 focus:border-blue-500/50 focus:ring-1 focus:ring-blue-500/50 focus:outline-none"
                     />
                     <button
                       onClick={handleManualInspect}
                       disabled={isInspecting || !manualInspectLink.trim()}
-                      className="w-full h-8 flex items-center justify-center rounded-lg bg-blue-650 hover:bg-blue-600 text-white font-bold text-xs shadow-md transition-all active:scale-[0.98] disabled:opacity-50 disabled:pointer-events-none"
+                      className="bg-blue-650 flex h-8 w-full items-center justify-center rounded-lg text-xs font-bold text-white shadow-md transition-all hover:bg-blue-600 active:scale-[0.98] disabled:pointer-events-none disabled:opacity-50"
                     >
                       {isInspecting ? (
-                        <span className="flex items-center gap-1.5 justify-center">
-                          <svg className="animate-spin h-3.5 w-3.5 text-white" fill="none" viewBox="0 0 24 24">
-                            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                        <span className="flex items-center justify-center gap-1.5">
+                          <svg
+                            className="h-3.5 w-3.5 animate-spin text-white"
+                            fill="none"
+                            viewBox="0 0 24 24"
+                          >
+                            <circle
+                              className="opacity-25"
+                              cx="12"
+                              cy="12"
+                              r="10"
+                              stroke="currentColor"
+                              strokeWidth="4"
+                            />
+                            <path
+                              className="opacity-75"
+                              fill="currentColor"
+                              d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"
+                            />
                           </svg>
-                          {t("inventoryScanner.scanningPattern", "Đang kiểm tra...")}
+                          {t('inventoryScanner.scanningPattern', 'Đang kiểm tra...')}
                         </span>
                       ) : (
-                        t("inventoryScanner.inspectPatternButton", "Kiểm tra Pattern")
+                        t('inventoryScanner.inspectPatternButton', 'Kiểm tra Pattern')
                       )}
                     </button>
                   </div>
-                  {findStatus === "error" && (
-                    <div className="text-[10px] text-amber-400 font-semibold text-center mt-1">
-                      {t("portfolio.autoFindNotFound", "Không tìm thấy Inspect Link trong dữ liệu scan kho đồ của bạn. Hãy quét lại kho đồ hoặc dán thủ công.")}
+                  {findStatus === 'error' && (
+                    <div className="mt-1 text-center text-[10px] font-semibold text-amber-400">
+                      {t(
+                        'portfolio.autoFindNotFound',
+                        'Không tìm thấy Inspect Link trong dữ liệu scan kho đồ của bạn. Hãy quét lại kho đồ hoặc dán thủ công.'
+                      )}
                     </div>
                   )}
-                  {findStatus === "success" && (
-                    <div className="text-[10px] text-emerald-400 font-semibold text-center mt-1">
-                      {t("portfolio.autoFindSuccess", "Đã tìm thấy link! Đang tiến hành kiểm tra...")}
+                  {findStatus === 'success' && (
+                    <div className="mt-1 text-center text-[10px] font-semibold text-emerald-400">
+                      {t(
+                        'portfolio.autoFindSuccess',
+                        'Đã tìm thấy link! Đang tiến hành kiểm tra...'
+                      )}
                     </div>
                   )}
                   {inspectError && (
-                    <div className="text-[10px] text-red-400 font-semibold text-center mt-1">
+                    <div className="mt-1 text-center text-[10px] font-semibold text-red-400">
                       {t(`inventoryScanner.apiErrors.${inspectError}`, inspectError)}
                     </div>
                   )}
                 </div>
               </div>
-            ) : null
-          ))}
-
+            ) : null)}
 
           {item.storageUnitDetails && item.storageUnitDetails.length > 0 && (
             <div className="mb-5 space-y-3 border-b border-stone-800/60 pb-5">
-              <div className="text-[10px] font-bold tracking-wider text-stone-500 uppercase flex items-center gap-1.5">
+              <div className="flex items-center gap-1.5 text-[10px] font-bold tracking-wider text-stone-500 uppercase">
                 <TbPackage className="size-3.5 text-stone-400" />
-                {t("portfolio.storageUnitAllocation", "Stored in Storage Unit")}
+                {t('portfolio.storageUnitAllocation', 'Stored in Storage Unit')}
               </div>
               <div className="grid gap-2">
                 {item.storageUnitDetails.map((su) => {
-                  const account = accountsQuery.data?.find(
-                    (a) => a.steamId64 === su.steamId64
-                  );
-                  const accountName = account ? account.name : "";
+                  const account = accountOptions.find((a) => a.steamId64 === su.steamId64);
+                  const accountName = account ? account.name : '';
                   return (
                     <div
                       key={su.storageUnitId}
-                      className="flex items-center justify-between rounded-xl border border-stone-800/40 bg-stone-950/20 px-3 py-2.5 hover:bg-stone-900/10 transition duration-200"
+                      className="flex items-center justify-between rounded-xl border border-stone-800/40 bg-stone-950/20 px-3 py-2.5 transition duration-200 hover:bg-stone-900/10"
                     >
-                      <span className="flex items-center gap-2 text-xs font-semibold text-stone-300 min-w-0 flex-1">
-                        <span className="flex size-5.5 items-center justify-center rounded-lg bg-amber-500/10 text-amber-500 shrink-0">
+                      <span className="flex min-w-0 flex-1 items-center gap-2 text-xs font-semibold text-stone-300">
+                        <span className="flex size-5.5 shrink-0 items-center justify-center rounded-lg bg-amber-500/10 text-amber-500">
                           <TbPackage className="size-3" />
                         </span>
                         <span className="truncate">{su.storageUnitName}</span>
                         {accountName && (
-                          <span className="inline-flex max-w-[7rem] shrink-0 items-center gap-0.5 truncate rounded bg-sky-500/5 border border-sky-500/10 px-1.5 py-0.5 text-[8.5px] font-bold text-sky-400 tracking-wide">
+                          <span className="inline-flex max-w-[7rem] shrink-0 items-center gap-0.5 truncate rounded border border-sky-500/10 bg-sky-500/5 px-1.5 py-0.5 text-[8.5px] font-bold tracking-wide text-sky-400">
                             {accountName}
                           </span>
                         )}
                       </span>
-                      <span className="font-mono text-xs font-extrabold text-amber-400 shrink-0">
+                      <span className="shrink-0 font-mono text-xs font-extrabold text-amber-400">
                         {su.quantity}
                       </span>
                     </div>
@@ -1095,7 +1190,9 @@ export function ItemHoverCard({
             </div>
           )}
           {relatedRows.length <= 1 ? (
-            <div className={`space-y-4 transition-all duration-350 ${isResetting ? "animate-reset-flash" : ""}`}>
+            <div
+              className={`space-y-4 transition-all duration-350 ${isResetting ? 'animate-reset-flash' : ''}`}
+            >
               <ItemHoldSection
                 item={item}
                 editAccountId={editAccountId}
@@ -1106,7 +1203,7 @@ export function ItemHoverCard({
                 setEditState={setEditState}
                 editHoldDays={editHoldDays}
                 setEditHoldDays={setEditHoldDays}
-                accounts={accountsQuery.data}
+                accounts={accountOptions}
                 storageUnits={storageUnitsQuery.data}
                 onSelectOpenChange={onSelectOpenChange}
               />
@@ -1116,7 +1213,7 @@ export function ItemHoverCard({
                 const charms = item.patternInfo?.charms ?? [];
                 const hasAccessories = stickers.length > 0 || charms.length > 0;
                 const hasScanSnapshot = (capturedScanTotal ?? item.stickerScanTotalPrice ?? 0) > 0;
-                
+
                 return (
                   <>
                     <StickerCharmSection
@@ -1155,6 +1252,8 @@ export function ItemHoverCard({
                       showStickerFormulaTotal={hasAccessories && hasScanSnapshot}
                       stickerFormulaTotalPrice={stickerFormulaTotal}
                       hasBuff={hasBuff}
+                      useSellLabel={useSellLabel}
+                      isGuest={isGuest}
                     />
                   </>
                 );
@@ -1201,14 +1300,24 @@ export function ItemHoverCard({
         )}
 
         {onOpenDetails && !embedded && (
-          <div className="border-t border-stone-800/80 bg-stone-900/10 p-3 rounded-b-2xl">
+          <div className="rounded-b-2xl border-t border-stone-800/80 bg-stone-900/10 p-3">
             <button
               onClick={onOpenDetails}
-              className="flex w-full items-center justify-center gap-1.5 rounded-xl bg-blue-600/10 hover:bg-blue-600/20 active:scale-[0.98] border border-blue-500/20 py-2.5 text-xs font-bold text-blue-400 hover:text-blue-300 transition-all duration-200"
+              className="flex w-full items-center justify-center gap-1.5 rounded-xl border border-blue-500/20 bg-blue-600/10 py-2.5 text-xs font-bold text-blue-400 transition-all duration-200 hover:bg-blue-600/20 hover:text-blue-300 active:scale-[0.98]"
             >
-              <span>{t("common.expand", "Xem tất cả")}</span>
-              <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2.5">
-                <path strokeLinecap="round" strokeLinejoin="round" d="M13.5 6H5.25A2.25 2.25 0 0 0 3 8.25v10.5A2.25 2.25 0 0 0 5.25 21h10.5A2.25 2.25 0 0 0 18 18.75V10.5m-10.5 6L21 3m0 0h-5.25M21 3v5.25" />
+              <span>{t('common.expand', 'Xem tất cả')}</span>
+              <svg
+                className="h-3.5 w-3.5"
+                fill="none"
+                viewBox="0 0 24 24"
+                stroke="currentColor"
+                strokeWidth="2.5"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  d="M13.5 6H5.25A2.25 2.25 0 0 0 3 8.25v10.5A2.25 2.25 0 0 0 5.25 21h10.5A2.25 2.25 0 0 0 18 18.75V10.5m-10.5 6L21 3m0 0h-5.25M21 3v5.25"
+                />
               </svg>
             </button>
           </div>
@@ -1227,7 +1336,7 @@ export function ItemHoverCard({
             noPadding
             side="left"
             showOverlay={false}
-            className="border-stone-850/80 max-w-[440px] overflow-hidden border-r border-border bg-[#0e121a] text-stone-100 shadow-[0_30px_90px_rgba(0,0,0,0.9)] backdrop-blur-3xl"
+            className="border-stone-850/80 border-border max-w-[440px] overflow-hidden border-r bg-[#0e121a] text-stone-100 shadow-[0_30px_90px_rgba(0,0,0,0.9)] backdrop-blur-3xl"
           >
             <ItemHoverCard
               item={selectedEditingLot}

@@ -1,50 +1,57 @@
-"use client";
+'use client';
 
-import { useState, useEffect } from "react";
+import { useState, useEffect } from 'react';
 
-import { useQueryClient } from "@tanstack/react-query";
-import { useSession } from "./use-session";
-import { useTheme } from "@/components/theme-provider";
-import * as Popover from "@radix-ui/react-popover";
-import { motion, AnimatePresence } from "framer-motion";
-import { Globe, Palette, LogOut, ChevronRight, LogIn, Key, Loader2 } from "lucide-react";
-import { cn } from "@/utils/cn";
-import { useTranslation } from "react-i18next";
-import { changeLanguage } from "@/i18n/config";
-import { Button } from "@/components/ui/button";
-import { CS2CapModal } from "./cs2cap-modal";
+import { useQueryClient } from '@tanstack/react-query';
+import { useSession } from './use-session';
+import { useTheme } from '@/components/theme-provider';
+import * as Popover from '@radix-ui/react-popover';
+import { motion, AnimatePresence } from 'framer-motion';
+import { Globe, Palette, LogOut, ChevronRight, LogIn, Key, Loader2 } from 'lucide-react';
+import { cn } from '@/utils/cn';
+import { useTranslation } from 'react-i18next';
+import { changeLanguage } from '@/i18n/config';
+import { Button } from '@/components/ui/button';
+import { CS2CapModal } from './cs2cap-modal';
 
 const springTransition = {
-  type: "spring",
+  type: 'spring',
   stiffness: 380,
   damping: 26,
 } as const;
-const slideTransition = { duration: 0.15, ease: "easeOut" } as const;
+const slideTransition = { duration: 0.15, ease: 'easeOut' } as const;
 
 // Custom high-performance circular flags using inline SVGs for offline capability & CDN-independence
-const UKFlag = ({ className = "size-5.5" }: { className?: string }) => (
+const UKFlag = ({ className = 'size-5.5' }: { className?: string }) => (
   <svg
     viewBox="0 0 30 30"
-    className={cn("inline-block shrink-0 rounded-full border border-stone-800/10 dark:border-stone-700/30 shadow-sm overflow-hidden", className)}
+    className={cn(
+      'inline-block shrink-0 overflow-hidden rounded-full border border-stone-800/10 shadow-sm dark:border-stone-700/30',
+      className
+    )}
   >
     <rect width="30" height="30" fill="#012169" />
     <path d="M0,0 L30,30 M30,0 L0,30" stroke="#fff" strokeWidth="4" />
-    <path d="M0,0 L15,15 M30,0 L15,15 M15,15 L0,30 M15,15 L30,30" stroke="#C8102E" strokeWidth="1.5" />
+    <path
+      d="M0,0 L15,15 M30,0 L15,15 M15,15 L0,30 M15,15 L30,30"
+      stroke="#C8102E"
+      strokeWidth="1.5"
+    />
     <path d="M15,0 v30 M0,15 h30" stroke="#fff" strokeWidth="6" />
     <path d="M15,0 v30 M0,15 h30" stroke="#C8102E" strokeWidth="3.6" />
   </svg>
 );
 
-const VietnamFlag = ({ className = "size-5.5" }: { className?: string }) => (
+const VietnamFlag = ({ className = 'size-5.5' }: { className?: string }) => (
   <svg
     viewBox="0 0 30 30"
-    className={cn("inline-block shrink-0 rounded-full border border-stone-800/10 dark:border-stone-700/30 shadow-sm overflow-hidden", className)}
+    className={cn(
+      'inline-block shrink-0 overflow-hidden rounded-full border border-stone-800/10 shadow-sm dark:border-stone-700/30',
+      className
+    )}
   >
     <rect width="30" height="30" fill="#da251d" />
-    <path
-      d="M15,6 L20.29,22.28 L6.44,12.22 L23.56,12.22 L9.71,22.28 Z"
-      fill="#ffff00"
-    />
+    <path d="M15,6 L20.29,22.28 L6.44,12.22 L23.56,12.22 L9.71,22.28 Z" fill="#ffff00" />
   </svg>
 );
 
@@ -61,32 +68,35 @@ export function AuthStatus() {
   const [cs2capOpen, setCs2capOpen] = useState(false);
 
   // Active submenu: "none" | "language" | "theme"
-  const [activeSubmenu, setActiveSubmenu] = useState<
-    "none" | "language" | "theme"
-  >("none");
+  const [activeSubmenu, setActiveSubmenu] = useState<'none' | 'language' | 'theme'>('none');
 
   // Interactive language state
-  const [lang, setLang] = useState<"vi" | "en">(i18n.language as "vi" | "en");
+  const [lang, setLang] = useState<'vi' | 'en'>(i18n.language as 'vi' | 'en');
+  const [isMobile, setIsMobile] = useState(false);
+
+  useEffect(() => {
+    const checkMobile = () => setIsMobile(window.innerWidth < 768);
+    checkMobile();
+    window.addEventListener('resize', checkMobile);
+    return () => window.removeEventListener('resize', checkMobile);
+  }, []);
 
   // Load language from localStorage
   useEffect(() => {
-    const savedLang = localStorage.getItem("cs2t_lang");
-    if (savedLang === "vi" || savedLang === "en") {
+    const savedLang = localStorage.getItem('cs2t_lang');
+    if (savedLang === 'vi' || savedLang === 'en') {
       setLang(savedLang);
     }
   }, []);
 
-  const handleLangChange = (newLang: "vi" | "en", e: React.MouseEvent) => {
+  const handleLangChange = (newLang: 'vi' | 'en', e: React.MouseEvent) => {
     e.preventDefault();
     e.stopPropagation();
     setLang(newLang);
     changeLanguage(newLang);
   };
 
-  const handleThemeChange = (
-    newTheme: "light" | "dark",
-    e: React.MouseEvent,
-  ) => {
+  const handleThemeChange = (newTheme: 'light' | 'dark', e: React.MouseEvent) => {
     e.preventDefault();
     e.stopPropagation();
     setTheme(newTheme);
@@ -94,13 +104,13 @@ export function AuthStatus() {
 
   // Close submenu when popover closes
   useEffect(() => {
-    if (!isOpen) setActiveSubmenu("none");
+    if (!isOpen) setActiveSubmenu('none');
   }, [isOpen]);
 
   async function handleLogout() {
     setLoggingOut(true);
     try {
-      await fetch("/api/auth/logout", { method: "POST" });
+      await fetch('/api/auth/logout', { method: 'POST' });
       queryClient.clear();
       window.location.reload();
     } finally {
@@ -110,7 +120,7 @@ export function AuthStatus() {
 
   if (loading) {
     return (
-      <div className="h-10 w-10 animate-pulse rounded-full border border-border bg-surface-muted" />
+      <div className="border-border bg-surface-muted h-10 w-10 animate-pulse rounded-full border" />
     );
   }
 
@@ -127,8 +137,8 @@ export function AuthStatus() {
         }}
         aria-disabled={!googleConfigured || redirecting}
         className={cn(
-          "inline-flex h-10 shrink-0 cursor-pointer items-center justify-center gap-1.5 lg:gap-2.5 rounded-lg bg-accent px-3.5 lg:px-5.5 text-xs font-bold text-accent-foreground shadow-md shadow-accent/10 transition-all hover:bg-accent-hover hover:shadow-lg hover:shadow-accent/20 active:scale-95 whitespace-nowrap",
-          (!googleConfigured || redirecting) && "pointer-events-none opacity-50",
+          'bg-accent text-accent-foreground shadow-accent/10 hover:bg-accent-hover hover:shadow-accent/20 inline-flex h-8 w-8 shrink-0 cursor-pointer items-center justify-center gap-0 rounded-xl p-0 text-xs font-bold whitespace-nowrap shadow-md transition-all hover:shadow-lg active:scale-95 md:h-10 md:w-auto md:gap-1.5 md:rounded-lg md:px-3.5 lg:gap-2.5 lg:px-5.5',
+          (!googleConfigured || redirecting) && 'pointer-events-none opacity-50'
         )}
       >
         {redirecting ? (
@@ -136,7 +146,7 @@ export function AuthStatus() {
         ) : (
           <LogIn className="size-4" strokeWidth={2.5} />
         )}
-        <span className="hidden lg:inline">{t("auth.loginGmail")}</span>
+        <span className="hidden lg:inline">{t('auth.loginGmail')}</span>
       </a>
     );
   }
@@ -145,13 +155,13 @@ export function AuthStatus() {
   const profileEmail = user.email;
   const profileImage =
     user.image ||
-    "https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?w=100&auto=format&fit=crop&q=80";
+    'https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?w=100&auto=format&fit=crop&q=80';
 
   // Initials fallback
   const initials = profileName
-    .split(" ")
+    .split(' ')
     .map((w) => w[0])
-    .join("")
+    .join('')
     .toUpperCase()
     .slice(0, 2);
 
@@ -162,21 +172,21 @@ export function AuthStatus() {
           <Button
             type="button"
             variant="outline"
-            className="group relative flex size-10 cursor-pointer items-center justify-center rounded-full border border-border bg-surface transition-all duration-300 outline-none hover:border-accent hover:shadow-[0_0_12px_rgba(59,130,246,0.15)] active:scale-95 p-0"
+            className="group border-border bg-surface hover:border-accent relative flex size-8 cursor-pointer items-center justify-center rounded-full border p-0 transition-all duration-300 outline-none hover:shadow-[0_0_12px_rgba(59,130,246,0.15)] active:scale-95 md:size-10"
           >
             {profileImage ? (
               <img
                 src={profileImage}
-                alt={t("auth.avatarAlt", "{{name}}'s profile avatar", { name: profileName })}
+                alt={t('auth.avatarAlt', "{{name}}'s profile avatar", { name: profileName })}
                 className="size-full rounded-full object-cover transition duration-300 group-hover:scale-105"
                 referrerPolicy="no-referrer"
               />
             ) : (
-              <div className="flex size-full items-center justify-center rounded-full bg-surface-muted text-xs font-bold text-foreground transition duration-300 group-hover:scale-105">
+              <div className="bg-surface-muted text-foreground flex size-full items-center justify-center rounded-full text-xs font-bold transition duration-300 group-hover:scale-105">
                 {initials}
               </div>
             )}
-            <span className="absolute -right-0.5 -bottom-0.5 size-2.5 rounded-full border-2 border-surface bg-success shadow-sm" />
+            <span className="border-surface bg-success absolute -right-0.5 -bottom-0.5 size-2.5 rounded-full border-2 shadow-sm" />
           </Button>
         </Popover.Trigger>
 
@@ -191,10 +201,7 @@ export function AuthStatus() {
                 className="z-50 outline-none"
                 onInteractOutside={(event) => {
                   // Radix swallowing fix: do not close Popover or swallow click if clicking on the absolute submenu
-                  if (
-                    event.target &&
-                    (event.target as HTMLElement).closest(".submenu-content")
-                  ) {
+                  if (event.target && (event.target as HTMLElement).closest('.submenu-content')) {
                     event.preventDefault();
                   }
                 }}
@@ -205,37 +212,39 @@ export function AuthStatus() {
                   animate={{ opacity: 1, scale: 1, y: 0 }}
                   exit={{ opacity: 0, scale: 0.95, y: -8 }}
                   transition={springTransition}
-                  className="relative w-[240px] overflow-visible rounded-xl border border-border bg-surface p-1.5 text-left shadow-soft select-none"
+                  className="border-border bg-surface shadow-soft relative w-[240px] overflow-visible rounded-xl border p-1.5 text-left select-none"
                 >
                   {/* Google User Info Header (Avatar, Username, Email) */}
-                  <div className="flex items-center gap-3 rounded-lg px-2.5 py-2.5 transition duration-150 hover:bg-surface-hover/40">
+                  <div className="hover:bg-surface-hover/40 flex items-center gap-3 rounded-lg px-2.5 py-2.5 transition duration-150">
                     <div className="relative size-10 shrink-0">
                       {profileImage ? (
                         <img
                           src={profileImage}
-                          alt={t("auth.avatarAlt", "{{name}}'s profile avatar", { name: profileName })}
-                          className="size-full rounded-full border border-border object-cover"
+                          alt={t('auth.avatarAlt', "{{name}}'s profile avatar", {
+                            name: profileName,
+                          })}
+                          className="border-border size-full rounded-full border object-cover"
                           referrerPolicy="no-referrer"
                         />
                       ) : (
-                        <div className="flex size-full items-center justify-center rounded-full border border-border bg-surface-muted text-xs font-bold text-foreground">
+                        <div className="border-border bg-surface-muted text-foreground flex size-full items-center justify-center rounded-full border text-xs font-bold">
                           {initials}
                         </div>
                       )}
-                      <span className="absolute -right-0.5 -bottom-0.5 size-2.5 rounded-full border-2 border-surface bg-success" />
+                      <span className="border-surface bg-success absolute -right-0.5 -bottom-0.5 size-2.5 rounded-full border-2" />
                     </div>
                     <div className="flex min-w-0 flex-1 flex-col">
-                      <p className="truncate text-sm leading-tight font-bold text-foreground">
+                      <p className="text-foreground truncate text-sm leading-tight font-bold">
                         {profileName}
                       </p>
-                      <p className="mt-0.5 truncate text-[11px] leading-none font-medium text-muted-foreground">
+                      <p className="text-muted-foreground mt-0.5 truncate text-[11px] leading-none font-medium">
                         {profileEmail}
                       </p>
                     </div>
                   </div>
 
                   {/* Divider */}
-                  <div className="mx-1 my-1.5 h-px bg-border/70" />
+                  <div className="bg-border/70 mx-1 my-1.5 h-px" />
 
                   {/* CS2Cap API Key / Rate Limit Modal Trigger */}
                   <Button
@@ -245,20 +254,20 @@ export function AuthStatus() {
                       setCs2capOpen(true);
                       setIsOpen(false);
                     }}
-                    className="flex w-full cursor-pointer items-center justify-start gap-2.5 rounded-lg px-3 py-2.5 text-xs font-semibold text-foreground transition-all duration-200 outline-none hover:bg-surface-hover"
+                    className="text-foreground hover:bg-surface-hover flex w-full cursor-pointer items-center justify-start gap-2.5 rounded-lg px-3 py-2.5 text-xs font-semibold transition-all duration-200 outline-none"
                   >
-                    <Key className="size-4 text-muted-foreground" />
-                    <span>{t("auth.rateLimitAndKey")}</span>
+                    <Key className="text-muted-foreground size-4" />
+                    <span>{t('auth.rateLimitAndKey')}</span>
                   </Button>
 
                   {/* Divider */}
-                  <div className="mx-1 my-1.5 h-px bg-border/70" />
+                  <div className="bg-border/70 mx-1 my-1.5 h-px" />
 
                   {/* Change Language Item */}
                   <div
                     className="relative"
-                    onMouseEnter={() => setActiveSubmenu("language")}
-                    onMouseLeave={() => setActiveSubmenu("none")}
+                    onMouseEnter={() => !isMobile && setActiveSubmenu('language')}
+                    onMouseLeave={() => !isMobile && setActiveSubmenu('none')}
                   >
                     <Button
                       type="button"
@@ -266,59 +275,62 @@ export function AuthStatus() {
                       onClick={(e) => {
                         e.preventDefault();
                         e.stopPropagation();
-                        setActiveSubmenu(
-                          activeSubmenu === "language" ? "none" : "language",
-                        );
+                        if (isMobile) {
+                          const nextLang = lang === 'vi' ? 'en' : 'vi';
+                          setLang(nextLang);
+                          changeLanguage(nextLang);
+                        } else {
+                          setActiveSubmenu(activeSubmenu === 'language' ? 'none' : 'language');
+                        }
                       }}
                       className={cn(
-                        "flex w-full cursor-pointer items-center justify-between rounded-lg px-3 py-2.5 text-xs font-semibold transition-all duration-200 outline-none",
-                        "text-foreground hover:bg-surface-hover",
-                        activeSubmenu === "language" &&
-                        "bg-surface-hover",
+                        'flex w-full cursor-pointer items-center justify-between rounded-lg px-3 py-2.5 text-xs font-semibold transition-all duration-200 outline-none',
+                        'text-foreground hover:bg-surface-hover',
+                        !isMobile && activeSubmenu === 'language' && 'bg-surface-hover'
                       )}
                     >
                       <div className="flex items-center gap-2.5">
-                        <Globe className="size-4 text-muted-foreground" />
-                        <span>{t("auth.changeLanguage")}</span>
+                        <Globe className="text-muted-foreground size-4" />
+                        <span>{t('auth.changeLanguage')}</span>
                       </div>
-                      <ChevronRight className="size-3.5 text-muted-foreground" />
+                      {!isMobile && <ChevronRight className="text-muted-foreground size-3.5" />}
                     </Button>
 
                     {/* Change Language Submenu (Exactly Like Screenshot, Opening to the Right) */}
                     <AnimatePresence>
-                      {activeSubmenu === "language" && (
+                      {!isMobile && activeSubmenu === 'language' && (
                         <motion.div
                           initial={{ opacity: 0, x: -8, scale: 0.95 }}
                           animate={{ opacity: 1, x: 0, scale: 1 }}
                           exit={{ opacity: 0, x: -8, scale: 0.95 }}
                           transition={slideTransition}
-                          className="submenu-content absolute top-0 left-[calc(100%+8px)] z-50 min-w-[170px] flex flex-col gap-1.5 rounded-xl border border-border bg-surface p-1.5 shadow-soft"
+                          className="submenu-content border-border bg-surface shadow-soft absolute top-0 left-[calc(100%+8px)] z-50 flex min-w-[170px] flex-col gap-1.5 rounded-xl border p-1.5"
                         >
                           {/* Invisible Hover Bridge */}
                           <div className="absolute top-0 -left-2 h-full w-2 bg-transparent" />
-                           <Button
+                          <Button
                             type="button"
                             variant="ghost"
-                            onClick={(e) => handleLangChange("en", e)}
+                            onClick={(e) => handleLangChange('en', e)}
                             className={cn(
-                              "flex w-full cursor-pointer items-center justify-start gap-3 rounded-lg px-3 py-2.5 text-xs font-bold text-foreground transition duration-150 hover:bg-surface-hover",
-                              lang === "en" && "bg-surface-hover",
+                              'text-foreground hover:bg-surface-hover flex w-full cursor-pointer items-center justify-start gap-3 rounded-lg px-3 py-2.5 text-xs font-bold transition duration-150',
+                              lang === 'en' && 'bg-surface-hover'
                             )}
                           >
                             <UKFlag />
-                            <span>{t("common.english")}</span>
+                            <span>{t('common.english')}</span>
                           </Button>
                           <Button
                             type="button"
                             variant="ghost"
-                            onClick={(e) => handleLangChange("vi", e)}
+                            onClick={(e) => handleLangChange('vi', e)}
                             className={cn(
-                              "flex w-full cursor-pointer items-center justify-start gap-3 rounded-lg px-3 py-2.5 text-xs font-bold text-foreground transition duration-150 hover:bg-surface-hover",
-                              lang === "vi" && "bg-surface-hover",
+                              'text-foreground hover:bg-surface-hover flex w-full cursor-pointer items-center justify-start gap-3 rounded-lg px-3 py-2.5 text-xs font-bold transition duration-150',
+                              lang === 'vi' && 'bg-surface-hover'
                             )}
                           >
                             <VietnamFlag />
-                            <span>{t("common.vietnamese")}</span>
+                            <span>{t('common.vietnamese')}</span>
                           </Button>
                         </motion.div>
                       )}
@@ -328,8 +340,8 @@ export function AuthStatus() {
                   {/* Change Theme Item */}
                   <div
                     className="relative mt-0.5"
-                    onMouseEnter={() => setActiveSubmenu("theme")}
-                    onMouseLeave={() => setActiveSubmenu("none")}
+                    onMouseEnter={() => !isMobile && setActiveSubmenu('theme')}
+                    onMouseLeave={() => !isMobile && setActiveSubmenu('none')}
                   >
                     <Button
                       type="button"
@@ -337,59 +349,60 @@ export function AuthStatus() {
                       onClick={(e) => {
                         e.preventDefault();
                         e.stopPropagation();
-                        setActiveSubmenu(
-                          activeSubmenu === "theme" ? "none" : "theme",
-                        );
+                        if (isMobile) {
+                          setTheme(theme === 'dark' ? 'light' : 'dark');
+                        } else {
+                          setActiveSubmenu(activeSubmenu === 'theme' ? 'none' : 'theme');
+                        }
                       }}
                       className={cn(
-                        "flex w-full cursor-pointer items-center justify-between rounded-lg px-3 py-2.5 text-xs font-semibold transition-all duration-200 outline-none",
-                        "text-foreground hover:bg-surface-hover",
-                        activeSubmenu === "theme" &&
-                        "bg-surface-hover",
+                        'flex w-full cursor-pointer items-center justify-between rounded-lg px-3 py-2.5 text-xs font-semibold transition-all duration-200 outline-none',
+                        'text-foreground hover:bg-surface-hover',
+                        !isMobile && activeSubmenu === 'theme' && 'bg-surface-hover'
                       )}
                     >
                       <div className="flex items-center gap-2.5">
-                        <Palette className="size-4 text-muted-foreground" />
-                        <span>{t("auth.changeTheme")}</span>
+                        <Palette className="text-muted-foreground size-4" />
+                        <span>{t('auth.changeTheme')}</span>
                       </div>
-                      <ChevronRight className="size-3.5 text-muted-foreground" />
+                      {!isMobile && <ChevronRight className="text-muted-foreground size-3.5" />}
                     </Button>
 
                     {/* Change Theme Submenu */}
                     <AnimatePresence>
-                      {activeSubmenu === "theme" && (
+                      {!isMobile && activeSubmenu === 'theme' && (
                         <motion.div
                           initial={{ opacity: 0, x: -8, scale: 0.95 }}
                           animate={{ opacity: 1, x: 0, scale: 1 }}
                           exit={{ opacity: 0, x: -8, scale: 0.95 }}
                           transition={slideTransition}
-                          className="submenu-content absolute top-0 left-[calc(100%+8px)] z-50 min-w-[170px] flex flex-col gap-1.5 rounded-xl border border-border bg-surface p-1.5 shadow-soft"
+                          className="submenu-content border-border bg-surface shadow-soft absolute top-0 left-[calc(100%+8px)] z-50 flex min-w-[170px] flex-col gap-1.5 rounded-xl border p-1.5"
                         >
                           {/* Invisible Hover Bridge */}
                           <div className="absolute top-0 -left-2 h-full w-2 bg-transparent" />
                           <Button
                             type="button"
                             variant="ghost"
-                            onClick={(e) => handleThemeChange("dark", e)}
+                            onClick={(e) => handleThemeChange('dark', e)}
                             className={cn(
-                              "flex w-full cursor-pointer items-center justify-start gap-3 rounded-lg px-3 py-2.5 text-xs font-bold text-foreground transition duration-150 hover:bg-surface-hover",
-                              theme === "dark" && "bg-surface-hover",
+                              'text-foreground hover:bg-surface-hover flex w-full cursor-pointer items-center justify-start gap-3 rounded-lg px-3 py-2.5 text-xs font-bold transition duration-150',
+                              theme === 'dark' && 'bg-surface-hover'
                             )}
                           >
-                            <i className="size-3.5 rounded-full bg-[#181A20] shadow-sm border border-stone-850 dark:border-stone-700 shrink-0" />
-                            <span>{t("auth.darkTheme")}</span>
+                            <i className="border-stone-850 size-3.5 shrink-0 rounded-full border bg-[#181A20] shadow-sm dark:border-stone-700" />
+                            <span>{t('auth.darkTheme')}</span>
                           </Button>
                           <Button
                             type="button"
                             variant="ghost"
-                            onClick={(e) => handleThemeChange("light", e)}
+                            onClick={(e) => handleThemeChange('light', e)}
                             className={cn(
-                              "flex w-full cursor-pointer items-center justify-start gap-3 rounded-lg px-3 py-2.5 text-xs font-bold text-foreground transition duration-150 hover:bg-surface-hover",
-                              theme === "light" && "bg-surface-hover",
+                              'text-foreground hover:bg-surface-hover flex w-full cursor-pointer items-center justify-start gap-3 rounded-lg px-3 py-2.5 text-xs font-bold transition duration-150',
+                              theme === 'light' && 'bg-surface-hover'
                             )}
                           >
-                            <i className="size-3.5 rounded-full bg-[#ffffff] shadow-sm border border-stone-300 dark:border-stone-800 shrink-0" />
-                            <span>{t("auth.lightTheme")}</span>
+                            <i className="size-3.5 shrink-0 rounded-full border border-stone-300 bg-[#ffffff] shadow-sm dark:border-stone-800" />
+                            <span>{t('auth.lightTheme')}</span>
                           </Button>
                         </motion.div>
                       )}
@@ -397,7 +410,7 @@ export function AuthStatus() {
                   </div>
 
                   {/* Space / Divider */}
-                  <div className="mx-1 my-1.5 h-px bg-border/70" />
+                  <div className="bg-border/70 mx-1 my-1.5 h-px" />
 
                   {/* Logout (Exact Red Danger Theme) */}
                   {user ? (
@@ -406,24 +419,24 @@ export function AuthStatus() {
                       variant="ghost"
                       disabled={loggingOut}
                       onClick={handleLogout}
-                      className="flex w-full cursor-pointer items-center justify-start gap-2.5 rounded-lg px-3 py-2.5 text-xs font-bold text-danger transition duration-150 outline-none hover:bg-danger-muted hover:text-danger disabled:opacity-50"
+                      className="text-danger hover:bg-danger-muted hover:text-danger flex w-full cursor-pointer items-center justify-start gap-2.5 rounded-lg px-3 py-2.5 text-xs font-bold transition duration-150 outline-none disabled:opacity-50"
                     >
-                      <LogOut className="size-4 text-danger" />
-                      <span>{t("auth.logout")}</span>
+                      <LogOut className="text-danger size-4" />
+                      <span>{t('auth.logout')}</span>
                     </Button>
                   ) : (
                     <a
                       href="/api/auth/google"
                       aria-disabled={!googleConfigured}
                       className={cn(
-                        "flex w-full cursor-pointer items-center gap-2.5 rounded-lg px-3 py-2.5 text-xs font-bold transition duration-150 outline-none",
+                        'flex w-full cursor-pointer items-center gap-2.5 rounded-lg px-3 py-2.5 text-xs font-bold transition duration-150 outline-none',
                         googleConfigured
-                          ? "text-accent hover:bg-accent/10"
-                          : "pointer-events-none text-muted-foreground",
+                          ? 'text-accent hover:bg-accent/10'
+                          : 'text-muted-foreground pointer-events-none'
                       )}
                     >
                       <LogIn className="size-4" />
-                      <span>{t("auth.loginGmail")}</span>
+                      <span>{t('auth.loginGmail')}</span>
                     </a>
                   )}
                 </motion.div>
@@ -432,11 +445,7 @@ export function AuthStatus() {
           )}
         </AnimatePresence>
       </Popover.Root>
-      <CS2CapModal
-        open={cs2capOpen}
-        onOpenChange={setCs2capOpen}
-        mode="member"
-      />
+      <CS2CapModal open={cs2capOpen} onOpenChange={setCs2capOpen} mode="member" />
     </div>
   );
 }

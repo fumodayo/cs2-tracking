@@ -1,9 +1,9 @@
-"use client";
+'use client';
 
-import { useEffect, useMemo } from "react";
-import type { ReactNode } from "react";
-import { useQuery } from "@tanstack/react-query";
-import { useTranslation } from "react-i18next";
+import { useEffect, useMemo } from 'react';
+import type { ReactNode } from 'react';
+import { useQuery } from '@tanstack/react-query';
+import { useTranslation } from 'react-i18next';
 import {
   Badge,
   ExternalLink,
@@ -12,13 +12,13 @@ import {
   ShieldCheck,
   TrendingDown,
   TrendingUp,
-} from "lucide-react";
-import type { PatternInfo } from "@/domain/pattern-info";
-import { formatVND } from "@/utils/format";
-import { proxySteamUrl } from "@/utils/url";
-import { Input } from "@/components/ui/input";
-import { Button } from "@/components/ui/button";
-import { formatDateVi } from "@/utils/date";
+} from 'lucide-react';
+import type { PatternInfo } from '@/domain/pattern-info';
+import { formatVND } from '@/utils/format';
+import { proxySteamUrl } from '@/utils/url';
+import { Input } from '@/components/ui/input';
+import { Button } from '@/components/ui/button';
+import { formatDateVi } from '@/utils/date';
 
 type AccessoryPrice = {
   marketHashName: string;
@@ -72,25 +72,23 @@ export function StickerCharmSection({
         new Set(
           [...stickers, ...charms]
             .map((item) => item.marketHashName)
-            .filter((name): name is string => Boolean(name)),
-        ),
+            .filter((name): name is string => Boolean(name))
+        )
       ),
-    [stickers, charms],
+    [stickers, charms]
   );
 
   const pricesQuery = useQuery({
-    queryKey: ["sticker-charm-prices", marketHashNames],
+    queryKey: ['sticker-charm-prices', marketHashNames],
     queryFn: async () => {
-      const res = await fetch("/api/inventory/sticker-prices", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
+      const res = await fetch('/api/inventory/sticker-prices', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ marketHashNames }),
       });
-      if (!res.ok) throw new Error("failedToFetchStickerPrices");
+      if (!res.ok) throw new Error('failedToFetchStickerPrices');
       const data = (await res.json()) as { results?: AccessoryPrice[] };
-      return new Map(
-        (data.results ?? []).map((item) => [item.marketHashName, item.price]),
-      );
+      return new Map((data.results ?? []).map((item) => [item.marketHashName, item.price]));
     },
     enabled: marketHashNames.length > 0,
     staleTime: 15 * 60 * 1000,
@@ -103,7 +101,7 @@ export function StickerCharmSection({
         if (!accessory.marketHashName) return sum;
         return sum + (priceMap.get(accessory.marketHashName) ?? 0);
       }, 0),
-    [charms, priceMap, stickers],
+    [charms, priceMap, stickers]
   );
 
   const safeStickerRate = parseRate(stickerRate);
@@ -111,31 +109,20 @@ export function StickerCharmSection({
   const scanAccessoryTotal = Math.max(0, stickerScanTotalPrice ?? 0);
   const hasScanSnapshot = scanAccessoryTotal > 0;
   const savedCurrentAddValue = Math.round(
-    (currentAccessoryTotal * Math.max(0, savedStickerRate)) / 100,
+    (currentAccessoryTotal * Math.max(0, savedStickerRate)) / 100
   );
-  const currentAddedValue = Math.round(
-    (currentAccessoryTotal * safeStickerRate) / 100,
-  );
-  const currentBaseSkinPrice = Math.max(
-    0,
-    (skinPrice ?? 0) - savedCurrentAddValue,
-  );
+  const currentAddedValue = Math.round((currentAccessoryTotal * safeStickerRate) / 100);
+  const currentBaseSkinPrice = Math.max(0, (skinPrice ?? 0) - savedCurrentAddValue);
   const currentTotalPrice = currentBaseSkinPrice + currentAddedValue;
   const savedBuyAddValue = Math.round(
-    (scanAccessoryTotal * Math.max(0, savedStickerBuyRate)) / 100,
+    (scanAccessoryTotal * Math.max(0, savedStickerBuyRate)) / 100
   );
-  const buyAddedValue = Math.round(
-    (scanAccessoryTotal * safeStickerBuyRate) / 100,
-  );
+  const buyAddedValue = Math.round((scanAccessoryTotal * safeStickerBuyRate) / 100);
   const buyBaseSkinPrice = Math.max(0, (buyPrice ?? 0) - savedBuyAddValue);
   const buyFormulaTotalPrice = buyBaseSkinPrice + buyAddedValue;
-  const accessoryChange = hasScanSnapshot
-    ? currentAccessoryTotal - scanAccessoryTotal
-    : 0;
+  const accessoryChange = hasScanSnapshot ? currentAccessoryTotal - scanAccessoryTotal : 0;
   const accessoryChangePercent =
-    hasScanSnapshot && scanAccessoryTotal > 0
-      ? (accessoryChange / scanAccessoryTotal) * 100
-      : null;
+    hasScanSnapshot && scanAccessoryTotal > 0 ? (accessoryChange / scanAccessoryTotal) * 100 : null;
 
   useEffect(() => {
     if (!hasScanSnapshot) return;
@@ -145,12 +132,7 @@ export function StickerCharmSection({
   useEffect(() => {
     if (!shouldApplyStickerTotal || !hasScanSnapshot) return;
     onStickerTotalPriceChange?.(buyFormulaTotalPrice);
-  }, [
-    buyFormulaTotalPrice,
-    hasScanSnapshot,
-    onStickerTotalPriceChange,
-    shouldApplyStickerTotal,
-  ]);
+  }, [buyFormulaTotalPrice, hasScanSnapshot, onStickerTotalPriceChange, shouldApplyStickerTotal]);
 
   if (!hasAccessories && !patternInfo?.isSouvenir) {
     return null;
@@ -160,7 +142,7 @@ export function StickerCharmSection({
     <div className="mb-5 space-y-3 border-b border-stone-800/60 pb-5 text-xs">
       <div className="flex items-center justify-between gap-3">
         <div className="text-[10px] font-bold tracking-wide text-stone-500">
-          {t("portfolio.stickerCharmTitle")}
+          {t('portfolio.stickerCharmTitle')}
         </div>
         {patternInfo?.isSouvenir ? (
           <span className="inline-flex shrink-0 items-center gap-1 rounded-md border border-amber-500/20 bg-amber-500/10 px-2 py-1 text-[10px] font-bold text-amber-300">
@@ -174,42 +156,36 @@ export function StickerCharmSection({
         readOnly ? (
           <div className="rounded-lg border border-stone-800/70 bg-stone-950/40 p-3.5 shadow-[inset_0_1px_0_rgba(255,255,255,0.03)]">
             <div className="flex items-center justify-between text-xs font-semibold text-stone-300">
-              <span>{t("portfolio.stickerCharmMarket", "Giá thị trường Sticker/Charm")}</span>
-              <span className="font-mono text-emerald-400 font-extrabold text-sm">
+              <span>{t('portfolio.stickerCharmMarket', 'Giá thị trường Sticker/Charm')}</span>
+              <span className="font-mono text-sm font-extrabold text-emerald-400">
                 {formatVND(currentAccessoryTotal)}
               </span>
             </div>
           </div>
         ) : (
-          <div className="rounded-lg border border-stone-800/70 bg-stone-950/40 p-3 space-y-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.03)]">
+          <div className="space-y-3 rounded-lg border border-stone-800/70 bg-stone-950/40 p-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.03)]">
             <div className="rounded-md border border-emerald-500/15 bg-emerald-500/5 p-2.5">
               <div className="flex items-center justify-between gap-2">
                 <div className="text-[9px] font-bold tracking-wide text-emerald-400">
-                  {t("portfolio.currentPriceTitle")}
+                  {t('portfolio.currentPriceTitle')}
                 </div>
                 {hasScanSnapshot ? (
-                  <ChangeBadge
-                    amount={accessoryChange}
-                    percent={accessoryChangePercent}
-                  />
+                  <ChangeBadge amount={accessoryChange} percent={accessoryChangePercent} />
                 ) : null}
               </div>
-              <ValueLine
-                label={t("portfolio.stickerCharmMarket")}
-                value={currentAccessoryTotal}
-              />
+              <ValueLine label={t('portfolio.stickerCharmMarket')} value={currentAccessoryTotal} />
               <RateField
-                label={t("portfolio.percentSellingValuation")}
+                label={t('portfolio.percentSellingValuation')}
                 value={stickerRate}
                 onChange={onStickerRateChange}
               />
               <ValueLine
-                label={t("portfolio.addToCurrentPrice")}
+                label={t('portfolio.addToCurrentPrice')}
                 value={currentAddedValue}
                 tone="emerald"
               />
               <ValueLine
-                label={t("portfolio.estimatedValue")}
+                label={t('portfolio.estimatedValue')}
                 value={currentTotalPrice}
                 tone="emerald"
               />
@@ -218,25 +194,21 @@ export function StickerCharmSection({
             {hasScanSnapshot ? (
               <div className="rounded-md border border-amber-500/15 bg-amber-500/5 p-2.5">
                 <div className="text-[9px] font-bold tracking-wide text-amber-400">
-                  {t("portfolio.purchaseValuationTitle", "Định giá lúc mua")}
+                  {t('portfolio.purchaseValuationTitle', 'Định giá lúc mua')}
                 </div>
                 <ValueLine
-                  label={t("portfolio.stickerCharmScanPrice", "Giá Sticker lúc Scan")}
+                  label={t('portfolio.stickerCharmScanPrice', 'Giá Sticker lúc Scan')}
                   value={scanAccessoryTotal}
                   tone="amber"
                 />
                 <RateField
-                  label={t("portfolio.percentIntoCapital")}
+                  label={t('portfolio.percentIntoCapital')}
                   value={stickerBuyRate}
                   onChange={onStickerBuyRateChange}
                 />
+                <ValueLine label={t('portfolio.addToCapital')} value={buyAddedValue} tone="amber" />
                 <ValueLine
-                  label={t("portfolio.addToCapital")}
-                  value={buyAddedValue}
-                  tone="amber"
-                />
-                <ValueLine
-                  label={t("portfolio.suggestedCost")}
+                  label={t('portfolio.suggestedCost')}
                   value={buyFormulaTotalPrice}
                   tone="amber"
                 />
@@ -257,16 +229,14 @@ export function StickerCharmSection({
               meta={[
                 sticker.slot !== undefined ? `Slot ${sticker.slot + 1}` : null,
                 sticker.wear !== undefined
-                  ? t("portfolio.scratched", {
-                      percent: (100 - Math.round(Math.max(0, Math.min(1, sticker.wear)) * 100)).toFixed(0),
+                  ? t('portfolio.scratched', {
+                      percent: (
+                        100 - Math.round(Math.max(0, Math.min(1, sticker.wear)) * 100)
+                      ).toFixed(0),
                     })
                   : null,
               ]}
-              price={
-                sticker.marketHashName
-                  ? priceMap.get(sticker.marketHashName)
-                  : undefined
-              }
+              price={sticker.marketHashName ? priceMap.get(sticker.marketHashName) : undefined}
               marketHashName={sticker.marketHashName}
             />
           ))}
@@ -285,11 +255,7 @@ export function StickerCharmSection({
                 charm.slot !== undefined ? `Slot ${charm.slot + 1}` : null,
                 charm.pattern !== undefined ? `Pattern ${charm.pattern}` : null,
               ]}
-              price={
-                charm.marketHashName
-                  ? priceMap.get(charm.marketHashName)
-                  : undefined
-              }
+              price={charm.marketHashName ? priceMap.get(charm.marketHashName) : undefined}
               marketHashName={charm.marketHashName}
             />
           ))}
@@ -300,7 +266,7 @@ export function StickerCharmSection({
 }
 
 function parseRate(value: string): number {
-  const parsed = Number(value.replace(",", "."));
+  const parsed = Number(value.replace(',', '.'));
   return Number.isFinite(parsed) ? Math.max(0, parsed) : 0;
 }
 
@@ -334,36 +300,30 @@ function RateField({
 function ValueLine({
   label,
   value,
-  tone = "stone",
+  tone = 'stone',
 }: {
   label: string;
   value: number | null;
-  tone?: "stone" | "amber" | "emerald";
+  tone?: 'stone' | 'amber' | 'emerald';
 }) {
   const toneClass =
-    tone === "emerald"
-      ? "text-emerald-300"
-      : tone === "amber"
-        ? "text-amber-300"
-        : "text-stone-300";
+    tone === 'emerald'
+      ? 'text-emerald-300'
+      : tone === 'amber'
+        ? 'text-amber-300'
+        : 'text-stone-300';
 
   return (
     <div className="mt-2 flex items-center justify-between gap-3 text-[10px] font-semibold text-stone-500">
       <span>{label}</span>
       <span className={`font-mono text-[11px] font-extrabold ${toneClass}`}>
-        {value !== null ? formatVND(value) : "--"}
+        {value !== null ? formatVND(value) : '--'}
       </span>
     </div>
   );
 }
 
-function ChangeBadge({
-  amount,
-  percent,
-}: {
-  amount: number;
-  percent: number | null;
-}) {
+function ChangeBadge({ amount, percent }: { amount: number; percent: number | null }) {
   const isUp = amount >= 0;
   const Icon = isUp ? TrendingUp : TrendingDown;
 
@@ -371,12 +331,12 @@ function ChangeBadge({
     <span
       className={`inline-flex items-center gap-1 rounded-md border px-1.5 py-0.5 text-[9px] font-bold ${
         isUp
-          ? "border-emerald-500/20 bg-emerald-500/10 text-emerald-300"
-          : "border-red-500/20 bg-red-500/10 text-red-300"
+          ? 'border-emerald-500/20 bg-emerald-500/10 text-emerald-300'
+          : 'border-red-500/20 bg-red-500/10 text-red-300'
       }`}
     >
       <Icon className="size-3" />
-      {isUp ? "+" : ""}
+      {isUp ? '+' : ''}
       {percent !== null ? `${percent.toFixed(0)}%` : formatVND(amount)}
     </span>
   );
@@ -399,9 +359,7 @@ function AccessoryRow({
 }) {
   const cleanMeta = meta.filter((value): value is string => Boolean(value));
   const marketUrl = marketHashName
-    ? `https://steamcommunity.com/market/listings/730/${encodeURIComponent(
-        marketHashName,
-      )}`
+    ? `https://steamcommunity.com/market/listings/730/${encodeURIComponent(marketHashName)}`
     : undefined;
   const content = (
     <>
@@ -417,7 +375,7 @@ function AccessoryRow({
         )}
       </div>
       <div className="min-w-0 flex-1">
-        <div className="truncate text-[11px] font-bold text-stone-200 transition-colors duration-200 group-hover:text-white">
+        <div className="group-hover:text-foreground truncate text-[11px] font-bold text-stone-200 transition-colors duration-200">
           {name}
         </div>
         {cleanMeta.length > 0 ? (
