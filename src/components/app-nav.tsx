@@ -14,6 +14,7 @@ import { FaHeart } from 'react-icons/fa6';
 import { Button } from '@/components/ui/button';
 import { DonateDialog } from '@/components/donate-dialog';
 import { Tooltip } from '@/components/ui/tooltip';
+import type { CryptoItem, NetworkOption } from '@/components/donate-dialog/donate-types';
 
 const NAV_ITEMS = [
   { href: '/portfolio', labelKey: 'nav.portfolio', icon: BarChart3 },
@@ -39,8 +40,26 @@ const hoverTransition = {
 const DONATE_HASH = 'donate';
 const DEFAULT_DONATE_AMOUNT = 20000;
 
+type DonateTab = 'bank' | 'crypto';
+
+interface DonateRequest {
+  tab: DonateTab;
+  amount: number;
+  cryptoId: string | null;
+  network: string | null;
+}
+
+function getParam(params: URLSearchParams, keys: string[]): string | null {
+  for (const key of keys) {
+    const value = params.get(key);
+    if (value !== null) return value;
+  }
+
+  return null;
+}
+
 function getAmountParam(params: URLSearchParams): string | null {
-  return params.get('amount') ?? params.get('a');
+  return getParam(params, ['amount', 'a']);
 }
 
 function getHashFragment(): string {
@@ -101,9 +120,34 @@ function formatDonateAmountParam(amount: number): string | null {
   return String(roundedAmount);
 }
 
-function buildDonateHash(amount: number): string {
+function formatUrlParam(value: string): string {
+  return value
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '');
+}
+
+function buildBankDonateHash(amount: number): string {
+  const params = new URLSearchParams({ type: 'bank' });
   const amountParam = formatDonateAmountParam(amount);
-  return amountParam ? `${DONATE_HASH}?amount=${amountParam}` : DONATE_HASH;
+
+  if (amountParam) {
+    params.set('amount', amountParam);
+  }
+
+  return `${DONATE_HASH}?${params.toString()}`;
+}
+
+function buildCryptoDonateHash(crypto?: CryptoItem | null, network?: NetworkOption | null): string {
+  const params = new URLSearchParams({ type: 'crypto' });
+
+  if (crypto) {
+    params.set('crypto', crypto.id);
+    params.set('network', formatUrlParam(network?.networkName ?? crypto.network));
+  }
+
+  return `${DONATE_HASH}?${params.toString()}`;
 }
 
 function getUrlWithoutDonateParams(): string {
@@ -111,40 +155,93 @@ function getUrlWithoutDonateParams(): string {
   searchParams.delete('donate');
   searchParams.delete('amount');
   searchParams.delete('a');
+  searchParams.delete('type');
+  searchParams.delete('method');
+  searchParams.delete('tab');
+  searchParams.delete('crypto');
+  searchParams.delete('coin');
+  searchParams.delete('token');
+  searchParams.delete('currency');
+  searchParams.delete('network');
+  searchParams.delete('net');
+  searchParams.delete('chain');
 
   const search = searchParams.toString();
   return `${window.location.pathname}${search ? `?${search}` : ''}`;
 }
 
-function updateDonateUrl(amount: number) {
+function updateBankDonateUrl(amount: number) {
   window.history.replaceState(
     null,
     '',
-    `${getUrlWithoutDonateParams()}#${buildDonateHash(amount)}`
+    `${getUrlWithoutDonateParams()}#${buildBankDonateHash(amount)}`
   );
 }
 
-function getDonateRequestFromLocation(): { amount: number } | null {
+function updateCryptoDonateUrl(crypto?: CryptoItem | null, network?: NetworkOption | null) {
+  window.history.replaceState(
+    null,
+    '',
+    `${getUrlWithoutDonateParams()}#${buildCryptoDonateHash(crypto, network)}`
+  );
+}
+
+function getDonateRequestFromLocation(): DonateRequest | null {
   const searchParams = new URLSearchParams(window.location.search);
   const rawHash = getHashFragment();
 
   if (isDonateHashFragment(rawHash)) {
     const suffix = rawHash.slice(DONATE_HASH.length);
     const suffixPrefix = suffix.charAt(0);
-    let rawAmount = getAmountParam(searchParams);
+    const hashParams =
+      suffixPrefix === '?' || suffixPrefix === '&'
+        ? new URLSearchParams(suffix.slice(1))
+        : new URLSearchParams();
 
-    if (suffixPrefix === '?' || suffixPrefix === '&') {
-      rawAmount = getAmountParam(new URLSearchParams(suffix.slice(1))) ?? rawAmount;
-    } else if (suffixPrefix === '=' || suffixPrefix === ':' || suffixPrefix === '/') {
-      rawAmount = suffix.slice(1) || rawAmount;
-    }
+    const rawAmount =
+      getAmountParam(hashParams) ??
+      getAmountParam(searchParams) ??
+      (suffixPrefix === '=' || suffixPrefix === ':' || suffixPrefix === '/'
+        ? suffix.slice(1)
+        : null);
+    const tabParam =
+      getParam(hashParams, ['type', 'method', 'tab']) ??
+      getParam(searchParams, ['type', 'method', 'tab']);
+    const cryptoParam =
+      getParam(hashParams, ['crypto', 'coin', 'token', 'currency']) ??
+      getParam(searchParams, ['crypto', 'coin', 'token', 'currency']);
+    const networkParam =
+      getParam(hashParams, ['network', 'net', 'chain']) ??
+      getParam(searchParams, ['network', 'net', 'chain']);
+    const tab: DonateTab =
+      tabParam?.toLowerCase() === 'crypto' || Boolean(cryptoParam) ? 'crypto' : 'bank';
 
-    return { amount: parseDonateAmount(rawAmount) };
+    return {
+      tab,
+      amount: parseDonateAmount(rawAmount),
+      cryptoId: cryptoParam,
+      network: networkParam,
+    };
   }
 
   const donateParam = searchParams.get('donate');
   if (donateParam !== null) {
-    return { amount: parseDonateAmount(getAmountParam(searchParams) ?? donateParam) };
+    const tabParam = getParam(searchParams, ['type', 'method', 'tab']);
+    const cryptoParam = getParam(searchParams, ['crypto', 'coin', 'token', 'currency']);
+    const networkParam = getParam(searchParams, ['network', 'net', 'chain']);
+    const tab: DonateTab =
+      tabParam?.toLowerCase() === 'crypto' ||
+      donateParam.toLowerCase() === 'crypto' ||
+      Boolean(cryptoParam)
+        ? 'crypto'
+        : 'bank';
+
+    return {
+      tab,
+      amount: parseDonateAmount(getAmountParam(searchParams) ?? donateParam),
+      cryptoId: cryptoParam,
+      network: networkParam,
+    };
   }
 
   return null;
@@ -157,6 +254,9 @@ export function AppNav() {
   const [hoveredHref, setHoveredHref] = useState<string | null>(null);
   const [donateOpen, setDonateOpen] = useState(false);
   const [donateAmount, setDonateAmount] = useState(0);
+  const [donateTab, setDonateTab] = useState<DonateTab>('bank');
+  const [donateCryptoId, setDonateCryptoId] = useState<string | null>(null);
+  const [donateNetwork, setDonateNetwork] = useState<string | null>(null);
 
   useEffect(() => {
     const syncDonateDialogFromUrl = () => {
@@ -164,7 +264,10 @@ export function AppNav() {
 
       if (!donateRequest) return;
 
+      setDonateTab(donateRequest.tab);
       setDonateAmount(donateRequest.amount);
+      setDonateCryptoId(donateRequest.cryptoId);
+      setDonateNetwork(donateRequest.network);
       setDonateOpen(true);
     };
 
@@ -189,16 +292,44 @@ export function AppNav() {
   };
 
   const handleDonateOpen = () => {
+    setDonateTab('bank');
     setDonateAmount(DEFAULT_DONATE_AMOUNT);
+    setDonateCryptoId(null);
+    setDonateNetwork(null);
     setDonateOpen(true);
-    updateDonateUrl(DEFAULT_DONATE_AMOUNT);
+    updateBankDonateUrl(DEFAULT_DONATE_AMOUNT);
   };
 
   const handleDonateAmountUpdate = (amount: number) => {
+    setDonateTab('bank');
     setDonateAmount(amount);
+    setDonateCryptoId(null);
+    setDonateNetwork(null);
 
     if (donateOpen) {
-      updateDonateUrl(amount);
+      updateBankDonateUrl(amount);
+    }
+  };
+
+  const handleDonateTabUpdate = (tab: DonateTab) => {
+    setDonateTab(tab);
+
+    if (tab === 'bank') {
+      setDonateCryptoId(null);
+      setDonateNetwork(null);
+      updateBankDonateUrl(donateAmount);
+    } else {
+      updateCryptoDonateUrl();
+    }
+  };
+
+  const handleDonateCryptoUpdate = (crypto: CryptoItem, network: NetworkOption | null) => {
+    setDonateTab('crypto');
+    setDonateCryptoId(crypto.id);
+    setDonateNetwork(formatUrlParam(network?.networkName ?? crypto.network));
+
+    if (donateOpen) {
+      updateCryptoDonateUrl(crypto, network);
     }
   };
 
@@ -307,7 +438,12 @@ export function AppNav() {
         open={donateOpen}
         onClose={handleDonateClose}
         initialAmount={donateAmount}
+        initialTab={donateTab}
+        initialCryptoId={donateCryptoId}
+        initialNetwork={donateNetwork}
         onAmountUpdate={handleDonateAmountUpdate}
+        onTabUpdate={handleDonateTabUpdate}
+        onCryptoUpdate={handleDonateCryptoUpdate}
       />
     </header>
   );

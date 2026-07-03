@@ -13,21 +13,94 @@ import { BankTab } from './donate-dialog/bank-tab';
 import { CryptoTab } from './donate-dialog/crypto-tab';
 import { CryptoDetailTab } from './donate-dialog/crypto-detail-tab';
 
+type DonateTab = 'bank' | 'crypto';
+
 interface DonateDialogProps {
   open: boolean;
   onClose: () => void;
   initialAmount?: number;
+  initialTab?: DonateTab;
+  initialCryptoId?: string | null;
+  initialNetwork?: string | null;
   onAmountUpdate?: (amount: number) => void;
+  onTabUpdate?: (tab: DonateTab) => void;
+  onCryptoUpdate?: (crypto: CryptoItem, network: NetworkOption | null) => void;
+}
+
+function normalizeDonateParam(value: string): string {
+  return value
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '');
+}
+
+function normalizeNetworkParam(value: string): string {
+  const normalizedValue = normalizeDonateParam(value);
+  const aliases: Record<string, string> = {
+    bep20: 'bsc',
+    erc20: 'ethereum',
+    trc20: 'tron',
+  };
+
+  return aliases[normalizedValue] ?? normalizedValue;
+}
+
+function findCryptoByParam(value?: string | null): CryptoItem | null {
+  if (!value) return null;
+
+  const normalizedValue = normalizeDonateParam(value);
+  return (
+    CRYPTO_LIST.find(
+      (crypto) =>
+        normalizeDonateParam(crypto.id) === normalizedValue ||
+        normalizeDonateParam(crypto.symbol) === normalizedValue ||
+        normalizeDonateParam(crypto.name) === normalizedValue
+    ) ?? null
+  );
+}
+
+function getDefaultNetwork(crypto: CryptoItem): NetworkOption | null {
+  if (!crypto.networks || crypto.networks.length === 0) {
+    return null;
+  }
+
+  return (
+    crypto.networks.find(
+      (network) =>
+        normalizeNetworkParam(network.networkName) === normalizeNetworkParam(crypto.network)
+    ) ?? crypto.networks[0]
+  );
+}
+
+function findNetworkByParam(crypto: CryptoItem, value?: string | null): NetworkOption | null {
+  const defaultNetwork = getDefaultNetwork(crypto);
+
+  if (!value || !crypto.networks || crypto.networks.length === 0) {
+    return defaultNetwork;
+  }
+
+  const normalizedValue = normalizeDonateParam(value);
+  return (
+    crypto.networks.find(
+      (network) =>
+        normalizeNetworkParam(network.networkName) === normalizeNetworkParam(normalizedValue)
+    ) ?? defaultNetwork
+  );
 }
 
 export function DonateDialog({
   open,
   onClose,
   initialAmount = 0,
+  initialTab = 'bank',
+  initialCryptoId = null,
+  initialNetwork = null,
   onAmountUpdate,
+  onTabUpdate,
+  onCryptoUpdate,
 }: DonateDialogProps) {
   const { t } = useTranslation();
-  const [activeTab, setActiveTab] = useState<'bank' | 'crypto'>('bank');
+  const [activeTab, setActiveTab] = useState<DonateTab>(initialTab);
   const [amount, setAmount] = useState<number>(initialAmount);
   const [inputVal, setInputVal] = useState<string>(
     initialAmount > 0 ? formatIntegerViInput(initialAmount.toString()) : ''
@@ -39,19 +112,25 @@ export function DonateDialog({
   const [searchQuery, setSearchQuery] = useState<string>('');
 
   useEffect(() => {
-    if (selectedCrypto) {
-      if (selectedCrypto.networks && selectedCrypto.networks.length > 0) {
-        const defaultNet =
-          selectedCrypto.networks.find(
-            (n) => n.networkName.toLowerCase() === selectedCrypto.network.toLowerCase()
-          ) || selectedCrypto.networks[0];
-        setSelectedNetwork(defaultNet);
-      } else {
-        setSelectedNetwork(null);
-      }
-    } else {
+    if (!selectedCrypto) {
       setSelectedNetwork(null);
+      return;
     }
+
+    setSelectedNetwork((currentNetwork) => {
+      if (
+        currentNetwork &&
+        selectedCrypto.networks?.some(
+          (network) =>
+            normalizeNetworkParam(network.networkName) ===
+            normalizeNetworkParam(currentNetwork.networkName)
+        )
+      ) {
+        return currentNetwork;
+      }
+
+      return getDefaultNetwork(selectedCrypto);
+    });
   }, [selectedCrypto]);
 
   useEffect(() => {
@@ -66,7 +145,17 @@ export function DonateDialog({
     if (!open) return;
     setAmount(initialAmount);
     setInputVal(initialAmount > 0 ? formatIntegerViInput(initialAmount.toString()) : '');
-  }, [initialAmount, open]);
+    setActiveTab(initialTab);
+
+    if (initialTab === 'crypto') {
+      const crypto = findCryptoByParam(initialCryptoId);
+      setSelectedCrypto(crypto);
+      setSelectedNetwork(crypto ? findNetworkByParam(crypto, initialNetwork) : null);
+    } else {
+      setSelectedCrypto(null);
+      setSelectedNetwork(null);
+    }
+  }, [initialAmount, initialCryptoId, initialNetwork, initialTab, open]);
 
   const filteredCryptoList = CRYPTO_LIST.filter(
     (crypto) =>
@@ -91,6 +180,38 @@ export function DonateDialog({
     setAmount(value);
     setInputVal(formatIntegerViInput(value.toString()));
     onAmountUpdate?.(value);
+  };
+
+  const handleTabChange = (tab: DonateTab) => {
+    setActiveTab(tab);
+
+    if (tab === 'bank') {
+      setSelectedCrypto(null);
+      setSelectedNetwork(null);
+    }
+
+    onTabUpdate?.(tab);
+  };
+
+  const handleSelectCrypto = (crypto: CryptoItem) => {
+    const network = getDefaultNetwork(crypto);
+    setSelectedCrypto(crypto);
+    setSelectedNetwork(network);
+    onCryptoUpdate?.(crypto, network);
+  };
+
+  const handleSelectNetwork = (network: NetworkOption) => {
+    setSelectedNetwork(network);
+
+    if (selectedCrypto) {
+      onCryptoUpdate?.(selectedCrypto, network);
+    }
+  };
+
+  const handleBackToCryptoList = () => {
+    setSelectedCrypto(null);
+    setSelectedNetwork(null);
+    onTabUpdate?.('crypto');
   };
 
   const handleCopy = async (text: string) => {
@@ -167,7 +288,7 @@ export function DonateDialog({
                   <button
                     key={tab.id}
                     type="button"
-                    onClick={() => setActiveTab(tab.id as 'bank' | 'crypto')}
+                    onClick={() => handleTabChange(tab.id as DonateTab)}
                     className={cn(
                       'relative flex-1 cursor-pointer rounded-lg border-none bg-transparent py-2 text-xs font-bold transition-colors duration-300 outline-none',
                       activeTab === tab.id
@@ -220,7 +341,7 @@ export function DonateDialog({
                       searchQuery={searchQuery}
                       setSearchQuery={setSearchQuery}
                       filteredCryptoList={filteredCryptoList}
-                      onSelectCrypto={setSelectedCrypto}
+                      onSelectCrypto={handleSelectCrypto}
                     />
                   </motion.div>
                 )}
@@ -238,8 +359,8 @@ export function DonateDialog({
               <CryptoDetailTab
                 selectedCrypto={selectedCrypto}
                 selectedNetwork={selectedNetwork}
-                setSelectedNetwork={setSelectedNetwork}
-                onBack={() => setSelectedCrypto(null)}
+                setSelectedNetwork={handleSelectNetwork}
+                onBack={handleBackToCryptoList}
                 copied={copied}
                 onCopy={handleCopy}
               />
