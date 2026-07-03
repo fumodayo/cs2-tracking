@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState } from 'react';
-import { Loader2, Trash2, TrendingUp, Coins, RotateCcw, Save, DollarSign } from 'lucide-react';
+import { Loader2, Trash2, TrendingUp, Coins, RotateCcw, Check, DollarSign } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import { PortfolioTableRow } from '../portfolio-table-model';
@@ -249,9 +249,9 @@ export function ItemActions({
               {saving ? (
                 <Loader2 className="size-3.5 animate-spin" />
               ) : (
-                <Save className="size-3.5" />
+                <Check className="size-3.5" />
               )}
-              <span>{embedded ? t('common.save', 'Lưu') : t('portfolio.saveChanges', 'Lưu')}</span>
+              <span>{t('common.save', 'Lưu')}</span>
             </Button>
           </div>
         </div>

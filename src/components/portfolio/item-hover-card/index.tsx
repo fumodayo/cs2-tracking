@@ -1298,30 +1298,6 @@ export function ItemHoverCard({
             onDeleteAll={onDeleteAll}
           />
         )}
-
-        {onOpenDetails && !embedded && (
-          <div className="rounded-b-2xl border-t border-stone-800/80 bg-stone-900/10 p-3">
-            <button
-              onClick={onOpenDetails}
-              className="flex w-full items-center justify-center gap-1.5 rounded-xl border border-blue-500/20 bg-blue-600/10 py-2.5 text-xs font-bold text-blue-400 transition-all duration-200 hover:bg-blue-600/20 hover:text-blue-300 active:scale-[0.98]"
-            >
-              <span>{t('common.expand', 'Xem tất cả')}</span>
-              <svg
-                className="h-3.5 w-3.5"
-                fill="none"
-                viewBox="0 0 24 24"
-                stroke="currentColor"
-                strokeWidth="2.5"
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  d="M13.5 6H5.25A2.25 2.25 0 0 0 3 8.25v10.5A2.25 2.25 0 0 0 5.25 21h10.5A2.25 2.25 0 0 0 18 18.75V10.5m-10.5 6L21 3m0 0h-5.25M21 3v5.25"
-                />
-              </svg>
-            </button>
-          </div>
-        )}
       </div>
 
       <SlidePanel

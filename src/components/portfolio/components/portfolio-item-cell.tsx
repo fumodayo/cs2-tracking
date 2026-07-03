@@ -36,6 +36,8 @@ export function ItemCell({
   item,
   mode,
   relatedRows,
+  isSelected = false,
+  onToggleSelect,
   onUpdateQuantity,
   onUpdateBuyPrice,
   onUpdateNote,
@@ -53,6 +55,8 @@ export function ItemCell({
   item: PortfolioTableRow;
   mode: PortfolioTableMode;
   relatedRows: PortfolioTableRow[];
+  isSelected?: boolean;
+  onToggleSelect?: () => void;
   onUpdateQuantity?: (id: string, quantity: number) => Promise<void> | void;
   onUpdateBuyPrice?: (id: string, buyPrice: number) => Promise<void> | void;
   onUpdateNote?: (id: string, note: string) => Promise<void> | void;
@@ -80,6 +84,7 @@ export function ItemCell({
   const { t } = useTranslation();
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const steamMarketUrl = getSteamMarketListingUrl(item.case.marketHashName);
+  const buffMarketUrl = `https://buff.market/market/all?search=${encodeURIComponent(item.case.marketHashName)}`;
   const typeColor =
     item.itemType === 'capsule' || item.itemType === 'case'
       ? '#b0c3d9'
@@ -97,36 +102,74 @@ export function ItemCell({
   }, []);
 
   const triggerContent = (
-    <div className="relative flex w-fit items-center gap-3 outline-none">
+    <div className="relative flex w-fit items-center gap-3 outline-none max-md:max-w-[220px]">
       <button
         type="button"
-        onClick={() => setIsDialogOpen(true)}
-        className="group bg-surface-muted relative flex shrink-0 cursor-pointer items-center justify-center overflow-hidden rounded-lg border border-stone-800 transition-all duration-300 hover:scale-[1.06] hover:border-blue-500/40 hover:shadow-lg focus:outline-none active:scale-95"
-        title={t('portfolio.clickToEditLots', 'Click to customize / edit purchase lots')}
+        onClick={(e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          onToggleSelect?.();
+        }}
+        className="group relative flex shrink-0 cursor-pointer items-center justify-center overflow-hidden rounded-lg border border-stone-800 bg-stone-900 transition-all duration-300 hover:border-blue-500/40 hover:shadow-lg focus:outline-none active:scale-95 max-md:size-14"
+        title={t('portfolio.clickToSelect', 'Click to select')}
       >
-        <CaseThumbnail imageUrl={item.case.imageUrl} name={item.case.name} size="lg" />
+        <CaseThumbnail
+          imageUrl={item.case.imageUrl}
+          name={item.case.name}
+          size="lg"
+          className="max-md:size-14"
+        />
+        {isSelected && (
+          <div className="absolute inset-0 flex items-center justify-center bg-blue-500/20 backdrop-blur-[1px]">
+            <div className="flex size-6 items-center justify-center rounded-full bg-blue-500 shadow-md">
+              <svg
+                className="size-3.5 text-white"
+                fill="none"
+                viewBox="0 0 24 24"
+                stroke="currentColor"
+                strokeWidth="3"
+              >
+                <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+              </svg>
+            </div>
+          </div>
+        )}
         <span className="absolute inset-x-0 bottom-0 h-1" style={{ backgroundColor: typeColor }} />
       </button>
       <div className="min-w-0">
         <div className="flex items-center gap-1.5">
           <button
             type="button"
+            data-portfolio-item-details="true"
             onClick={() => setIsDialogOpen(true)}
-            className="text-foreground inline-flex max-w-[24rem] cursor-pointer items-center gap-1.5 truncate text-left font-bold transition-colors hover:text-blue-400 focus:outline-none"
+            className="text-foreground inline-flex max-w-[24rem] cursor-pointer items-center gap-1.5 truncate text-left font-bold transition-colors hover:text-blue-400 focus:outline-none max-md:max-w-full max-md:whitespace-normal"
             title={t('portfolio.clickToEditLots', 'Click to customize / edit purchase lots')}
           >
-            <span className="truncate">{item.case.name}</span>
+            <span className="truncate max-md:line-clamp-2 max-md:text-xs max-md:whitespace-normal">
+              {item.case.name}
+            </span>
           </button>
-          <CopyButton value={item.case.marketHashName} />
-          <a
-            href={steamMarketUrl}
-            target="_blank"
-            rel="noreferrer"
-            className="flex cursor-pointer items-center justify-center rounded border border-stone-800 bg-stone-900 p-1 text-stone-400 shadow-sm transition-all hover:border-white hover:bg-white hover:text-[#171a21]"
-            title={t('portfolio.openSteamMarket', 'Open on Steam Market')}
-          >
-            <FaSteam className="size-3.5" />
-          </a>
+          <span className="inline-flex items-center gap-1.5 max-md:hidden">
+            <CopyButton value={item.case.marketHashName} />
+            <a
+              href={steamMarketUrl}
+              target="_blank"
+              rel="noreferrer"
+              className="flex cursor-pointer items-center justify-center rounded border border-stone-800 bg-stone-900 p-1 text-stone-400 shadow-sm transition-all hover:border-white hover:bg-white hover:text-[#171a21]"
+              title={t('portfolio.openSteamMarket', 'Open on Steam Market')}
+            >
+              <FaSteam className="size-3.5" />
+            </a>
+            <a
+              href={buffMarketUrl}
+              target="_blank"
+              rel="noreferrer"
+              className="flex h-[24px] cursor-pointer items-center justify-center rounded border border-stone-800 bg-stone-900 px-1.5 text-[10px] font-bold text-stone-400 shadow-sm transition-all select-none hover:border-amber-500/50 hover:bg-amber-500/10 hover:text-amber-400"
+              title={t('common.openBuffMarket', 'Open on BUFF.Market')}
+            >
+              BUFF
+            </a>
+          </span>
         </div>
         <div className="mt-1 flex flex-wrap items-center gap-1.5">
           <span
@@ -240,7 +283,7 @@ export function ItemCell({
         </div>
         {item.sourceAccounts.length > 0 ? (
           <div
-            className="mt-1 flex max-w-[28rem] flex-wrap gap-1"
+            className="mt-1 flex max-w-[28rem] flex-wrap gap-1 max-md:hidden"
             title={formatSourceAccountTitle(item.sourceAccounts)}
           >
             {item.sourceAccounts.slice(0, 3).map((account) => (
@@ -256,11 +299,6 @@ export function ItemCell({
                 +{item.sourceAccounts.length - 3}
               </span>
             ) : null}
-          </div>
-        ) : null}
-        {mode === 'case-summary' ? (
-          <div className="text-muted-foreground mt-1 text-xs">
-            {t('common.purchasesWithCount', '{{count}} purchases', { count: item.lotCount })}
           </div>
         ) : null}
       </div>

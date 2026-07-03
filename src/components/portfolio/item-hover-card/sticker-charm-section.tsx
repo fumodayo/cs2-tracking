@@ -166,7 +166,7 @@ export function StickerCharmSection({
           <div className="space-y-3 rounded-lg border border-stone-800/70 bg-stone-950/40 p-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.03)]">
             <div className="rounded-md border border-emerald-500/15 bg-emerald-500/5 p-2.5">
               <div className="flex items-center justify-between gap-2">
-                <div className="text-[9px] font-bold tracking-wide text-emerald-400">
+                <div className="text-[9px] font-bold tracking-wide text-emerald-600 dark:text-emerald-400">
                   {t('portfolio.currentPriceTitle')}
                 </div>
                 {hasScanSnapshot ? (
@@ -192,25 +192,29 @@ export function StickerCharmSection({
             </div>
 
             {hasScanSnapshot ? (
-              <div className="rounded-md border border-amber-500/15 bg-amber-500/5 p-2.5">
-                <div className="text-[9px] font-bold tracking-wide text-amber-400">
+              <div className="rounded-md border border-orange-500/20 bg-orange-500/5 p-2.5 dark:border-orange-500/15">
+                <div className="text-[9px] font-bold tracking-wide text-orange-600 dark:text-orange-400">
                   {t('portfolio.purchaseValuationTitle', 'Định giá lúc mua')}
                 </div>
                 <ValueLine
                   label={t('portfolio.stickerCharmScanPrice', 'Giá Sticker lúc Scan')}
                   value={scanAccessoryTotal}
-                  tone="amber"
+                  tone="orange"
                 />
                 <RateField
                   label={t('portfolio.percentIntoCapital')}
                   value={stickerBuyRate}
                   onChange={onStickerBuyRateChange}
                 />
-                <ValueLine label={t('portfolio.addToCapital')} value={buyAddedValue} tone="amber" />
+                <ValueLine
+                  label={t('portfolio.addToCapital')}
+                  value={buyAddedValue}
+                  tone="orange"
+                />
                 <ValueLine
                   label={t('portfolio.suggestedCost')}
                   value={buyFormulaTotalPrice}
-                  tone="amber"
+                  tone="orange"
                 />
               </div>
             ) : null}
@@ -304,13 +308,13 @@ function ValueLine({
 }: {
   label: string;
   value: number | null;
-  tone?: 'stone' | 'amber' | 'emerald';
+  tone?: 'stone' | 'orange' | 'emerald';
 }) {
   const toneClass =
     tone === 'emerald'
-      ? 'text-emerald-300'
-      : tone === 'amber'
-        ? 'text-amber-300'
+      ? 'text-emerald-600 dark:text-emerald-400'
+      : tone === 'orange'
+        ? 'text-orange-600 dark:text-orange-400'
         : 'text-stone-300';
 
   return (

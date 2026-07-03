@@ -1,26 +1,29 @@
 /* eslint-disable react-refresh/only-export-components */
-import React, { useState } from "react";
-import { FaSteam, FaCoins } from "react-icons/fa";
-import { TbCircleFilled, TbPencil, TbDatabase } from "react-icons/tb";
-import { RefreshCcw, Search, X } from "lucide-react";
-import { Button } from "@/components/ui/button";
-import { motion } from "framer-motion";
-import { FilterPopover, ResetButton, ViewButton } from "@/components/ui/actions";
-import { BuffRateInput } from "../portfolio-columns";
-import { PortfolioSourceFilter, PortfolioTableMode, PortfolioTableRow } from "../portfolio-table-model";
-import { Table } from "@tanstack/react-table";
-import { PortfolioBulkActions } from "./portfolio-bulk-actions";
-import type { TFunction } from "i18next";
-import { cn } from "@/utils/cn";
+import React, { useEffect, useState } from 'react';
+import { FaSteam, FaCoins } from 'react-icons/fa';
+import { TbPencil, TbDatabase } from 'react-icons/tb';
+import { ListChecks, RefreshCcw, Search, X } from 'lucide-react';
+import { Button } from '@/components/ui/button';
+import { motion } from 'framer-motion';
+import { FilterPopover, ResetButton, ViewButton } from '@/components/ui/actions';
+import {
+  PortfolioSourceFilter,
+  PortfolioTableMode,
+  PortfolioTableRow,
+} from '../portfolio-table-model';
+import { Table } from '@tanstack/react-table';
+import { PortfolioBulkActions } from './portfolio-bulk-actions';
+import type { TFunction } from 'i18next';
+import { cn } from '@/utils/cn';
 
 export const SOURCE_FILTER_OPTIONS: Array<{
   label: string;
   value: PortfolioSourceFilter;
   icon?: React.ComponentType<{ className?: string }>;
 }> = [
-    { label: "Th\u1ee7 c\u00f4ng", value: "manual", icon: TbPencil },
-    { label: "C\u00f3 s\u1eb5n", value: "existing", icon: TbDatabase },
-  ];
+  { label: 'Th\u1ee7 c\u00f4ng', value: 'manual', icon: TbPencil },
+  { label: 'C\u00f3 s\u1eb5n', value: 'existing', icon: TbDatabase },
+];
 
 export interface PortfolioTableToolbarProps {
   mode: PortfolioTableMode;
@@ -38,13 +41,16 @@ export interface PortfolioTableToolbarProps {
   priceSourceFilters: string[];
   setPriceSourceFilters: (val: string[]) => void;
   accountOptions: Array<{ steamId64: string; name: string }>;
-  itemTypeOptions: Array<{ label: string; value: string; icon?: React.ComponentType<{ className?: string }> }>;
+  itemTypeOptions: Array<{
+    label: string;
+    value: string;
+    icon?: React.ComponentType<{ className?: string }>;
+  }>;
   t: TFunction;
   onRefreshPrices?: () => void;
   isRefreshingPrices?: boolean;
-  onUpdateBuffRate?: (rate: number) => void;
-  buffCnyToVndRate: number;
   table: Table<PortfolioTableRow>;
+  isMobile?: boolean;
 
   // Bulk actions
   selectedIds: string[];
@@ -52,6 +58,34 @@ export interface PortfolioTableToolbarProps {
   setSellDialogOpen: (open: boolean) => void;
   handleDeleteSelected: () => void;
   isDeletingMany?: boolean;
+}
+
+function ChipButton({
+  label,
+  active,
+  onClick,
+  colorClass,
+}: {
+  label: string;
+  active: boolean;
+  onClick: () => void;
+  colorClass?: string;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={cn(
+        'inline-flex h-8 shrink-0 cursor-pointer items-center justify-center gap-1.5 rounded-full border px-3.5 text-xs font-semibold transition-all select-none',
+        active
+          ? 'border-accent bg-accent/10 text-accent font-bold'
+          : 'border-stone-850 bg-stone-950 text-stone-400 hover:text-stone-300'
+      )}
+    >
+      {colorClass ? <span className={cn('size-1.5 rounded-full', colorClass)} /> : null}
+      {label}
+    </button>
+  );
 }
 
 export function PortfolioTableToolbar({
@@ -74,224 +108,434 @@ export function PortfolioTableToolbar({
   t,
   onRefreshPrices,
   isRefreshingPrices,
-  onUpdateBuffRate,
-  buffCnyToVndRate,
   table,
   selectedIds,
   setRowSelection,
   setSellDialogOpen,
   handleDeleteSelected,
   isDeletingMany = false,
+  isMobile = false,
 }: PortfolioTableToolbarProps) {
-  const [isSearchFocused, setIsSearchFocused] = useState(false);
+  const [localQuery, setLocalQuery] = useState(globalFilter);
+
+  useEffect(() => {
+    setLocalQuery(globalFilter);
+  }, [globalFilter]);
+
+  useEffect(() => {
+    const timer = window.setTimeout(() => {
+      if (localQuery !== globalFilter) {
+        setGlobalFilter(localQuery);
+      }
+    }, 300);
+
+    return () => window.clearTimeout(timer);
+  }, [globalFilter, localQuery, setGlobalFilter]);
+
+  const hasActiveFilters =
+    sourceFilters.length > 0 ||
+    itemTypeFilters.length > 0 ||
+    accountFilters.length > 0 ||
+    statusFilters.length > 0 ||
+    priceSourceFilters.length > 0;
+
+  const clearAllFilters = () => {
+    setSourceFilters([]);
+    setItemTypeFilters([]);
+    setAccountFilters([]);
+    setStatusFilters([]);
+    setPriceSourceFilters([]);
+    table.setPageIndex(0);
+  };
+
+  const toggleValue = (values: string[], value: string) => {
+    return values.includes(value) ? values.filter((item) => item !== value) : [...values, value];
+  };
+
+  const mobileItemTypeOptions = itemTypeOptions.filter(
+    (option) =>
+      option.value !== 'separator' &&
+      !option.value.startsWith('separator:') &&
+      !option.value.startsWith('group:') &&
+      !option.value.startsWith('subtype:')
+  );
+  const filteredRows = table.getFilteredRowModel().rows;
+  const filteredRowCount = filteredRows.length;
+  const selectedFilteredCount = filteredRows.filter((row) => row.getIsSelected()).length;
+  const hasSelectableRows = filteredRowCount > 0;
+  const handleSelectAllFiltered = () => {
+    const nextSelection: Record<string, boolean> = {};
+    for (const row of filteredRows) {
+      nextSelection[row.id] = true;
+    }
+    setRowSelection(nextSelection);
+  };
 
   return (
     <>
-      <div className="flex flex-col gap-4 rounded-t-2xl border-b border-stone-850/60 bg-stone-900/40 backdrop-blur-md p-4">
-        {/* Row 1: Modes, Rates & Search/Refresh Actions */}
-        <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
-          {/* Modes & Rates */}
-          <div className="flex flex-wrap items-center gap-2">
-            {/* View Mode Switcher */}
-            <div className="relative inline-flex h-9 items-center rounded-lg border border-stone-800 bg-surface-muted/20 p-1 shadow-sm select-none">
+      <div className="flex flex-col gap-3 border-b border-stone-800 bg-stone-900/60 p-3 lg:flex-row lg:items-end lg:justify-between">
+        <div className="flex shrink-0 flex-wrap items-center gap-2">
+          {!isMobile && (
+            <div className="relative inline-flex h-9 shrink-0 items-center rounded-lg border border-stone-800 bg-stone-950 p-1 shadow-sm select-none">
               <button
                 type="button"
-                onClick={() => setMode("case-summary")}
-                className={`relative inline-flex items-center justify-center rounded-md px-3.5 py-1 text-[11.5px] font-extrabold transition-all duration-200 cursor-pointer h-7 ${mode === "case-summary"
-                  ? "text-accent-foreground"
-                  : "text-muted-foreground hover:text-foreground"
-                  }`}
+                onClick={() => setMode('case-summary')}
+                className={`relative inline-flex h-7 cursor-pointer items-center justify-center rounded-md px-3 py-1 text-[11.5px] font-extrabold transition-all duration-200 ${
+                  mode === 'case-summary'
+                    ? 'text-accent-foreground'
+                    : 'text-stone-500 hover:text-stone-300'
+                }`}
               >
-                {mode === "case-summary" && (
+                {mode === 'case-summary' && (
                   <motion.div
                     layoutId="activeTabToolbar"
-                    className="absolute inset-0 rounded-md bg-gradient-to-r from-accent to-accent-hover shadow-md shadow-accent/15"
-                    transition={{ type: "spring", stiffness: 380, damping: 30 }}
+                    className="bg-accent shadow-accent/15 absolute inset-0 rounded-md shadow-md"
+                    transition={{ type: 'spring', stiffness: 380, damping: 30 }}
                   />
                 )}
-                <span className="relative z-10">{t("dashboard.caseSummaryMode", "Group Cases")}</span>
+                <span className="relative z-10">
+                  {t('dashboard.caseSummaryMode', 'Group Cases')}
+                </span>
               </button>
               <button
                 type="button"
-                onClick={() => setMode("transactions")}
-                className={`relative inline-flex items-center justify-center rounded-md px-3.5 py-1 text-[11.5px] font-extrabold transition-all duration-200 cursor-pointer h-7 ${mode === "transactions"
-                  ? "text-accent-foreground"
-                  : "text-muted-foreground hover:text-foreground"
-                  }`}
+                onClick={() => setMode('transactions')}
+                className={`relative inline-flex h-7 cursor-pointer items-center justify-center rounded-md px-3 py-1 text-[11.5px] font-extrabold transition-all duration-200 ${
+                  mode === 'transactions'
+                    ? 'text-accent-foreground'
+                    : 'text-stone-500 hover:text-stone-300'
+                }`}
               >
-                {mode === "transactions" && (
+                {mode === 'transactions' && (
                   <motion.div
                     layoutId="activeTabToolbar"
-                    className="absolute inset-0 rounded-md bg-gradient-to-r from-accent to-accent-hover shadow-md shadow-accent/15"
-                    transition={{ type: "spring", stiffness: 380, damping: 30 }}
+                    className="bg-accent shadow-accent/15 absolute inset-0 rounded-md shadow-md"
+                    transition={{ type: 'spring', stiffness: 380, damping: 30 }}
                   />
                 )}
-                <span className="relative z-10">{t("dashboard.viewMode", "Detail")}</span>
+                <span className="relative z-10">{t('dashboard.viewMode', 'Detail')}</span>
               </button>
             </div>
-            {onUpdateBuffRate && (
-              <BuffRateInput
-                value={buffCnyToVndRate}
-                onChange={onUpdateBuffRate}
-              />
-            )}
-          </div>
-
-          {/* Search bar & Refresh Action */}
-          <div className="flex items-center gap-3 w-full lg:w-auto">
-            <div className={cn(
-              "flex-grow transition-all duration-300 ease-in-out lg:flex-initial",
-              isSearchFocused ? "lg:w-[24rem]" : "lg:w-72"
-            )}>
-              <label className="flex h-9 w-full items-center gap-2 rounded-lg border border-stone-800 bg-stone-950/40 px-3 text-xs transition-all duration-200 focus-within:border-accent/40 focus-within:ring-1 focus-within:ring-accent/25 focus-within:bg-stone-950/70 focus-within:shadow-[0_0_12px_rgba(59,130,246,0.06)]">
-                <Search className="size-3.5 shrink-0 text-muted-foreground" />
-                <input
-                  value={globalFilter}
-                  onChange={(event) => setGlobalFilter(event.target.value)}
-                  placeholder={t("portfolio.searchPlaceholder", "Search items, market hash, notes...")}
-                  className="w-full bg-transparent text-xs font-semibold text-foreground outline-none placeholder:text-muted-foreground"
-                  onFocus={() => setIsSearchFocused(true)}
-                  onBlur={() => setIsSearchFocused(false)}
-                />
-                {globalFilter && (
-                  <button
-                    type="button"
-                    onClick={() => setGlobalFilter("")}
-                    className="text-stone-500 hover:text-stone-300 transition-colors p-0.5 rounded-full hover:bg-stone-800/60 shrink-0 cursor-pointer"
-                  >
-                    <X className="size-3.5" />
-                  </button>
-                )}
-              </label>
-            </div>
-
-            {onRefreshPrices && (
-              <Button
-                type="button"
-                onClick={onRefreshPrices}
-                disabled={isRefreshingPrices}
-                className="h-9 shrink-0 cursor-pointer items-center justify-center gap-1.5 rounded-lg border border-stone-850 bg-stone-900/40 px-3.5 text-xs font-bold text-stone-200 shadow-sm transition-all duration-200 hover:border-accent/40 hover:bg-accent/5 hover:text-accent hover:scale-[1.02] active:scale-[0.98] disabled:cursor-wait disabled:opacity-50"
-                title={t("portfolio.refreshPrices", "Refresh prices")}
-              >
-                <RefreshCcw
-                  className={cn("size-3.5 text-accent", isRefreshingPrices && "animate-spin")}
-                />
-                <span className="hidden sm:inline">{t("portfolio.refreshPrices", "Refresh prices")}</span>
-              </Button>
-            )}
-          </div>
+          )}
         </div>
 
-        {/* Divider */}
-        <div className="bg-stone-850/60 -mx-4 h-px" />
+        <div className="flex w-full items-center gap-3 lg:w-auto">
+          <div className="min-w-0 flex-1 lg:w-72 lg:flex-none">
+            <label className="border-input-border bg-input focus-within:border-ring focus-within:ring-ring flex h-9 w-full items-center gap-2 rounded-md border px-3 text-xs transition-all focus-within:ring-1">
+              <Search className="text-muted-foreground size-3.5 shrink-0" />
+              <input
+                value={localQuery}
+                onChange={(event) => setLocalQuery(event.target.value)}
+                placeholder={t(
+                  'portfolio.searchPlaceholder',
+                  'Search items, market hash, notes...'
+                )}
+                className="text-foreground placeholder:text-muted-foreground w-full bg-transparent text-xs font-medium outline-none"
+              />
+              {localQuery && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setLocalQuery('');
+                    setGlobalFilter('');
+                  }}
+                  className="shrink-0 cursor-pointer rounded-full p-0.5 text-stone-500 transition-colors hover:bg-stone-800/60 hover:text-stone-300"
+                  aria-label={t('common.clear', 'Clear')}
+                >
+                  <X className="size-3.5" />
+                </button>
+              )}
+            </label>
+          </div>
 
-        {/* Row 2: Filters */}
-        <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
-          <div className="flex items-center gap-2 overflow-x-auto pb-1 no-scrollbar -mx-4 px-4">
-            <div className="flex items-center gap-1.5 shrink-0 select-none mr-2">
-              <span className="text-xs font-bold    tracking-wider text-stone-500 uppercase">
-                {t("portfolio.filtersLabel", "Filters:")}
+          {onRefreshPrices && (
+            <Button
+              type="button"
+              onClick={onRefreshPrices}
+              disabled={isRefreshingPrices}
+              className="hover:bg-stone-850 flex h-9 shrink-0 cursor-pointer items-center gap-1.5 border border-stone-800 bg-stone-900/60 px-3 text-xs font-semibold hover:text-stone-200 disabled:cursor-wait disabled:opacity-50"
+              title={t('portfolio.refreshPrices', 'Refresh prices')}
+            >
+              <RefreshCcw
+                className={cn('text-accent size-3.5', isRefreshingPrices && 'animate-spin')}
+              />
+              <span className="text-stone-300 max-sm:sr-only">
+                {t('portfolio.refreshPrices', 'Refresh prices')}
+              </span>
+            </Button>
+          )}
+        </div>
+      </div>
+
+      {!isMobile && (
+        <div className="flex flex-col gap-3 border-b border-stone-800 bg-stone-900/60 px-3 py-2.5 lg:flex-row lg:items-center lg:justify-between">
+          <div className="no-scrollbar -mx-3 flex items-center gap-2 overflow-x-auto px-3">
+            <div className="mr-2 flex shrink-0 items-center gap-1.5 select-none">
+              <span className="text-xs font-bold tracking-wider text-stone-500 uppercase">
+                {t('portfolio.filtersLabel', 'Filters:')}
               </span>
             </div>
-            <div className="flex items-center gap-2 shrink-0">
+            <div className="flex shrink-0 items-center gap-2">
               <FilterPopover
-                label={t("portfolio.filterSource", "Source")}
+                label={t('portfolio.filterSource', 'Source')}
                 options={[
-                  { label: t("portfolio.sourceManual", "Manual"), value: "manual" },
-                  { label: t("portfolio.sourceExisting", "Existing"), value: "existing" },
+                  { label: t('portfolio.sourceManual', 'Manual'), value: 'manual' },
+                  { label: t('portfolio.sourceExisting', 'Existing'), value: 'existing' },
                 ]}
                 selectedValues={sourceFilters}
-                onChange={(values) => setSourceFilters(values as PortfolioSourceFilter[])}
+                onChange={(values) => {
+                  setSourceFilters(values as PortfolioSourceFilter[]);
+                  table.setPageIndex(0);
+                }}
+                hideOptionIcons={true}
               />
               <FilterPopover
-                label={t("portfolio.filterItemType", "Item Type")}
+                label={t('portfolio.filterItemType', 'Item Type')}
                 options={itemTypeOptions}
                 selectedValues={itemTypeFilters}
-                onChange={(values) => setItemTypeFilters(values)}
+                onChange={(values) => {
+                  setItemTypeFilters(values);
+                  table.setPageIndex(0);
+                }}
+                hideOptionIcons={true}
               />
               <FilterPopover
-                label={t("portfolio.filterAccount", "Account")}
+                label={t('portfolio.filterAccount', 'Account')}
                 options={accountOptions.map((account) => ({
                   label: account.name,
                   value: account.steamId64,
                 }))}
                 selectedValues={accountFilters}
-                onChange={(values) => setAccountFilters(values)}
+                onChange={(values) => {
+                  setAccountFilters(values);
+                  table.setPageIndex(0);
+                }}
                 disabled={accountOptions.length === 0}
+                hideOptionIcons={true}
               />
               <FilterPopover
-                label={t("portfolio.filterStatus", "Status")}
+                label={t('inventoryScanner.status', 'Trạng thái')}
                 options={[
                   {
-                    label: t("portfolio.statusTradeable", "Tradeable"),
-                    value: "tradeable",
-                    icon: () => <TbCircleFilled className="size-3.5 text-emerald-500" />,
+                    label: t('inventoryScanner.tradeable', 'Giao dịch được'),
+                    value: 'tradeable',
+                    icon: ({ className }) => (
+                      <span className={cn('size-2 rounded-full bg-emerald-500', className)} />
+                    ),
                   },
                   {
-                    label: t("portfolio.statusOnMarket", "On Market"),
-                    value: "market",
-                    icon: () => <TbCircleFilled className="size-3.5 text-amber-500" />,
+                    label: t('inventoryScanner.onMarket', 'Trên chợ'),
+                    value: 'market',
+                    icon: ({ className }) => (
+                      <span className={cn('size-2 rounded-full bg-amber-500', className)} />
+                    ),
                   },
                   {
-                    label: t("portfolio.statusTradeProtected", "Trade Protected"),
-                    value: "protected",
-                    icon: () => <TbCircleFilled className="size-3.5 text-blue-500" />,
+                    label: t('inventoryScanner.tradeProtected', 'Bảo vệ giao dịch'),
+                    value: 'protected',
+                    icon: ({ className }) => (
+                      <span className={cn('size-2 rounded-full bg-blue-500', className)} />
+                    ),
                   },
                   {
-                    label: t("portfolio.statusHold", "Hold"),
-                    value: "hold",
-                    icon: () => <TbCircleFilled className="size-3.5 text-red-500" />,
+                    label: t('inventoryScanner.hold', 'Tạm giữ'),
+                    value: 'hold',
+                    icon: ({ className }) => (
+                      <span className={cn('size-2 rounded-full bg-red-500', className)} />
+                    ),
                   },
                 ]}
                 selectedValues={statusFilters}
-                onChange={(values) => setStatusFilters(values)}
+                onChange={(values) => {
+                  setStatusFilters(values);
+                  table.setPageIndex(0);
+                }}
               />
               <FilterPopover
-                label={t("portfolio.filterPricing", "Pricing")}
+                label={t('portfolio.filterPricing', 'Pricing')}
                 options={[
                   {
-                    label: t("portfolio.pricingBuff", "BUFF Price"),
-                    value: "buff",
+                    label: t('portfolio.pricingBuff', 'BUFF Price'),
+                    value: 'buff',
                     icon: () => <FaCoins className="size-4.5 text-amber-500" />,
                   },
                   {
-                    label: t("portfolio.pricingSteam", "Steam Price"),
-                    value: "steam",
+                    label: t('portfolio.pricingSteam', 'Steam Price'),
+                    value: 'steam',
                     icon: () => <FaSteam className="size-4.5 text-sky-400" />,
                   },
                 ]}
                 selectedValues={priceSourceFilters}
-                onChange={(values) => setPriceSourceFilters(values)}
+                onChange={(values) => {
+                  setPriceSourceFilters(values);
+                  table.setPageIndex(0);
+                }}
+                hideOptionIcons={true}
               />
             </div>
           </div>
 
-          <div className="flex items-center justify-between mt-1 pt-1.5 border-t border-stone-850/60 lg:mt-0 lg:pt-0 lg:border-none lg:shrink-0 lg:gap-3 lg:self-auto">
-            <ResetButton
-              isVisible={
-                sourceFilters.length > 0 ||
-                itemTypeFilters.length > 0 ||
-                accountFilters.length > 0 ||
-                statusFilters.length > 0 ||
-                priceSourceFilters.length > 0
-              }
-              onReset={() => {
-                setSourceFilters([]);
-                setItemTypeFilters([]);
-                setAccountFilters([]);
-                setStatusFilters([]);
-                setPriceSourceFilters([]);
-              }}
-            />
+          <div className="flex items-center justify-between gap-3 lg:shrink-0">
+            {hasSelectableRows && selectedIds.length === 0 && (
+              <button
+                type="button"
+                onClick={handleSelectAllFiltered}
+                className="hover:bg-stone-850 inline-flex h-8 cursor-pointer items-center justify-center gap-1.5 rounded-md border border-blue-500/25 bg-blue-500/10 px-3 text-xs font-semibold text-blue-300 transition-all hover:border-blue-500/40 hover:text-blue-200"
+                title={t(
+                  'portfolio.selectAllFilteredTooltip',
+                  'Select all items matching the current filters'
+                )}
+              >
+                <ListChecks className="size-3.5" />
+                {t('portfolio.selectAllRows', 'Chọn tất cả')}
+              </button>
+            )}
+            <ResetButton isVisible={hasActiveFilters} onReset={clearAllFilters} />
             <ViewButton table={table} />
           </div>
         </div>
-      </div>
+      )}
+
+      {isMobile && (
+        <div className="flex flex-col gap-2 border-b border-stone-800 bg-stone-900/60 py-2.5">
+          <div className="no-scrollbar flex gap-2 overflow-x-auto px-3">
+            <ChipButton
+              label={t('portfolio.sourceManual', 'Manual')}
+              active={sourceFilters.includes('manual')}
+              onClick={() => {
+                setSourceFilters(toggleValue(sourceFilters, 'manual') as PortfolioSourceFilter[]);
+                table.setPageIndex(0);
+              }}
+            />
+            <ChipButton
+              label={t('portfolio.sourceExisting', 'Existing')}
+              active={sourceFilters.includes('existing')}
+              onClick={() => {
+                setSourceFilters(toggleValue(sourceFilters, 'existing') as PortfolioSourceFilter[]);
+                table.setPageIndex(0);
+              }}
+            />
+            {mobileItemTypeOptions.map((option) => (
+              <ChipButton
+                key={option.value}
+                label={option.label}
+                active={itemTypeFilters.includes(option.value)}
+                onClick={() => {
+                  setItemTypeFilters(toggleValue(itemTypeFilters, option.value));
+                  table.setPageIndex(0);
+                }}
+              />
+            ))}
+          </div>
+
+          <div className="no-scrollbar flex gap-2 overflow-x-auto px-3">
+            {[
+              {
+                label: t('portfolio.statusTradeable', 'Tradeable'),
+                value: 'tradeable',
+                colorClass: 'bg-emerald-500',
+              },
+              {
+                label: t('portfolio.statusOnMarket', 'On Market'),
+                value: 'market',
+                colorClass: 'bg-amber-500',
+              },
+              {
+                label: t('portfolio.statusTradeProtected', 'Trade Protected'),
+                value: 'protected',
+                colorClass: 'bg-blue-500',
+              },
+              {
+                label: t('portfolio.statusHold', 'Hold'),
+                value: 'hold',
+                colorClass: 'bg-red-500',
+              },
+              {
+                label: t('portfolio.pricingBuff', 'BUFF Price'),
+                value: 'buff',
+                colorClass: 'bg-amber-500',
+                group: 'price',
+              },
+              {
+                label: t('portfolio.pricingSteam', 'Steam Price'),
+                value: 'steam',
+                colorClass: 'bg-sky-400',
+                group: 'price',
+              },
+            ].map((option) => {
+              const values = option.group === 'price' ? priceSourceFilters : statusFilters;
+              return (
+                <ChipButton
+                  key={`${option.group ?? 'status'}-${option.value}`}
+                  label={option.label}
+                  colorClass={option.colorClass}
+                  active={values.includes(option.value)}
+                  onClick={() => {
+                    if (option.group === 'price') {
+                      setPriceSourceFilters(toggleValue(priceSourceFilters, option.value));
+                    } else {
+                      setStatusFilters(toggleValue(statusFilters, option.value));
+                    }
+                    table.setPageIndex(0);
+                  }}
+                />
+              );
+            })}
+          </div>
+
+          {accountOptions.length > 0 && (
+            <div className="no-scrollbar flex gap-2 overflow-x-auto px-3">
+              {accountOptions.map((account) => (
+                <ChipButton
+                  key={account.steamId64}
+                  label={account.name}
+                  active={accountFilters.includes(account.steamId64)}
+                  onClick={() => {
+                    setAccountFilters(toggleValue(accountFilters, account.steamId64));
+                    table.setPageIndex(0);
+                  }}
+                />
+              ))}
+            </div>
+          )}
+
+          {hasActiveFilters && (
+            <div className="px-3 pt-1">
+              <button
+                type="button"
+                onClick={clearAllFilters}
+                className="inline-flex h-8 w-full cursor-pointer items-center justify-center rounded-lg border border-red-500/30 bg-red-500/5 text-xs font-semibold text-red-400 transition-all hover:bg-red-500/10"
+              >
+                {t('common.clearAll', 'Clear all')}
+              </button>
+            </div>
+          )}
+          {hasSelectableRows && selectedIds.length === 0 && (
+            <div className="px-3 pt-1">
+              <button
+                type="button"
+                onClick={handleSelectAllFiltered}
+                className="inline-flex h-8 w-full cursor-pointer items-center justify-center gap-1.5 rounded-lg border border-blue-500/25 bg-blue-500/10 text-xs font-semibold text-blue-300 transition-all hover:border-blue-500/40 hover:text-blue-200"
+                title={t(
+                  'portfolio.selectAllFilteredTooltip',
+                  'Select all items matching the current filters'
+                )}
+              >
+                <ListChecks className="size-3.5" />
+                {t('portfolio.selectAllRows', 'Chọn tất cả')}
+              </button>
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Bulk Action Banner */}
       {selectedIds.length > 0 && (
         <PortfolioBulkActions
           selectedCount={selectedIds.length}
+          selectedFilteredCount={selectedFilteredCount}
+          totalFilteredCount={filteredRowCount}
+          onSelectAllFiltered={handleSelectAllFiltered}
           onClearSelection={() => setRowSelection({})}
           onSellSelected={() => setSellDialogOpen(true)}
           onDeleteSelected={handleDeleteSelected}

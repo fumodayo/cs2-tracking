@@ -1,4 +1,4 @@
-"use client";
+'use client';
 
 import {
   getCoreRowModel,
@@ -6,30 +6,27 @@ import {
   getPaginationRowModel,
   getSortedRowModel,
   useReactTable,
-} from "@tanstack/react-table";
-import { useCallback, useEffect, useMemo, useState, useRef } from "react";
-import { useTranslation } from "react-i18next";
-import type { PortfolioReportDto } from "@/types/report";
-import { useCurrency } from "@/components/currency-provider";
-import { useLocalStorage } from "@/hooks/use-local-storage";
+} from '@tanstack/react-table';
+import { useCallback, useEffect, useMemo, useState, useRef } from 'react';
+import { useTranslation } from 'react-i18next';
+import type { PortfolioReportDto } from '@/types/report';
+import { useCurrency } from '@/components/currency-provider';
+import { useLocalStorage } from '@/hooks/use-local-storage';
 
 import {
   buildPortfolioTableRows,
   remapPortfolioRowSelection,
   type PortfolioTableRow,
   type PortfolioTableMode,
-} from "./portfolio-table-model";
-import { ConfirmDialog } from "@/components/ui/confirm-dialog";
-import { SellSelectedDialog } from "./sell-selected-dialog";
-import { ItemCell } from "./components/portfolio-item-cell";
-import { buildColumns } from "./portfolio-columns";
-import { TablePagination } from "@/components/shared/table-pagination";
-import {
-  usePortfolioFilters,
-  usePortfolioTableState,
-} from "./hooks";
-import { PortfolioTableToolbar } from "./components/portfolio-table-toolbar";
-import { PortfolioTableBody } from "./components/portfolio-table-body";
+} from './portfolio-table-model';
+import { ConfirmDialog } from '@/components/ui/confirm-dialog';
+import { SellSelectedDialog } from './sell-selected-dialog';
+import { ItemCell } from './components/portfolio-item-cell';
+import { buildColumns } from './portfolio-columns';
+import { TablePagination } from '@/components/shared/table-pagination';
+import { usePortfolioFilters, usePortfolioTableState } from './hooks';
+import { PortfolioTableToolbar } from './components/portfolio-table-toolbar';
+import { PortfolioTableBody } from './components/portfolio-table-body';
 
 type PortfolioTableProps = {
   report: PortfolioReportDto;
@@ -53,13 +50,21 @@ type PortfolioTableProps = {
   buffPricesCny?: Record<string, number>;
   buffCnyToVndRate?: number;
   onUpdateBuffPrice?: (marketHashName: string, priceCny: number | null) => void;
-  onAddCaseLot?: (payload: { caseId: string; quantity: number; buyPrice: number; buyDate: string; note?: string }) => Promise<void> | void;
+  onAddCaseLot?: (payload: {
+    caseId: string;
+    quantity: number;
+    buyPrice: number;
+    buyDate: string;
+    note?: string;
+  }) => Promise<void> | void;
   onRefreshPrices?: () => void;
   isRefreshingPrices?: boolean;
   onUpdateBuffRate?: (rate: number) => void;
   onFilteredRowsChange?: (rows: PortfolioTableRow[]) => void;
   onDeleteMany?: (ids: string[]) => Promise<void> | void;
   isDeletingMany?: boolean;
+  sellDialogOpen?: boolean;
+  onSellDialogOpenChange?: (open: boolean) => void;
 };
 
 export function PortfolioTable({
@@ -80,39 +85,60 @@ export function PortfolioTable({
   onFilteredRowsChange,
   onDeleteMany,
   isDeletingMany = false,
+  sellDialogOpen,
+  onSellDialogOpenChange,
 }: PortfolioTableProps) {
   const { formatCurrency } = useCurrency();
   const { t } = useTranslation();
 
   const buffLoadingKeysRef = useRef<Set<string>>(new Set());
   const [, setBuffLoadingTick] = useState(0);
-  const wholesaleRate = "60";
-  const retailRate = "65";
+  const wholesaleRate = '60';
+  const retailRate = '65';
 
   const [deleteSelectedConfirmOpen, setDeleteSelectedConfirmOpen] = useState(false);
-  const [sellDialogOpen, setSellDialogOpen] = useState(false);
+  const [localSellDialogOpen, setLocalSellDialogOpen] = useState(false);
+  const isSellDialogOpen = sellDialogOpen !== undefined ? sellDialogOpen : localSellDialogOpen;
+  const setIsSellDialogOpen = useCallback(
+    (open: boolean) => {
+      if (onSellDialogOpenChange) {
+        onSellDialogOpenChange(open);
+      } else {
+        setLocalSellDialogOpen(open);
+      }
+    },
+    [onSellDialogOpenChange]
+  );
   const [lastSelectedId, setLastSelectedId] = useState<string | null>(null);
+  const [isMobile, setIsMobile] = useState(false);
+
+  useEffect(() => {
+    const checkMobile = () => setIsMobile(window.innerWidth < 768);
+    checkMobile();
+    window.addEventListener('resize', checkMobile);
+    return () => window.removeEventListener('resize', checkMobile);
+  }, []);
 
   const fetchBuffPrice = useCallback(
     async (marketHashName: string) => {
       if (buffLoadingKeysRef.current.has(marketHashName) || !onUpdateBuffPrice) return;
-      
+
       buffLoadingKeysRef.current.add(marketHashName);
       setBuffLoadingTick((t) => t + 1);
 
       try {
-        const response = await fetch("/api/inventory/buff-price", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
+        const response = await fetch('/api/inventory/buff-price', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ marketHashName, cnyToVndRate: buffCnyToVndRate }),
         });
 
         if (!response.ok) {
-          throw new Error("Failed to fetch BUFF163 price.");
+          throw new Error('Failed to fetch BUFF163 price.');
         }
 
         const data = await response.json();
-        if (data && typeof data.priceCny === "number") {
+        if (data && typeof data.priceCny === 'number') {
           onUpdateBuffPrice(marketHashName, data.priceCny);
         }
       } catch (error) {
@@ -122,14 +148,18 @@ export function PortfolioTable({
         setBuffLoadingTick((t) => t + 1);
       }
     },
-    [buffCnyToVndRate, onUpdateBuffPrice],
+    [buffCnyToVndRate, onUpdateBuffPrice]
   );
 
-  const [mode, setMode] = useLocalStorage<PortfolioTableMode>("cs2t_portfolio_mode", "case-summary");
+  const [mode, setMode] = useLocalStorage<PortfolioTableMode>(
+    'cs2t_portfolio_mode',
+    'case-summary'
+  );
+  const activeMode = isMobile ? 'transactions' : mode;
 
   const rows = useMemo(
-    () => buildPortfolioTableRows(report, mode, buffPricesCny, buffCnyToVndRate),
-    [report, mode, buffPricesCny, buffCnyToVndRate],
+    () => buildPortfolioTableRows(report, activeMode, buffPricesCny, buffCnyToVndRate),
+    [report, activeMode, buffPricesCny, buffCnyToVndRate]
   );
 
   // Filters hook
@@ -152,9 +182,7 @@ export function PortfolioTable({
       if (newMode === mode) return;
 
       const nextRows = buildPortfolioTableRows(report, newMode, buffPricesCny, buffCnyToVndRate);
-      setRowSelection((prevSelection) =>
-        remapPortfolioRowSelection(prevSelection, rows, nextRows)
-      );
+      setRowSelection((prevSelection) => remapPortfolioRowSelection(prevSelection, rows, nextRows));
       setMode(newMode);
     },
     [mode, report, buffPricesCny, buffCnyToVndRate, rows, setMode, setRowSelection]
@@ -167,16 +195,16 @@ export function PortfolioTable({
         ...prev,
         [id]: true,
       }));
-      setSellDialogOpen(true);
+      setIsSellDialogOpen(true);
     },
-    [setRowSelection, setSellDialogOpen],
+    [setRowSelection, setIsSellDialogOpen]
   );
 
   const columns = useMemo(
     () =>
       buildColumns({
         t,
-        mode,
+        mode: activeMode,
         deletingId,
         onDelete,
         updatingId,
@@ -197,9 +225,10 @@ export function PortfolioTable({
         formatCurrency,
         onSellItem: handleSellItem,
         ItemCellComponent: ItemCell,
+        isMobile,
       }),
     [
-      mode,
+      activeMode,
       deletingId,
       onDelete,
       updatingId,
@@ -219,7 +248,8 @@ export function PortfolioTable({
       formatCurrency,
       handleSellItem,
       t,
-    ],
+      isMobile,
+    ]
   );
 
   // eslint-disable-next-line react-hooks/incompatible-library
@@ -288,7 +318,7 @@ export function PortfolioTable({
     () => filteredRows.map((row) => row.original),
     [filteredRows]
   );
-  
+
   useEffect(() => {
     if (onFilteredRowsChange) {
       onFilteredRowsChange(originalFilteredRows);
@@ -317,24 +347,25 @@ export function PortfolioTable({
         t={t}
         onRefreshPrices={onRefreshPrices}
         isRefreshingPrices={isRefreshingPrices}
-        onUpdateBuffRate={onUpdateBuffRate}
-        buffCnyToVndRate={buffCnyToVndRate}
         table={table}
         selectedIds={selectedIds}
         setRowSelection={setRowSelection}
-        setSellDialogOpen={setSellDialogOpen}
+        setSellDialogOpen={setIsSellDialogOpen}
         handleDeleteSelected={handleDeleteSelected}
         isDeletingMany={isDeletingMany}
+        isMobile={isMobile}
       />
 
-      <PortfolioTableBody table={table} />
+      <PortfolioTableBody table={table} isMobile={isMobile} />
 
-      <TablePagination table={table} className="rounded-b-xl border-t border-stone-800" />
+      {!isMobile && (
+        <TablePagination table={table} className="rounded-b-xl border-t border-stone-800" />
+      )}
 
       <SellSelectedDialog
-        open={sellDialogOpen}
+        open={isSellDialogOpen}
         onClose={() => {
-          setSellDialogOpen(false);
+          setIsSellDialogOpen(false);
           setLastSelectedId(null);
         }}
         selectedItems={selectedRows}
@@ -363,10 +394,14 @@ export function PortfolioTable({
       <ConfirmDialog
         open={deleteSelectedConfirmOpen}
         onClose={() => setDeleteSelectedConfirmOpen(false)}
-        title={t("portfolio.deleteSelectedConfirmTitle", "Confirm deletion of selected items")}
-        description={t("portfolio.deleteSelectedConfirmDesc", "Are you sure you want to delete {{count}} selected items from your portfolio? This action cannot be undone.", { count: selectedDbIds.length })}
-        confirmText={t("portfolio.deleteSelectedConfirmButton", "Confirm Delete")}
-        cancelText={t("common.cancel")}
+        title={t('portfolio.deleteSelectedConfirmTitle', 'Confirm deletion of selected items')}
+        description={t(
+          'portfolio.deleteSelectedConfirmDesc',
+          'Are you sure you want to delete {{count}} selected items from your portfolio? This action cannot be undone.',
+          { count: selectedDbIds.length }
+        )}
+        confirmText={t('portfolio.deleteSelectedConfirmButton', 'Confirm Delete')}
+        cancelText={t('common.cancel')}
         variant="danger"
         onConfirm={async () => {
           if (onDeleteMany) {

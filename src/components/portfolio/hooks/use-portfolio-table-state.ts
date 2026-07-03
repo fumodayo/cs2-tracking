@@ -1,8 +1,8 @@
-import { useState, useEffect, useRef } from "react";
-import { useRouter, useSearchParams, usePathname } from "next/navigation";
-import type { SortingState } from "@tanstack/react-table";
-import type { PortfolioSourceFilter } from "../portfolio-table-model";
-import { useLocalStorage } from "@/hooks/use-local-storage";
+import { useState, useEffect, useRef } from 'react';
+import { useRouter, useSearchParams, usePathname } from 'next/navigation';
+import type { SortingState } from '@tanstack/react-table';
+import type { PortfolioSourceFilter } from '../portfolio-table-model';
+import { useLocalStorage } from '@/hooks/use-local-storage';
 
 interface UsePortfolioTableStateProps {
   filteredDataCount: number;
@@ -29,24 +29,24 @@ export function usePortfolioTableState({
   const didMountRef = useRef(false);
 
   // Read page from searchParams, default to 1 (which is index 0)
-  const pageParam = searchParams.get("page");
+  const pageParam = searchParams.get('page');
   const initialPageIndex = pageParam ? Math.max(0, parseInt(pageParam, 10) - 1) : 0;
 
   const [pagination, setPagination] = useState({
     pageIndex: initialPageIndex,
-    pageSize: 5,
+    pageSize: 10,
   });
 
-  const [sorting, setSorting] = useState<SortingState>([{ id: "buyPrice", desc: true }]);
+  const [sorting, setSorting] = useState<SortingState>([{ id: 'buyPrice', desc: true }]);
 
   // Persisted state using useLocalStorage hook
   const [rowSelection, setRowSelection] = useLocalStorage<Record<string, boolean>>(
-    "cs2t_portfolio_rowSelection",
+    'cs2t_portfolio_rowSelection',
     {}
   );
 
   const [columnVisibility, setColumnVisibility] = useLocalStorage<Record<string, boolean>>(
-    "cs2t_portfolio_columnVisibility",
+    'cs2t_portfolio_columnVisibility',
     {
       wholesaleValue: false,
       retailValue: false,
@@ -59,7 +59,7 @@ export function usePortfolioTableState({
 
   // Read page from URL
   useEffect(() => {
-    const pageVal = searchParams.get("page");
+    const pageVal = searchParams.get('page');
     const pIndex = pageVal ? Math.max(0, parseInt(pageVal, 10) - 1) : 0;
     if (pIndex !== pagination.pageIndex) {
       setPagination((prev) => ({ ...prev, pageIndex: pIndex }));
@@ -86,19 +86,26 @@ export function usePortfolioTableState({
       if (prev.pageIndex === 0) return prev;
       return { ...prev, pageIndex: 0 };
     });
-  }, [globalFilter, sourceFilters, itemTypeFilters, accountFilters, statusFilters, priceSourceFilters]);
+  }, [
+    globalFilter,
+    sourceFilters,
+    itemTypeFilters,
+    accountFilters,
+    statusFilters,
+    priceSourceFilters,
+  ]);
 
   // Sync pagination.pageIndex change to the URL query parameters
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
-    const currentPageVal = params.get("page");
+    const currentPageVal = params.get('page');
     const currentUrlPage = currentPageVal ? Math.max(0, parseInt(currentPageVal, 10) - 1) : 0;
-    
+
     if (pagination.pageIndex !== currentUrlPage) {
       if (pagination.pageIndex > 0) {
-        params.set("page", String(pagination.pageIndex + 1));
+        params.set('page', String(pagination.pageIndex + 1));
       } else {
-        params.delete("page");
+        params.delete('page');
       }
       router.replace(`${pathname}?${params.toString()}`, { scroll: false });
     }
