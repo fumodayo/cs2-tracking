@@ -1,15 +1,9 @@
-"use client";
+'use client';
 
-import { useState, useEffect, useMemo } from "react";
-import { useRouter } from "next/navigation";
-import {
-  Download,
-  LogIn,
-  Plus,
-  Upload,
-  Loader2,
-} from "lucide-react";
-import { useDashboard } from "./use-dashboard";
+import { useState, useEffect, useMemo } from 'react';
+import { useRouter } from 'next/navigation';
+import { Download, LogIn, Plus, Upload, Loader2, ShoppingBag } from 'lucide-react';
+import { useDashboard } from './use-dashboard';
 import {
   ImportExcelConfirmDialog,
   ImportExcelMappingDialog,
@@ -17,21 +11,23 @@ import {
   exportPortfolioToExcel,
   PortfolioTable,
   AddCaseDialog,
-} from "@/components/portfolio";
-import { SummaryCards } from "./summary-cards";
-import { FadeIn } from "@/components/ui/animation";
-import {
-  RecentImportsPopover,
-} from "./recent-imports-popover";
-import { SteamAccountsCard } from "@/components/steam-accounts";
-import { Button } from "@/components/ui/button";
+} from '@/components/portfolio';
+import { SummaryCards } from './summary-cards';
+import { FadeIn } from '@/components/ui/animation';
+import { RecentImportsPopover } from './recent-imports-popover';
+import { SteamAccountsCard } from '@/components/steam-accounts';
+import { Button } from '@/components/ui/button';
 
 export function Dashboard() {
   const router = useRouter();
+  const [sellDialogOpen, setSellDialogOpen] = useState(false);
 
   useEffect(() => {
-    if (typeof window !== "undefined" && localStorage.getItem("pending_portfolio_sync") === "true") {
-      router.push("/inventory-scanner");
+    if (
+      typeof window !== 'undefined' &&
+      localStorage.getItem('pending_portfolio_sync') === 'true'
+    ) {
+      router.push('/inventory-scanner');
     }
   }, [router]);
 
@@ -69,12 +65,7 @@ export function Dashboard() {
       suggestedMapping,
     },
     recentImports: { list: recentImports, remove: removeRecentImport },
-    table: {
-      filteredRows,
-      setFilteredRows,
-      computedTransactionRows,
-      deletingId,
-    },
+    table: { filteredRows, setFilteredRows, computedTransactionRows, deletingId },
     reportQuery,
     accountsQuery,
     mutations: {
@@ -90,10 +81,7 @@ export function Dashboard() {
 
   const steamWalletTotal = useMemo(() => {
     if (!accountsQuery.data) return 0;
-    return accountsQuery.data.reduce(
-      (sum, acc) => sum + (acc.walletBalanceVnd ?? 0),
-      0
-    );
+    return accountsQuery.data.reduce((sum, acc) => sum + (acc.walletBalanceVnd ?? 0), 0);
   }, [accountsQuery.data]);
 
   const [isDragOver, setIsDragOver] = useState(false);
@@ -102,7 +90,7 @@ export function Dashboard() {
   const handleDragOver = (e: React.DragEvent) => {
     e.preventDefault();
     e.stopPropagation();
-    if (e.dataTransfer.types.includes("Files")) {
+    if (e.dataTransfer.types.includes('Files')) {
       setIsDragOver(true);
     }
   };
@@ -125,23 +113,19 @@ export function Dashboard() {
   useEffect(() => {
     const handlePaste = async (e: ClipboardEvent) => {
       const target = e.target as HTMLElement;
-      if (
-        target.tagName === "INPUT" ||
-        target.tagName === "TEXTAREA" ||
-        target.isContentEditable
-      ) {
+      if (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable) {
         return;
       }
 
-      const text = e.clipboardData?.getData("text/plain");
-      if (text && text.includes("\t") && text.includes("\n")) {
+      const text = e.clipboardData?.getData('text/plain');
+      if (text && text.includes('\t') && text.includes('\n')) {
         e.preventDefault();
-        await handleExcelSource(text, "Clipboard");
+        await handleExcelSource(text, 'Clipboard');
       }
     };
 
-    window.addEventListener("paste", handlePaste);
-    return () => window.removeEventListener("paste", handlePaste);
+    window.addEventListener('paste', handlePaste);
+    return () => window.removeEventListener('paste', handlePaste);
   }, [handleExcelSource]);
 
   return (
@@ -151,17 +135,17 @@ export function Dashboard() {
           className="absolute inset-0 bg-cover bg-center opacity-55"
           style={{ backgroundImage: "url('/assets/dashboard-banner.png')" }}
         />
-        <div className="absolute inset-0 bg-gradient-to-r from-hero-scrim via-hero-scrim to-transparent" />
+        <div className="from-hero-scrim via-hero-scrim absolute inset-0 bg-gradient-to-r to-transparent" />
         <div className="relative mx-auto flex max-w-7xl flex-col justify-end px-4 pt-16 pb-8 sm:px-6 lg:px-8">
           <div className="max-w-3xl">
-            <p className="text-sm font-semibold tracking-[0.18em] text-accent uppercase">
+            <p className="text-accent text-sm font-semibold tracking-[0.18em] uppercase">
               CS2 Portfolio Tracker
             </p>
-            <h1 className="mt-3 text-4xl font-semibold tracking-normal text-foreground sm:text-5xl">
-              {t("dashboard.heroTitle")}
+            <h1 className="text-foreground mt-3 text-4xl font-semibold tracking-normal sm:text-5xl">
+              {t('dashboard.heroTitle')}
             </h1>
-            <p className="mt-4 max-w-2xl text-base leading-7 text-muted-foreground">
-              {t("dashboard.heroDescription")}
+            <p className="text-muted-foreground mt-4 max-w-2xl text-base leading-7">
+              {t('dashboard.heroDescription')}
             </p>
           </div>
         </div>
@@ -175,24 +159,22 @@ export function Dashboard() {
       >
         {isDragOver && (
           <div className="pointer-events-none absolute inset-0 z-50 flex flex-col items-center justify-center rounded-lg border-2 border-dashed border-blue-500/80 bg-[#0c0f17]/90 backdrop-blur-sm">
-            <Upload className="mx-auto size-12 text-blue-400 animate-bounce" />
+            <Upload className="mx-auto size-12 animate-bounce text-blue-400" />
             <p className="mt-4 text-lg font-bold text-stone-100">
-              {t("excelMapping.dropFileHere", "Drop Excel file here")}
+              {t('excelMapping.dropFileHere', 'Drop Excel file here')}
             </p>
             <p className="mt-1 text-sm text-stone-400">
-              {t("excelMapping.pasteHint", "Or copy cells from Excel and press Ctrl+V")}
+              {t('excelMapping.pasteHint', 'Or copy cells from Excel and press Ctrl+V')}
             </p>
           </div>
         )}
         {!user ? (
-          <div className="mb-5 flex flex-col gap-3 rounded-lg border border-accent/28 bg-accent/12 px-4 py-4 sm:flex-row sm:items-center sm:justify-between">
+          <div className="border-accent/28 bg-accent/12 mb-5 flex flex-col gap-3 rounded-lg border px-4 py-4 sm:flex-row sm:items-center sm:justify-between">
             <div>
               <p className="text-sm font-semibold text-blue-200">
-                {t("dashboard.loginPromptTitle")}
+                {t('dashboard.loginPromptTitle')}
               </p>
-              <p className="mt-1 text-sm text-stone-300">
-                {t("dashboard.loginPromptDesc")}
-              </p>
+              <p className="mt-1 text-sm text-stone-300">{t('dashboard.loginPromptDesc')}</p>
             </div>
             <a
               href="/api/auth/google"
@@ -204,17 +186,18 @@ export function Dashboard() {
                 setRedirecting(true);
               }}
               aria-disabled={!googleConfigured || loading || redirecting}
-              className={`inline-flex h-10 shrink-0 items-center justify-center gap-2 rounded-md px-4 text-sm font-semibold ${googleConfigured && !loading && !redirecting
-                ? "bg-accent text-accent-foreground hover:bg-accent-hover cursor-pointer"
-                : "pointer-events-none border border-border text-muted-foreground opacity-50"
-                }`}
+              className={`inline-flex h-10 shrink-0 items-center justify-center gap-2 rounded-md px-4 text-sm font-semibold ${
+                googleConfigured && !loading && !redirecting
+                  ? 'bg-accent text-accent-foreground hover:bg-accent-hover cursor-pointer'
+                  : 'border-border text-muted-foreground pointer-events-none border opacity-50'
+              }`}
             >
               {redirecting ? (
                 <Loader2 className="size-4 animate-spin" />
               ) : (
                 <LogIn className="size-4" />
               )}
-              {googleConfigured ? t("auth.loginGmail") : t("auth.missingOAuth")}
+              {googleConfigured ? t('auth.loginGmail') : t('auth.missingOAuth')}
             </a>
           </div>
         ) : null}
@@ -223,9 +206,7 @@ export function Dashboard() {
           {user && (
             <>
               <div>
-                <h2 className="text-xl font-semibold text-foreground">
-                  Portfolio
-                </h2>
+                <h2 className="text-foreground text-xl font-semibold">Portfolio</h2>
               </div>
               <div className="flex flex-wrap items-center gap-2">
                 <Button
@@ -234,7 +215,7 @@ export function Dashboard() {
                   disabled={!report || report.rows.length === 0}
                 >
                   <Download className="size-4 text-emerald-400" />
-                  {t("dashboard.exportExcel")}
+                  {t('dashboard.exportExcel')}
                 </Button>
                 <Button
                   variant="outline"
@@ -246,16 +227,13 @@ export function Dashboard() {
                   ) : (
                     <Upload className="size-4 text-blue-400" />
                   )}
-                  {importStatus.phase === "reading"
-                    ? t("dashboard.readingExcel")
+                  {importStatus.phase === 'reading'
+                    ? t('dashboard.readingExcel')
                     : importMutation.isPending
-                      ? t("dashboard.importing")
-                      : t("dashboard.importExcel")}
+                      ? t('dashboard.importing')
+                      : t('dashboard.importExcel')}
                 </Button>
-                <RecentImportsPopover
-                  recentImports={recentImports}
-                  onRemove={removeRecentImport}
-                />
+                <RecentImportsPopover recentImports={recentImports} onRemove={removeRecentImport} />
                 <input
                   ref={importInputRef}
                   type="file"
@@ -264,12 +242,16 @@ export function Dashboard() {
                   onChange={handleImportFile}
                 />
                 <Button
-                  variant="primary"
-                  onClick={() => setDialogOpen(true)}
-                  disabled={loading}
+                  variant="outline"
+                  onClick={() => setSellDialogOpen(true)}
+                  disabled={loading || !report || report.rows.length === 0}
                 >
+                  <ShoppingBag className="size-4 text-blue-400" />
+                  {t('inventoryScanner.sellItems')}
+                </Button>
+                <Button variant="primary" onClick={() => setDialogOpen(true)} disabled={loading}>
                   <Plus className="size-4" />
-                  {t("dashboard.addItem")}
+                  {t('dashboard.addItem')}
                 </Button>
               </div>
             </>
@@ -280,9 +262,9 @@ export function Dashboard() {
           <div className="mb-4 rounded-lg border border-red-500/30 bg-red-950/30 px-4 py-3 text-sm text-red-200">
             {error
               ? t(`auth.errors.${error}`, { defaultValue: error })
-              : (reportQuery.error instanceof Error
+              : reportQuery.error instanceof Error
                 ? reportQuery.error.message
-                : t("bugReportsAdmin.occurredError"))}
+                : t('bugReportsAdmin.occurredError')}
           </div>
         ) : null}
 
@@ -311,45 +293,33 @@ export function Dashboard() {
                   report={report}
                   deletingId={deletingId}
                   onDelete={(id) => deleteMutation.mutate(id)}
-                  onDeleteMany={(ids) =>
-                    deleteManyMutation.mutateAsync(ids).then(() => undefined)
-                  }
+                  onDeleteMany={(ids) => deleteManyMutation.mutateAsync(ids).then(() => undefined)}
                   isDeletingMany={deleteManyMutation.isPending}
                   updatingId={
-                    updateMutation.isPending
-                      ? (updateMutation.variables?.id ?? null)
-                      : null
+                    updateMutation.isPending ? (updateMutation.variables?.id ?? null) : null
                   }
                   onUpdateBuyPrice={(id, buyPrice) =>
-                    updateMutation
-                      .mutateAsync({ id, buyPrice })
-                      .then(() => undefined)
+                    updateMutation.mutateAsync({ id, buyPrice }).then(() => undefined)
                   }
                   onUpdateQuantity={(id, quantity) =>
-                    updateMutation
-                      .mutateAsync({ id, quantity })
-                      .then(() => undefined)
+                    updateMutation.mutateAsync({ id, quantity }).then(() => undefined)
                   }
                   onUpdateNote={(id, note) =>
-                    updateMutation
-                      .mutateAsync({ id, note })
-                      .then(() => undefined)
+                    updateMutation.mutateAsync({ id, note }).then(() => undefined)
                   }
                   onUpdateLot={(id, payload) =>
-                    updateMutation
-                      .mutateAsync({ id, ...payload })
-                      .then(() => undefined)
+                    updateMutation.mutateAsync({ id, ...payload }).then(() => undefined)
                   }
                   buffPricesCny={buffPricesCny}
                   buffCnyToVndRate={buffCnyToVndRate}
                   onUpdateBuffPrice={handleUpdateBuffPrice}
-                  onAddCaseLot={(payload) =>
-                    addMutation.mutateAsync(payload).then(() => undefined)
-                  }
+                  onAddCaseLot={(payload) => addMutation.mutateAsync(payload).then(() => undefined)}
                   onRefreshPrices={() => refreshMutation.mutate()}
                   isRefreshingPrices={refreshMutation.isPending || loading}
                   onUpdateBuffRate={handleUpdateBuffRate}
                   onFilteredRowsChange={setFilteredRows}
+                  sellDialogOpen={sellDialogOpen}
+                  onSellDialogOpenChange={setSellDialogOpen}
                 />
               ) : (
                 <EmptyState onAdd={() => setDialogOpen(true)} />
@@ -363,9 +333,7 @@ export function Dashboard() {
         open={dialogOpen}
         saving={addMutation.isPending}
         onClose={() => setDialogOpen(false)}
-        onSubmit={(payload) =>
-          addMutation.mutateAsync(payload).then(() => undefined)
-        }
+        onSubmit={(payload) => addMutation.mutateAsync(payload).then(() => undefined)}
         defaultBuffRate={buffCnyToVndRate}
       />
 
@@ -414,33 +382,33 @@ function DashboardSkeleton() {
           />
         ))}
       </div>
-      <div className="rounded-xl border border-stone-800 bg-stone-900/20 p-4 space-y-4">
+      <div className="space-y-4 rounded-xl border border-stone-800 bg-stone-900/20 p-4">
         {/* Table skeleton replica */}
-        <div className="overflow-x-auto rounded-lg border border-stone-850">
-          <div className="min-w-full divide-y divide-stone-850">
+        <div className="border-stone-850 overflow-x-auto rounded-lg border">
+          <div className="divide-stone-850 min-w-full divide-y">
             {/* Header */}
-            <div className="bg-stone-900/50 flex py-3.5 px-4">
-              <div className="h-4 w-8 bg-stone-800 animate-pulse rounded mr-6" />
-              <div className="h-4 w-40 bg-stone-800 animate-pulse rounded mr-auto" />
-              <div className="h-4 w-16 bg-stone-800 animate-pulse rounded mr-12" />
-              <div className="h-4 w-24 bg-stone-800 animate-pulse rounded mr-12" />
-              <div className="h-4 w-20 bg-stone-800 animate-pulse rounded" />
+            <div className="flex bg-stone-900/50 px-4 py-3.5">
+              <div className="mr-6 h-4 w-8 animate-pulse rounded bg-stone-800" />
+              <div className="mr-auto h-4 w-40 animate-pulse rounded bg-stone-800" />
+              <div className="mr-12 h-4 w-16 animate-pulse rounded bg-stone-800" />
+              <div className="mr-12 h-4 w-24 animate-pulse rounded bg-stone-800" />
+              <div className="h-4 w-20 animate-pulse rounded bg-stone-800" />
             </div>
             {/* Rows */}
-            <div className="divide-y divide-stone-850 bg-stone-955/20">
+            <div className="divide-stone-850 bg-stone-955/20 divide-y">
               {Array.from({ length: 6 }).map((_, rowIndex) => (
-                <div key={rowIndex} className="flex items-center py-4 px-4">
-                  <div className="h-4 w-4 bg-stone-800 animate-pulse rounded mr-8" />
-                  <div className="flex items-center gap-3 mr-auto">
-                    <div className="size-10 bg-stone-800 animate-pulse rounded-lg" />
+                <div key={rowIndex} className="flex items-center px-4 py-4">
+                  <div className="mr-8 h-4 w-4 animate-pulse rounded bg-stone-800" />
+                  <div className="mr-auto flex items-center gap-3">
+                    <div className="size-10 animate-pulse rounded-lg bg-stone-800" />
                     <div className="space-y-1.5">
-                      <div className="h-4 w-48 bg-stone-800 animate-pulse rounded" />
-                      <div className="h-3 w-24 bg-stone-800 animate-pulse rounded" />
+                      <div className="h-4 w-48 animate-pulse rounded bg-stone-800" />
+                      <div className="h-3 w-24 animate-pulse rounded bg-stone-800" />
                     </div>
                   </div>
-                  <div className="h-4 w-12 bg-stone-800 animate-pulse rounded mr-16" />
-                  <div className="h-4.5 w-20 bg-stone-800 animate-pulse rounded mr-16" />
-                  <div className="h-4.5 w-24 bg-stone-800 animate-pulse rounded" />
+                  <div className="mr-16 h-4 w-12 animate-pulse rounded bg-stone-800" />
+                  <div className="mr-16 h-4.5 w-20 animate-pulse rounded bg-stone-800" />
+                  <div className="h-4.5 w-24 animate-pulse rounded bg-stone-800" />
                 </div>
               ))}
             </div>

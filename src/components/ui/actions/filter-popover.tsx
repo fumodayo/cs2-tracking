@@ -1,12 +1,12 @@
-"use client";
+'use client';
 
-import * as React from "react";
-import * as Popover from "@radix-ui/react-popover";
-import { Plus, Search, Check } from "lucide-react";
-import { useMemo, useState } from "react";
-import { cn } from "@/utils/cn";
-import { Button } from "@/components/ui/button";
-import { useTranslation } from "react-i18next";
+import * as React from 'react';
+import * as Popover from '@radix-ui/react-popover';
+import { Plus, Search, Check } from 'lucide-react';
+import { useMemo, useState } from 'react';
+import { cn } from '@/utils/cn';
+import { Button } from '@/components/ui/button';
+import { useTranslation } from 'react-i18next';
 
 interface FilterPopoverProps<TValue extends string> {
   label: string;
@@ -21,6 +21,7 @@ interface FilterPopoverProps<TValue extends string> {
   onChange: (values: TValue[]) => void;
   disabled?: boolean;
   showSearch?: boolean;
+  hideOptionIcons?: boolean;
 }
 
 export function FilterPopover<TValue extends string>({
@@ -30,10 +31,11 @@ export function FilterPopover<TValue extends string>({
   onChange,
   disabled = false,
   showSearch = true,
+  hideOptionIcons = false,
 }: FilterPopoverProps<TValue>) {
   const { t } = useTranslation();
   const [open, setOpen] = useState(false);
-  const [searchValue, setSearchValue] = useState("");
+  const [searchValue, setSearchValue] = useState('');
 
   const selectedLabels = useMemo(() => {
     return options
@@ -46,17 +48,16 @@ export function FilterPopover<TValue extends string>({
     if (!query) return options;
     return options.filter(
       (option) =>
-        option.label.toLowerCase().includes(query) ||
-        option.value.toLowerCase().includes(query),
+        option.label.toLowerCase().includes(query) || option.value.toLowerCase().includes(query)
     );
   }, [options, searchValue]);
 
   const handleCheckedChange = (value: TValue, optionSubValues?: string[]) => {
-    if (value.startsWith("group:") && optionSubValues) {
-      const allSelected = optionSubValues.every(v => selectedValues.includes(v as TValue));
+    if (value.startsWith('group:') && optionSubValues) {
+      const allSelected = optionSubValues.every((v) => selectedValues.includes(v as TValue));
       let newValues: TValue[];
       if (allSelected) {
-        newValues = selectedValues.filter(v => !optionSubValues.includes(v));
+        newValues = selectedValues.filter((v) => !optionSubValues.includes(v));
       } else {
         newValues = Array.from(new Set([...selectedValues, ...optionSubValues])) as TValue[];
       }
@@ -88,16 +89,15 @@ export function FilterPopover<TValue extends string>({
           variant="outline"
           disabled={disabled}
           className={cn(
-            "h-8 cursor-pointer gap-1.5 rounded-lg border border-dashed border-stone-800 bg-stone-900/40 px-3 text-xs font-semibold text-stone-300 shadow-sm transition-all duration-200 hover:border-stone-700 hover:bg-stone-850 hover:text-stone-100 hover:scale-[1.02] active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-50",
+            'hover:bg-stone-850 h-8 cursor-pointer gap-1.5 rounded-lg border border-dashed border-stone-800 bg-stone-900/40 px-3 text-xs font-semibold text-stone-300 shadow-sm transition-all duration-200 hover:scale-[1.02] hover:border-stone-700 hover:text-stone-100 active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-50',
             selectedValues.length > 0 &&
-            "border-solid border-accent/30 bg-accent/5 text-accent hover:border-accent/50 hover:bg-accent/10 hover:text-accent-hover shadow-sm shadow-accent/5",
+              'border-accent/30 bg-accent/5 text-accent hover:border-accent/50 hover:bg-accent/10 hover:text-accent-hover shadow-accent/5 border-solid shadow-sm'
           )}
         >
           <Plus
             className={cn(
-              "size-3.5 text-stone-500 transition-colors group-hover:text-stone-300 shrink-0",
-              selectedValues.length > 0 &&
-              "text-accent group-hover:text-accent-hover",
+              'size-3.5 shrink-0 text-stone-500 transition-colors group-hover:text-stone-300',
+              selectedValues.length > 0 && 'text-accent group-hover:text-accent-hover'
             )}
           />
           <span>{label}</span>
@@ -107,14 +107,14 @@ export function FilterPopover<TValue extends string>({
               <div className="mx-1 h-3.5 w-px bg-stone-800 transition-colors group-hover:bg-stone-700" />
               <div className="flex items-center gap-1">
                 {selectedLabels.length >= 3 ? (
-                  <div className="inline-flex items-center rounded-md bg-accent/10 px-1.5 py-0.5 text-[10px] font-bold text-accent">
-                    {t("common.selected", { count: selectedValues.length })}
+                  <div className="bg-accent/10 text-accent inline-flex items-center rounded-md px-1.5 py-0.5 text-[10px] font-bold">
+                    {t('common.selected', { count: selectedValues.length })}
                   </div>
                 ) : (
                   selectedLabels.map((itemLabel) => (
                     <div
                       key={itemLabel}
-                      className="rounded bg-accent/10 px-1.5 py-0.5 text-[10px] font-bold text-accent"
+                      className="bg-accent/10 text-accent rounded px-1.5 py-0.5 text-[10px] font-bold"
                     >
                       {itemLabel}
                     </div>
@@ -141,7 +141,7 @@ export function FilterPopover<TValue extends string>({
                   ref={searchInputRef}
                   value={searchValue}
                   onChange={(e) => setSearchValue(e.target.value)}
-                  placeholder={t("common.search", "Search") + "..."}
+                  placeholder={t('common.search', 'Search') + '...'}
                   className="h-7 w-full border-none bg-transparent text-xs text-stone-200 outline-none placeholder:text-stone-500 focus:ring-0"
                 />
               </div>
@@ -151,15 +151,15 @@ export function FilterPopover<TValue extends string>({
             <div
               className="hover:[&::-webkit-scrollbar-thumb]:bg-stone-750 max-h-60 overflow-y-auto p-1.5 [&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-stone-800 [&::-webkit-scrollbar-track]:bg-transparent"
               style={{
-                scrollbarWidth: "thin",
-                scrollbarColor: "var(--border) transparent",
+                scrollbarWidth: 'thin',
+                scrollbarColor: 'var(--border) transparent',
               }}
             >
               {(() => {
                 if (filteredOptions.length === 0) {
                   return (
                     <p className="p-4 text-center text-xs text-stone-500">
-                      {t("common.noResults", "No results found.")}
+                      {t('common.noResults', 'No results found.')}
                     </p>
                   );
                 }
@@ -175,7 +175,7 @@ export function FilterPopover<TValue extends string>({
                     continue;
                   }
 
-                  if (value === "separator" || value.startsWith("separator:")) {
+                  if (value === 'separator' || value.startsWith('separator:')) {
                     elements.push(
                       <div
                         key={value}
@@ -188,7 +188,7 @@ export function FilterPopover<TValue extends string>({
                     continue;
                   }
 
-                  if (value.startsWith("group:")) {
+                  if (value.startsWith('group:')) {
                     const isGroupHeaderChecked = subValues
                       ? subValues.every((v) => selectedValues.includes(v as TValue))
                       : false;
@@ -206,9 +206,9 @@ export function FilterPopover<TValue extends string>({
                       >
                         <span className="inline-flex size-3.5 shrink-0 items-center justify-center">
                           {isGroupHeaderChecked ? (
-                            <Check className="size-2.5 text-accent" />
+                            <Check className="text-accent size-2.5" />
                           ) : isGroupHeaderPartiallyChecked ? (
-                            <div className="size-1 rounded bg-accent animate-pulse" />
+                            <div className="bg-accent size-1 animate-pulse rounded" />
                           ) : null}
                         </span>
                         <span className="truncate">{optionLabel}</span>
@@ -238,11 +238,9 @@ export function FilterPopover<TValue extends string>({
                                 className="relative flex w-full cursor-pointer items-center justify-start gap-1.5 rounded-md px-2 py-1 text-start text-xs font-semibold text-stone-400 transition-all outline-none select-none hover:bg-stone-900/60 hover:text-stone-200"
                               >
                                 <span className="inline-flex size-3.5 shrink-0 items-center justify-center">
-                                  {isChecked && (
-                                    <Check className="size-2.5 text-accent" />
-                                  )}
+                                  {isChecked && <Check className="text-accent size-2.5" />}
                                 </span>
-                                {ItemIcon && (
+                                {ItemIcon && !hideOptionIcons && (
                                   <ItemIcon className="size-3.5 shrink-0 text-stone-500/80" />
                                 )}
                                 <span className="flex-1 text-left whitespace-nowrap">
@@ -266,11 +264,9 @@ export function FilterPopover<TValue extends string>({
                       className="relative flex w-full cursor-pointer items-center justify-start gap-2 rounded-lg px-2.5 py-2 text-start text-xs font-semibold text-stone-300 transition-all outline-none select-none hover:bg-stone-900 hover:text-stone-100"
                     >
                       <span className="inline-flex size-4 shrink-0 items-center justify-center">
-                        {isChecked && (
-                          <Check className="size-3.5 text-accent" />
-                        )}
+                        {isChecked && <Check className="text-accent size-3.5" />}
                       </span>
-                      {Icon && (
+                      {Icon && !hideOptionIcons && (
                         <Icon className="size-4 shrink-0 text-stone-400/80" />
                       )}
                       <span className="truncate">{optionLabel}</span>

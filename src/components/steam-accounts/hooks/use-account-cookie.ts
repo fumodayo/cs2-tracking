@@ -1,16 +1,17 @@
-"use client";
+'use client';
 
-import { useState, useEffect, useRef, useCallback } from "react";
-import { useMutation, useQueryClient, UseQueryResult } from "@tanstack/react-query";
-import { useTranslation } from "react-i18next";
-import { toast } from "@/stores";
-import { getErrorMessage } from "@/utils/error";
+import { useState, useEffect, useRef, useCallback } from 'react';
+import { useMutation, useQueryClient, UseQueryResult } from '@tanstack/react-query';
+import { useTranslation } from 'react-i18next';
+import { toast } from '@/stores';
+import { getErrorMessage } from '@/utils/error';
+import { translateAccountError } from '../../inventory-scanner/utils';
 import {
   checkSteamCookieStatus,
   updateSteamAccountCookie,
   STEAM_ACCOUNTS_QUERY_KEY,
-} from "@/lib/api-client/steam-accounts-api";
-import type { SteamAccountDto } from "@/lib/api-client/steam-accounts-api";
+} from '@/lib/api-client/steam-accounts-api';
+import type { SteamAccountDto } from '@/lib/api-client/steam-accounts-api';
 
 interface UseAccountCookieProps {
   accountsQuery: UseQueryResult<SteamAccountDto[], unknown>;
@@ -29,7 +30,7 @@ export function useAccountCookie({ accountsQuery }: UseAccountCookieProps) {
     Record<
       string,
       {
-        status: "idle" | "loading" | "live" | "expired" | "error";
+        status: 'idle' | 'loading' | 'live' | 'expired' | 'error';
         message?: string;
       }
     >
@@ -67,7 +68,7 @@ export function useAccountCookie({ accountsQuery }: UseAccountCookieProps) {
 
       setCookieStatuses((prev) => ({
         ...prev,
-        [accountId]: { status: "loading" },
+        [accountId]: { status: 'loading' },
       }));
 
       try {
@@ -75,48 +76,63 @@ export function useAccountCookie({ accountsQuery }: UseAccountCookieProps) {
         if (data.isValid) {
           setCookieStatuses((prev) => ({
             ...prev,
-            [accountId]: { status: "live" },
+            [accountId]: { status: 'live' },
           }));
           accountsQuery.refetch();
-          toast.success(t("dashboard.cookieWorking", "Cookie is working properly!"));
+          toast.success(t('dashboard.cookieWorking', 'Cookie is working properly!'));
         } else if (data.isExpired) {
           setCookieStatuses((prev) => ({
             ...prev,
             [accountId]: {
-              status: "expired",
-              message: data.message || t("dashboard.cookieExpiredStatus", "Cookie expired"),
+              status: 'expired',
+              message: data.message
+                ? translateAccountError(data.message, t)
+                : t('dashboard.cookieExpiredStatus', 'Cookie expired'),
             },
           }));
           accountsQuery.refetch();
-          toast.error(t("dashboard.cookieExpiredError", "Cookie has expired!"));
+          toast.error(
+            data.message
+              ? translateAccountError(data.message, t)
+              : t('dashboard.cookieExpiredError', 'Cookie has expired!')
+          );
         } else {
           setCookieStatuses((prev) => ({
             ...prev,
             [accountId]: {
-              status: "error",
-              message: data.message || t("dashboard.cookieCheckError", "Verification error"),
+              status: 'error',
+              message: data.message
+                ? translateAccountError(data.message, t)
+                : t('dashboard.cookieCheckError', 'Verification error'),
             },
           }));
           accountsQuery.refetch();
-          toast.error(data.message || t("dashboard.cookieVerificationFailed", "Cookie verification failed."));
+          toast.error(
+            data.message
+              ? translateAccountError(data.message, t)
+              : t('dashboard.cookieVerificationFailed', 'Cookie verification failed.')
+          );
         }
       } catch {
         setCookieStatuses((prev) => ({
           ...prev,
-          [accountId]: { status: "error", message: t("dashboard.networkConnectionError", "Network connection error") },
+          [accountId]: {
+            status: 'error',
+            message: t('dashboard.networkConnectionError', 'Network connection error'),
+          },
         }));
         accountsQuery.refetch();
-        toast.error(t("common.serverConnectionError", "Cannot connect to server."));
+        toast.error(t('common.serverConnectionError', 'Cannot connect to server.'));
       } finally {
         setCheckCooldowns((prev) => ({ ...prev, [accountId]: 15 }));
       }
     },
-    [accountsQuery, t],
+    [accountsQuery, t]
   );
 
   const updateCookieMutation = useMutation({
     mutationFn: (payload: { id: string; steamCookie: string }) =>
-      updateSteamAccountCookie(payload, t("dashboard.cannotUpdateCookie")),
+      updateSteamAccountCookie(payload, t('dashboard.cannotUpdateCookie')),
     onSuccess: (data, variables) => {
       const accountId = variables.id;
       setCookieInputs((prev) => {
@@ -135,11 +151,11 @@ export function useAccountCookie({ accountsQuery }: UseAccountCookieProps) {
         return next;
       });
       queryClient.invalidateQueries({ queryKey: STEAM_ACCOUNTS_QUERY_KEY });
-      queryClient.invalidateQueries({ queryKey: ["portfolio-storage-units"] });
-      toast.success(t("dashboard.cookieSaved"));
+      queryClient.invalidateQueries({ queryKey: ['portfolio-storage-units'] });
+      toast.success(t('dashboard.cookieSaved'));
     },
     onError: (err) => {
-      toast.error(t("dashboard.cookieError"), {
+      toast.error(t('dashboard.cookieError'), {
         description: getErrorMessage(err),
       });
     },
@@ -148,48 +164,40 @@ export function useAccountCookie({ accountsQuery }: UseAccountCookieProps) {
   const getUnsavedCookie = useCallback(
     (account: { id: string; steamCookie?: string | null }) => {
       const getVal = (raw: string, key: string) => {
-        if (raw.includes(";")) {
-          const match = raw.split(";").find((p) =>
+        if (raw.includes(';')) {
+          const match = raw.split(';').find((p) =>
             p
               .trim()
               .toLowerCase()
-              .startsWith(key + "="),
+              .startsWith(key + '=')
           );
-          return match ? match.split("=").slice(1).join("=").trim() : "";
+          return match ? match.split('=').slice(1).join('=').trim() : '';
         }
-        if (key === "steamloginsecure") {
-          return raw.toLowerCase().startsWith("steamloginsecure=")
+        if (key === 'steamloginsecure') {
+          return raw.toLowerCase().startsWith('steamloginsecure=')
             ? raw.substring(17).trim()
             : raw.trim();
         }
-        return "";
+        return '';
       };
 
       const parsedLoginSecure = account.steamCookie
-        ? getVal(account.steamCookie, "steamloginsecure")
-        : "";
+        ? getVal(account.steamCookie, 'steamloginsecure')
+        : '';
       const parsedParental = account.steamCookie
-        ? getVal(account.steamCookie, "steamparental")
-        : "";
-      const parsedSessionId = account.steamCookie
-        ? getVal(account.steamCookie, "sessionid")
-        : "";
+        ? getVal(account.steamCookie, 'steamparental')
+        : '';
+      const parsedSessionId = account.steamCookie ? getVal(account.steamCookie, 'sessionid') : '';
 
       const hasUnsavedCookieChange =
-        cookieInputs[account.id] !== undefined &&
-        cookieInputs[account.id] !== parsedLoginSecure;
+        cookieInputs[account.id] !== undefined && cookieInputs[account.id] !== parsedLoginSecure;
       const hasUnsavedParentalChange =
-        parentalInputs[account.id] !== undefined &&
-        parentalInputs[account.id] !== parsedParental;
+        parentalInputs[account.id] !== undefined && parentalInputs[account.id] !== parsedParental;
       const hasUnsavedSessionIdChange =
         sessionIdInputs[account.id] !== undefined &&
         sessionIdInputs[account.id] !== parsedSessionId;
 
-      if (
-        !hasUnsavedCookieChange &&
-        !hasUnsavedParentalChange &&
-        !hasUnsavedSessionIdChange
-      ) {
+      if (!hasUnsavedCookieChange && !hasUnsavedParentalChange && !hasUnsavedSessionIdChange) {
         return null;
       }
 
@@ -198,11 +206,11 @@ export function useAccountCookie({ accountsQuery }: UseAccountCookieProps) {
       const sSessionId = sessionIdInputs[account.id] ?? parsedSessionId;
       const combined =
         `steamLoginSecure=${sLogin}` +
-        (sParental ? `; steamparental=${sParental}` : "") +
-        (sSessionId ? `; sessionid=${sSessionId}` : "");
+        (sParental ? `; steamparental=${sParental}` : '') +
+        (sSessionId ? `; sessionid=${sSessionId}` : '');
       return combined;
     },
-    [cookieInputs, parentalInputs, sessionIdInputs],
+    [cookieInputs, parentalInputs, sessionIdInputs]
   );
 
   return {

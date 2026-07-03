@@ -108,9 +108,11 @@ export function ThemeSelector() {
         <Button
           type="button"
           variant="outline"
+          size="icon"
           onClick={handleButtonClick}
-          className="border-border bg-surface text-foreground hover:border-accent flex h-8 w-8 shrink-0 cursor-pointer items-center justify-center rounded-xl border p-0 transition-all duration-300 outline-none hover:shadow-[0_0_12px_rgba(59,130,246,0.15)] active:scale-95 md:h-10 md:w-10"
-          aria-label="Toggle Theme Options"
+          className="border-border bg-surface text-foreground hover:border-accent flex size-9 shrink-0 cursor-pointer items-center justify-center rounded-xl border p-0 transition-all duration-300 outline-none hover:shadow-[0_0_12px_rgba(59,130,246,0.15)] active:scale-95 md:size-10"
+          aria-label={t('auth.changeTheme', 'Change Theme')}
+          title={t('auth.changeTheme', 'Change Theme')}
         >
           {theme === 'dark' ? (
             <Moon className="size-4 md:size-[20px]" />
@@ -202,9 +204,9 @@ export function LanguageSelector() {
 
   const activeFlag =
     lang === 'vi' ? (
-      <VietnamFlag className="size-4 md:size-5" />
+      <VietnamFlag className="size-5 md:size-[22px]" />
     ) : (
-      <UKFlag className="size-4 md:size-5" />
+      <UKFlag className="size-5 md:size-[22px]" />
     );
   const langLabel = lang === 'vi' ? 'Ti\u1ebfng Vi\u1ec7t' : 'English';
 
@@ -239,11 +241,13 @@ export function LanguageSelector() {
         <Button
           type="button"
           variant="outline"
+          size="icon"
           onClick={handleButtonClick}
-          className="border-border bg-surface text-foreground hover:border-accent flex h-8 w-8 shrink-0 cursor-pointer items-center justify-center gap-0 rounded-xl border p-0 text-xs font-bold transition-all duration-300 outline-none hover:shadow-[0_0_12px_rgba(59,130,246,0.15)] active:scale-95 md:h-10 md:justify-start md:gap-1.5 md:px-3"
+          className="border-border bg-surface text-foreground hover:border-accent flex size-9 shrink-0 cursor-pointer items-center justify-center rounded-xl border p-0 transition-all duration-300 outline-none hover:shadow-[0_0_12px_rgba(59,130,246,0.15)] active:scale-95 md:size-10"
+          aria-label={t('auth.changeLanguage', 'Change Language')}
+          title={langLabel}
         >
           {activeFlag}
-          <span className="hidden md:inline">{langLabel}</span>
         </Button>
       </Popover.Trigger>
 

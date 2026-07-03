@@ -1,15 +1,20 @@
-"use client";
+'use client';
 
-import React, { memo } from "react";
-import { useTranslation } from "react-i18next";
-import { Users, Loader2, Search, Trash2, AlertCircle, Plus } from "lucide-react";
-import { proxySteamUrl } from "@/utils/url";
-import { Button } from "@/components/ui/button";
-import { cn } from "@/utils/cn";
-import { AccountWallet } from "./account-wallet";
-import { AccountCookiePanel } from "./account-cookie-panel";
-import { AccountStorageUnits } from "./account-storage-units";
-import type { SteamAccountDto } from "@/lib/api-client/steam-accounts-api";
+import React, { memo } from 'react';
+import { useTranslation } from 'react-i18next';
+import { Users, Loader2, Search, Trash2, AlertCircle, Plus, ExternalLink } from 'lucide-react';
+import { proxySteamUrl } from '@/utils/url';
+import { Button } from '@/components/ui/button';
+import { cn } from '@/utils/cn';
+import { AccountWallet } from './account-wallet';
+import { AccountCookiePanel } from './account-cookie-panel';
+import { AccountStorageUnits } from './account-storage-units';
+import {
+  STEAM_PRIVACY_SETTINGS_URL,
+  isPrivateInventoryAccountError,
+  translateAccountError,
+} from '../../inventory-scanner/utils';
+import type { SteamAccountDto } from '@/lib/api-client/steam-accounts-api';
 
 const AccountListItemComponent = memo(
   function AccountListItemComponent({
@@ -42,8 +47,8 @@ const AccountListItemComponent = memo(
     startSingleSync: (id: string, name: string) => void;
     setAccountToDelete: (account: { id: string; name: string } | null) => void;
     deleteAccountPending: boolean;
-    updateCookieMutation: AccountListProps["updateCookieMutation"];
-    cookieStatuses: AccountListProps["cookieStatuses"];
+    updateCookieMutation: AccountListProps['updateCookieMutation'];
+    cookieStatuses: AccountListProps['cookieStatuses'];
     checkCooldowns: Record<string, number>;
     handleCheckCookie: (accountId: string) => void;
     cookieInputs: Record<string, string>;
@@ -53,42 +58,45 @@ const AccountListItemComponent = memo(
     sessionIdInputs: Record<string, string>;
     setSessionIdInputs: React.Dispatch<React.SetStateAction<Record<string, string>>>;
     setShowCookieGuide: (show: boolean) => void;
-    onSelectStorageUnit: AccountListProps["onSelectStorageUnit"];
+    onSelectStorageUnit: AccountListProps['onSelectStorageUnit'];
   }) {
     const { t } = useTranslation();
+    const cookieErrorMessage = translateAccountError(account.cookieError, t);
+    const showPrivacySettingsLink = isPrivateInventoryAccountError(account.cookieError);
+
     return (
-      <div
-        className="group relative flex flex-col gap-3.5 rounded-xl border border-stone-800/80 bg-gradient-to-b from-stone-950/90 via-stone-950/60 to-stone-950/30 p-4 transition-all duration-300 hover:border-accent/30 hover:shadow-[0_4px_20px_rgba(59,130,246,0.03)] overflow-hidden"
-      >
+      <div className="group hover:border-accent/30 relative flex flex-col gap-3.5 overflow-hidden rounded-xl border border-stone-800/80 bg-gradient-to-b from-stone-950/90 via-stone-950/60 to-stone-950/30 p-4 transition-all duration-300 hover:shadow-[0_4px_20px_rgba(59,130,246,0.03)]">
         <div
           className={cn(
-            "absolute left-0 top-0 bottom-0 w-[3px] transition-colors duration-300",
-            account.cookieError ? "bg-red-500/80" : "bg-transparent group-hover:bg-accent/40"
+            'absolute top-0 bottom-0 left-0 w-[3px] transition-colors duration-300',
+            account.cookieError ? 'bg-red-500/80' : 'group-hover:bg-accent/40 bg-transparent'
           )}
         />
-        
-        <div className="flex items-center justify-between gap-3 min-w-0 relative z-10">
-          <div className="flex items-center gap-3.5 min-w-0">
+
+        <div className="relative z-10 flex min-w-0 items-center justify-between gap-3">
+          <div className="flex min-w-0 items-center gap-2.5 sm:gap-3.5">
             {account.avatarUrl ? (
               <img
                 src={proxySteamUrl(account.avatarUrl)}
-                alt={t("steamAccounts.avatarAlt", "{{name}}'s Steam avatar", { name: account.name })}
-                className="size-11 rounded-full border border-stone-800/80 object-cover shrink-0 shadow-sm"
+                alt={t('steamAccounts.avatarAlt', "{{name}}'s Steam avatar", {
+                  name: account.name,
+                })}
+                className="size-9 shrink-0 rounded-full border border-stone-800/80 object-cover shadow-sm sm:size-11"
               />
             ) : (
-              <div className="flex size-11 items-center justify-center rounded-full border border-stone-800/80 bg-stone-900/60 shrink-0">
-                <Users className="size-5 text-stone-500" />
+              <div className="flex size-9 shrink-0 items-center justify-center rounded-full border border-stone-800/80 bg-stone-900/60 sm:size-11">
+                <Users className="size-4 text-stone-500 sm:size-5" />
               </div>
             )}
             <div className="flex min-w-0 flex-col">
-              <div className="truncate text-sm font-bold text-stone-200 group-hover:text-foreground transition-colors">
+              <div className="group-hover:text-foreground truncate text-sm font-bold text-stone-200 transition-colors">
                 {account.name}
               </div>
               <a
                 href={account.steamUrl}
                 target="_blank"
                 rel="noreferrer"
-                className="mt-0.5 block truncate text-[10px] text-stone-500 transition-colors hover:text-accent font-mono"
+                className="hover:text-accent mt-0.5 block truncate font-mono text-[10px] text-stone-500 transition-colors"
               >
                 {account.steamId64}
               </a>
@@ -102,17 +110,19 @@ const AccountListItemComponent = memo(
               variant="outline"
               onClick={() => startSingleSync(account.id, account.name)}
               disabled={isSyncing || !!singleScanId}
-              className="h-8 px-3 rounded-lg text-[11px] font-bold hover:border-accent/40 hover:bg-accent/10 hover:text-accent disabled:cursor-wait disabled:opacity-40 transition-all cursor-pointer"
-              title={t("dashboard.scanSingle")}
+              className="hover:border-accent/40 hover:bg-accent/10 hover:text-accent flex h-8 shrink-0 cursor-pointer items-center justify-center rounded-lg px-2 text-[11px] font-bold transition-all disabled:cursor-wait disabled:opacity-40 sm:px-3"
+              title={t('dashboard.scanSingle')}
             >
               {singleScanId === account.id ? (
-                <Loader2 className="size-3.5 animate-spin mr-1.5" />
+                <Loader2 className="size-3.5 animate-spin sm:mr-1.5" />
               ) : (
-                <Search className="size-3.5 mr-1.5" />
+                <Search className="size-3.5 sm:mr-1.5" />
               )}
-              {singleScanId === account.id
-                ? t("dashboard.scanningSingle")
-                : t("dashboard.scanSingle")}
+              <span className="hidden sm:inline">
+                {singleScanId === account.id
+                  ? t('dashboard.scanningSingle')
+                  : t('dashboard.scanSingle')}
+              </span>
             </Button>
             <Button
               type="button"
@@ -124,8 +134,8 @@ const AccountListItemComponent = memo(
                 })
               }
               disabled={deleteAccountPending}
-              className="size-8 p-0 rounded-lg text-stone-500 transition-all hover:text-red-400 hover:bg-red-500/10 disabled:opacity-50 cursor-pointer"
-              title={t("dashboard.unlink")}
+              className="size-8 cursor-pointer rounded-lg p-0 text-stone-500 transition-all hover:bg-red-500/10 hover:text-red-400 disabled:opacity-50"
+              title={t('dashboard.unlink')}
             >
               <Trash2 className="size-3.5" />
             </Button>
@@ -133,15 +143,26 @@ const AccountListItemComponent = memo(
         </div>
 
         {account.cookieError && (
-          <div className="mt-1 flex items-start gap-2 rounded-md border border-red-200 bg-red-50 dark:border-red-900/30 dark:bg-red-950/30 p-2.5 text-[11px] text-red-700 dark:text-red-300 shadow-sm leading-relaxed">
-            <AlertCircle className="size-4 shrink-0 text-red-600 dark:text-red-400 mt-0.5" />
-            <div className="flex-1 min-w-0">
+          <div className="mt-1 flex items-start gap-2 rounded-md border border-red-200 bg-red-50 p-2.5 text-[11px] leading-relaxed text-red-700 shadow-sm dark:border-red-900/30 dark:bg-red-950/30 dark:text-red-300">
+            <AlertCircle className="mt-0.5 size-4 shrink-0 text-red-600 dark:text-red-400" />
+            <div className="min-w-0 flex-1">
               <p className="font-semibold text-red-900 dark:text-red-200">
-                {t("dashboard.cookieErrorTitle", "Cookie Configuration Required")}
+                {t('dashboard.cookieErrorTitle', 'Cookie Configuration Required')}
               </p>
-              <p className="mt-0.5 text-red-700 dark:text-red-300/95 font-medium whitespace-normal break-words">
-                {account.cookieError}
+              <p className="mt-0.5 font-medium break-words whitespace-normal text-red-700 dark:text-red-300/95">
+                {cookieErrorMessage}
               </p>
+              {showPrivacySettingsLink && (
+                <a
+                  href={STEAM_PRIVACY_SETTINGS_URL}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="mt-1.5 inline-flex items-center gap-1 text-[11px] font-bold text-red-800 underline underline-offset-2 transition-colors hover:text-red-950 dark:text-red-200 dark:hover:text-red-100"
+                >
+                  {t('inventoryScanner.openSteamPrivacySettings', 'Open Steam Privacy Settings')}
+                  <ExternalLink className="size-3" />
+                </a>
+              )}
             </div>
           </div>
         )}
@@ -191,7 +212,7 @@ const AccountListItemComponent = memo(
   }
 );
 
-AccountListItemComponent.displayName = "AccountListItemComponent";
+AccountListItemComponent.displayName = 'AccountListItemComponent';
 
 interface AccountListProps {
   accounts: SteamAccountDto[];
@@ -210,7 +231,7 @@ interface AccountListProps {
   cookieStatuses: Record<
     string,
     {
-      status: "idle" | "loading" | "live" | "expired" | "error";
+      status: 'idle' | 'loading' | 'live' | 'expired' | 'error';
       message?: string;
     }
   >;
@@ -278,20 +299,18 @@ export function AccountList({
 
   if (!accounts || accounts.length === 0) {
     return (
-      <div className="flex flex-col items-center justify-center rounded-md border-2 border-dashed border-stone-800 bg-stone-950/20 p-8 min-h-[160px] text-center w-full">
+      <div className="flex min-h-[160px] w-full flex-col items-center justify-center rounded-md border-2 border-dashed border-stone-800 bg-stone-950/20 p-8 text-center">
         <button
           type="button"
           onClick={onAddAccountClick}
-          className="flex flex-col items-center justify-center gap-2 group cursor-pointer"
+          className="group flex cursor-pointer flex-col items-center justify-center gap-2"
         >
-          <Plus className="size-6 text-stone-500 group-hover:text-stone-300 transition-colors" />
-          <span className="text-sm font-semibold text-stone-400 group-hover:text-stone-200 transition-colors">
-            {t("dashboard.addAccount", "Add Account")}
+          <Plus className="size-6 text-stone-500 transition-colors group-hover:text-stone-300" />
+          <span className="text-sm font-semibold text-stone-400 transition-colors group-hover:text-stone-200">
+            {t('dashboard.addAccount', 'Add Account')}
           </span>
         </button>
-        <p className="mt-2 text-[11px] text-stone-500 max-w-sm">
-          {t("dashboard.noAccountsDesc")}
-        </p>
+        <p className="mt-2 max-w-sm text-[11px] text-stone-500">{t('dashboard.noAccountsDesc')}</p>
       </div>
     );
   }
@@ -332,13 +351,13 @@ export function AccountList({
       <button
         type="button"
         onClick={onAddAccountClick}
-        className="flex flex-col items-center justify-center gap-2.5 rounded-xl border-2 border-dashed border-stone-850 bg-stone-950/15 hover:bg-accent/[0.02] hover:border-accent/40 p-6 min-h-[160px] w-full transition-all duration-300 group text-center cursor-pointer select-none hover:shadow-[0_4px_20px_rgba(59,130,246,0.03)]"
+        className="border-stone-850 hover:bg-accent/[0.02] hover:border-accent/40 group flex min-h-[160px] w-full cursor-pointer flex-col items-center justify-center gap-2.5 rounded-xl border-2 border-dashed bg-stone-950/15 p-6 text-center transition-all duration-300 select-none hover:shadow-[0_4px_20px_rgba(59,130,246,0.03)]"
       >
-        <div className="flex size-10 items-center justify-center rounded-full border border-stone-800 bg-stone-900/50 group-hover:border-accent/30 group-hover:bg-accent/10 transition-all duration-300">
-          <Plus className="size-5 text-stone-500 group-hover:text-accent group-hover:rotate-90 transition-all duration-300" />
+        <div className="group-hover:border-accent/30 group-hover:bg-accent/10 flex size-10 items-center justify-center rounded-full border border-stone-800 bg-stone-900/50 transition-all duration-300">
+          <Plus className="group-hover:text-accent size-5 text-stone-500 transition-all duration-300 group-hover:rotate-90" />
         </div>
-        <span className="text-xs font-bold text-stone-400 group-hover:text-stone-200 transition-colors">
-          {t("dashboard.addAccount", "Add Account")}
+        <span className="text-xs font-bold text-stone-400 transition-colors group-hover:text-stone-200">
+          {t('dashboard.addAccount', 'Add Account')}
         </span>
       </button>
     </div>

@@ -2,6 +2,8 @@
 @import 'react-day-picker/style.css';
 @plugin 'tailwindcss-animate';
 
+@custom-variant dark (&:where(.dark, .dark *));
+
 @theme {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
@@ -418,5 +420,3 @@ button:disabled {
 .rdp-outside {
   opacity: 0.3 !important;
 }
-
-

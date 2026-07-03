@@ -264,150 +264,214 @@ export function AuthStatus() {
                   <div className="bg-border/70 mx-1 my-1.5 h-px" />
 
                   {/* Change Language Item */}
-                  <div
-                    className="relative"
-                    onMouseEnter={() => !isMobile && setActiveSubmenu('language')}
-                    onMouseLeave={() => !isMobile && setActiveSubmenu('none')}
-                  >
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      onClick={(e) => {
-                        e.preventDefault();
-                        e.stopPropagation();
-                        if (isMobile) {
-                          const nextLang = lang === 'vi' ? 'en' : 'vi';
-                          setLang(nextLang);
-                          changeLanguage(nextLang);
-                        } else {
-                          setActiveSubmenu(activeSubmenu === 'language' ? 'none' : 'language');
-                        }
-                      }}
-                      className={cn(
-                        'flex w-full cursor-pointer items-center justify-between rounded-lg px-3 py-2.5 text-xs font-semibold transition-all duration-200 outline-none',
-                        'text-foreground hover:bg-surface-hover',
-                        !isMobile && activeSubmenu === 'language' && 'bg-surface-hover'
-                      )}
+                  {!isMobile ? (
+                    <div
+                      className="relative"
+                      onMouseEnter={() => setActiveSubmenu('language')}
+                      onMouseLeave={() => setActiveSubmenu('none')}
                     >
-                      <div className="flex items-center gap-2.5">
-                        <Globe className="text-muted-foreground size-4" />
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        onClick={(e) => {
+                          e.preventDefault();
+                          e.stopPropagation();
+                          setActiveSubmenu(activeSubmenu === 'language' ? 'none' : 'language');
+                        }}
+                        className={cn(
+                          'flex w-full cursor-pointer items-center justify-between rounded-lg px-3 py-2.5 text-xs font-semibold transition-all duration-200 outline-none',
+                          'text-foreground hover:bg-surface-hover',
+                          activeSubmenu === 'language' && 'bg-surface-hover'
+                        )}
+                      >
+                        <div className="flex items-center gap-2.5">
+                          <Globe className="text-muted-foreground size-4" />
+                          <span>{t('auth.changeLanguage')}</span>
+                        </div>
+                        <ChevronRight className="text-muted-foreground size-3.5" />
+                      </Button>
+
+                      {/* Change Language Submenu (Exactly Like Screenshot, Opening to the Right) */}
+                      <AnimatePresence>
+                        {activeSubmenu === 'language' && (
+                          <motion.div
+                            initial={{ opacity: 0, x: -8, scale: 0.95 }}
+                            animate={{ opacity: 1, x: 0, scale: 1 }}
+                            exit={{ opacity: 0, x: -8, scale: 0.95 }}
+                            transition={slideTransition}
+                            className="submenu-content border-border bg-surface shadow-soft absolute top-0 left-[calc(100%+8px)] z-50 flex min-w-[170px] flex-col gap-1.5 rounded-xl border p-1.5"
+                          >
+                            {/* Invisible Hover Bridge */}
+                            <div className="absolute top-0 -left-2 h-full w-2 bg-transparent" />
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              onClick={(e) => handleLangChange('en', e)}
+                              className={cn(
+                                'text-foreground hover:bg-surface-hover flex w-full cursor-pointer items-center justify-start gap-3 rounded-lg px-3 py-2.5 text-xs font-bold transition duration-150',
+                                lang === 'en' && 'bg-surface-hover'
+                              )}
+                            >
+                              <UKFlag />
+                              <span>{t('common.english')}</span>
+                            </Button>
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              onClick={(e) => handleLangChange('vi', e)}
+                              className={cn(
+                                'text-foreground hover:bg-surface-hover flex w-full cursor-pointer items-center justify-start gap-3 rounded-lg px-3 py-2.5 text-xs font-bold transition duration-150',
+                                lang === 'vi' && 'bg-surface-hover'
+                              )}
+                            >
+                              <VietnamFlag />
+                              <span>{t('common.vietnamese')}</span>
+                            </Button>
+                          </motion.div>
+                        )}
+                      </AnimatePresence>
+                    </div>
+                  ) : (
+                    <div className="flex flex-col gap-1.5 px-3 py-1.5 text-xs select-none">
+                      <div className="text-muted-foreground flex items-center gap-2 pb-0.5 font-semibold">
+                        <Globe className="size-3.5" />
                         <span>{t('auth.changeLanguage')}</span>
                       </div>
-                      {!isMobile && <ChevronRight className="text-muted-foreground size-3.5" />}
-                    </Button>
-
-                    {/* Change Language Submenu (Exactly Like Screenshot, Opening to the Right) */}
-                    <AnimatePresence>
-                      {!isMobile && activeSubmenu === 'language' && (
-                        <motion.div
-                          initial={{ opacity: 0, x: -8, scale: 0.95 }}
-                          animate={{ opacity: 1, x: 0, scale: 1 }}
-                          exit={{ opacity: 0, x: -8, scale: 0.95 }}
-                          transition={slideTransition}
-                          className="submenu-content border-border bg-surface shadow-soft absolute top-0 left-[calc(100%+8px)] z-50 flex min-w-[170px] flex-col gap-1.5 rounded-xl border p-1.5"
+                      <div className="bg-surface-muted/50 border-border/40 grid grid-cols-2 gap-1 rounded-lg border p-1">
+                        <button
+                          type="button"
+                          onClick={(e) => handleLangChange('vi', e)}
+                          className={cn(
+                            'flex items-center justify-center gap-1.5 rounded-md py-1.5 text-[11px] font-semibold transition',
+                            lang === 'vi'
+                              ? 'bg-background text-foreground border-border/20 border shadow-sm'
+                              : 'text-muted-foreground hover:text-foreground'
+                          )}
                         >
-                          {/* Invisible Hover Bridge */}
-                          <div className="absolute top-0 -left-2 h-full w-2 bg-transparent" />
-                          <Button
-                            type="button"
-                            variant="ghost"
-                            onClick={(e) => handleLangChange('en', e)}
-                            className={cn(
-                              'text-foreground hover:bg-surface-hover flex w-full cursor-pointer items-center justify-start gap-3 rounded-lg px-3 py-2.5 text-xs font-bold transition duration-150',
-                              lang === 'en' && 'bg-surface-hover'
-                            )}
-                          >
-                            <UKFlag />
-                            <span>{t('common.english')}</span>
-                          </Button>
-                          <Button
-                            type="button"
-                            variant="ghost"
-                            onClick={(e) => handleLangChange('vi', e)}
-                            className={cn(
-                              'text-foreground hover:bg-surface-hover flex w-full cursor-pointer items-center justify-start gap-3 rounded-lg px-3 py-2.5 text-xs font-bold transition duration-150',
-                              lang === 'vi' && 'bg-surface-hover'
-                            )}
-                          >
-                            <VietnamFlag />
-                            <span>{t('common.vietnamese')}</span>
-                          </Button>
-                        </motion.div>
-                      )}
-                    </AnimatePresence>
-                  </div>
+                          <VietnamFlag className="size-3.5" />
+                          <span>{t('common.vietnamese')}</span>
+                        </button>
+                        <button
+                          type="button"
+                          onClick={(e) => handleLangChange('en', e)}
+                          className={cn(
+                            'flex items-center justify-center gap-1.5 rounded-md py-1.5 text-[11px] font-semibold transition',
+                            lang === 'en'
+                              ? 'bg-background text-foreground border-border/20 border shadow-sm'
+                              : 'text-muted-foreground hover:text-foreground'
+                          )}
+                        >
+                          <UKFlag className="size-3.5" />
+                          <span>{t('common.english')}</span>
+                        </button>
+                      </div>
+                    </div>
+                  )}
 
                   {/* Change Theme Item */}
-                  <div
-                    className="relative mt-0.5"
-                    onMouseEnter={() => !isMobile && setActiveSubmenu('theme')}
-                    onMouseLeave={() => !isMobile && setActiveSubmenu('none')}
-                  >
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      onClick={(e) => {
-                        e.preventDefault();
-                        e.stopPropagation();
-                        if (isMobile) {
-                          setTheme(theme === 'dark' ? 'light' : 'dark');
-                        } else {
-                          setActiveSubmenu(activeSubmenu === 'theme' ? 'none' : 'theme');
-                        }
-                      }}
-                      className={cn(
-                        'flex w-full cursor-pointer items-center justify-between rounded-lg px-3 py-2.5 text-xs font-semibold transition-all duration-200 outline-none',
-                        'text-foreground hover:bg-surface-hover',
-                        !isMobile && activeSubmenu === 'theme' && 'bg-surface-hover'
-                      )}
+                  {!isMobile ? (
+                    <div
+                      className="relative mt-0.5"
+                      onMouseEnter={() => setActiveSubmenu('theme')}
+                      onMouseLeave={() => setActiveSubmenu('none')}
                     >
-                      <div className="flex items-center gap-2.5">
-                        <Palette className="text-muted-foreground size-4" />
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        onClick={(e) => {
+                          e.preventDefault();
+                          e.stopPropagation();
+                          setActiveSubmenu(activeSubmenu === 'theme' ? 'none' : 'theme');
+                        }}
+                        className={cn(
+                          'flex w-full cursor-pointer items-center justify-between rounded-lg px-3 py-2.5 text-xs font-semibold transition-all duration-200 outline-none',
+                          'text-foreground hover:bg-surface-hover',
+                          activeSubmenu === 'theme' && 'bg-surface-hover'
+                        )}
+                      >
+                        <div className="flex items-center gap-2.5">
+                          <Palette className="text-muted-foreground size-4" />
+                          <span>{t('auth.changeTheme')}</span>
+                        </div>
+                        <ChevronRight className="text-muted-foreground size-3.5" />
+                      </Button>
+
+                      {/* Change Theme Submenu */}
+                      <AnimatePresence>
+                        {activeSubmenu === 'theme' && (
+                          <motion.div
+                            initial={{ opacity: 0, x: -8, scale: 0.95 }}
+                            animate={{ opacity: 1, x: 0, scale: 1 }}
+                            exit={{ opacity: 0, x: -8, scale: 0.95 }}
+                            transition={slideTransition}
+                            className="submenu-content border-border bg-surface shadow-soft absolute top-0 left-[calc(100%+8px)] z-50 flex min-w-[170px] flex-col gap-1.5 rounded-xl border p-1.5"
+                          >
+                            {/* Invisible Hover Bridge */}
+                            <div className="absolute top-0 -left-2 h-full w-2 bg-transparent" />
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              onClick={(e) => handleThemeChange('dark', e)}
+                              className={cn(
+                                'text-foreground hover:bg-surface-hover flex w-full cursor-pointer items-center justify-start gap-3 rounded-lg px-3 py-2.5 text-xs font-bold transition duration-150',
+                                theme === 'dark' && 'bg-surface-hover'
+                              )}
+                            >
+                              <i className="border-stone-850 size-3.5 shrink-0 rounded-full border bg-[#181A20] shadow-sm dark:border-stone-700" />
+                              <span>{t('auth.darkTheme')}</span>
+                            </Button>
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              onClick={(e) => handleThemeChange('light', e)}
+                              className={cn(
+                                'text-foreground hover:bg-surface-hover flex w-full cursor-pointer items-center justify-start gap-3 rounded-lg px-3 py-2.5 text-xs font-bold transition duration-150',
+                                theme === 'light' && 'bg-surface-hover'
+                              )}
+                            >
+                              <i className="size-3.5 shrink-0 rounded-full border border-stone-300 bg-[#ffffff] shadow-sm dark:border-stone-800" />
+                              <span>{t('auth.lightTheme')}</span>
+                            </Button>
+                          </motion.div>
+                        )}
+                      </AnimatePresence>
+                    </div>
+                  ) : (
+                    <div className="mt-1 flex flex-col gap-1.5 px-3 py-1.5 text-xs select-none">
+                      <div className="text-muted-foreground flex items-center gap-2 pb-0.5 font-semibold">
+                        <Palette className="size-3.5" />
                         <span>{t('auth.changeTheme')}</span>
                       </div>
-                      {!isMobile && <ChevronRight className="text-muted-foreground size-3.5" />}
-                    </Button>
-
-                    {/* Change Theme Submenu */}
-                    <AnimatePresence>
-                      {!isMobile && activeSubmenu === 'theme' && (
-                        <motion.div
-                          initial={{ opacity: 0, x: -8, scale: 0.95 }}
-                          animate={{ opacity: 1, x: 0, scale: 1 }}
-                          exit={{ opacity: 0, x: -8, scale: 0.95 }}
-                          transition={slideTransition}
-                          className="submenu-content border-border bg-surface shadow-soft absolute top-0 left-[calc(100%+8px)] z-50 flex min-w-[170px] flex-col gap-1.5 rounded-xl border p-1.5"
+                      <div className="bg-surface-muted/50 border-border/40 grid grid-cols-2 gap-1 rounded-lg border p-1">
+                        <button
+                          type="button"
+                          onClick={(e) => handleThemeChange('light', e)}
+                          className={cn(
+                            'flex items-center justify-center gap-1.5 rounded-md py-1.5 text-[11px] font-semibold transition',
+                            theme === 'light'
+                              ? 'bg-background text-foreground border-border/20 border shadow-sm'
+                              : 'text-muted-foreground hover:text-foreground'
+                          )}
                         >
-                          {/* Invisible Hover Bridge */}
-                          <div className="absolute top-0 -left-2 h-full w-2 bg-transparent" />
-                          <Button
-                            type="button"
-                            variant="ghost"
-                            onClick={(e) => handleThemeChange('dark', e)}
-                            className={cn(
-                              'text-foreground hover:bg-surface-hover flex w-full cursor-pointer items-center justify-start gap-3 rounded-lg px-3 py-2.5 text-xs font-bold transition duration-150',
-                              theme === 'dark' && 'bg-surface-hover'
-                            )}
-                          >
-                            <i className="border-stone-850 size-3.5 shrink-0 rounded-full border bg-[#181A20] shadow-sm dark:border-stone-700" />
-                            <span>{t('auth.darkTheme')}</span>
-                          </Button>
-                          <Button
-                            type="button"
-                            variant="ghost"
-                            onClick={(e) => handleThemeChange('light', e)}
-                            className={cn(
-                              'text-foreground hover:bg-surface-hover flex w-full cursor-pointer items-center justify-start gap-3 rounded-lg px-3 py-2.5 text-xs font-bold transition duration-150',
-                              theme === 'light' && 'bg-surface-hover'
-                            )}
-                          >
-                            <i className="size-3.5 shrink-0 rounded-full border border-stone-300 bg-[#ffffff] shadow-sm dark:border-stone-800" />
-                            <span>{t('auth.lightTheme')}</span>
-                          </Button>
-                        </motion.div>
-                      )}
-                    </AnimatePresence>
-                  </div>
+                          <i className="size-3 shrink-0 rounded-full border border-stone-300 bg-[#ffffff] shadow-sm dark:border-stone-800" />
+                          <span>{t('auth.lightThemeShort', 'Sáng')}</span>
+                        </button>
+                        <button
+                          type="button"
+                          onClick={(e) => handleThemeChange('dark', e)}
+                          className={cn(
+                            'flex items-center justify-center gap-1.5 rounded-md py-1.5 text-[11px] font-semibold transition',
+                            theme === 'dark'
+                              ? 'bg-background text-foreground border-border/20 border shadow-sm'
+                              : 'text-muted-foreground hover:text-foreground'
+                          )}
+                        >
+                          <i className="border-stone-850 size-3 shrink-0 rounded-full border bg-[#181A20] shadow-sm dark:border-stone-700" />
+                          <span>{t('auth.darkThemeShort', 'Tối')}</span>
+                        </button>
+                      </div>
+                    </div>
+                  )}
 
                   {/* Space / Divider */}
                   <div className="bg-border/70 mx-1 my-1.5 h-px" />
