@@ -127,6 +127,22 @@ export function groupItemsForSummary(items: ScanResultItem[]): ScanResultItem[] 
   });
 }
 
+export function groupCommoditiesForMobile(items: ScanResultItem[]): ScanResultItem[] {
+  const commodities: ScanResultItem[] = [];
+  const skins: ScanResultItem[] = [];
+
+  for (const item of items) {
+    if (item.type !== 'Skin') {
+      commodities.push(item);
+    } else {
+      skins.push(item);
+    }
+  }
+
+  const groupedCommodities = groupItemsForSummary(commodities);
+  return [...groupedCommodities, ...skins];
+}
+
 export function useScannerDataMerged({
   accounts,
   manualItems,

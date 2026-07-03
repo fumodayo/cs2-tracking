@@ -7,6 +7,7 @@ import {
   AlertCircle,
   ShoppingBag,
   Wallet,
+  ExternalLink,
 } from 'lucide-react';
 import { proxySteamUrl } from '@/utils/url';
 import { useTranslation } from 'react-i18next';
@@ -16,6 +17,10 @@ import {
   formatProgressDetail,
   translateScanProgressMessage,
   translateAccountError,
+  isCookieCredentialError,
+  isFamilyViewAccountError,
+  isPrivateInventoryAccountError,
+  STEAM_PRIVACY_SETTINGS_URL,
 } from '../utils';
 import { AccountCookieConfig } from './account-cookie-config';
 import { toast } from '@/stores';
@@ -124,17 +129,17 @@ export function AccountCard({
     setCheckCooldown(5);
   };
 
-  const hasCookieError =
-    acc.error &&
-    (acc.error.toLowerCase().includes('cookie') ||
-      acc.error.toLowerCase().includes('session') ||
-      acc.error.toLowerCase().includes('h\u1ebft h\u1ea1n') ||
-      acc.error.toLowerCase().includes('unauthorized'));
+  const accountErrorMessage = translateAccountError(acc.error, t);
+  const hasFamilyViewError = isFamilyViewAccountError(acc.error);
+  const hasCookieError = isCookieCredentialError(acc.error);
+  const showPrivacySettingsLink =
+    isPrivateInventoryAccountError(acc.error) || (!acc.steamCookie && acc.status !== 'scanning');
 
   const isCookieInvalid =
     !!hasCookieError || cookieStatus?.status === 'error' || cookieStatus?.status === 'expired';
 
-  const isCookiesExpanded = showCookies || !!acc.steamCookie || isCookieInvalid;
+  const isCookiesExpanded =
+    showCookies || !!acc.steamCookie || isCookieInvalid || hasFamilyViewError;
 
   return (
     <div className="group hover:border-stone-750 flex flex-col gap-3 rounded-md border border-stone-800 bg-stone-950/40 p-3.5 transition-all duration-200">
@@ -161,7 +166,7 @@ export function AccountCard({
           </div>
           <div className="flex min-w-0 flex-col items-start">
             <h3 className="text-stone-250 flex flex-wrap items-center gap-1 text-xs font-bold">
-              {acc.status === 'done' && acc.result?.profile?.name ? (
+              {acc.result?.profile?.name ? (
                 <span
                   className="max-w-[120px] truncate text-stone-100 sm:max-w-[200px] md:max-w-[120px] lg:max-w-[180px]"
                   title={acc.result.profile.name}
@@ -179,20 +184,20 @@ export function AccountCard({
                 </span>
               )}
               {acc.status === 'error' && (
-                <span className="py-0.2 rounded bg-red-500/5 px-1 text-[9px] font-bold text-red-400">
+                <span className="py-0.2 rounded bg-red-50 px-1 text-[9px] font-bold text-red-700 ring-1 ring-red-200 dark:bg-red-500/10 dark:text-red-300 dark:ring-red-500/20">
                   {t('inventoryScanner.error')}
                 </span>
               )}
             </h3>
             <div className="mt-0.5 flex flex-wrap items-center gap-1.5">
               <span className="font-mono text-[10px] text-stone-500">
-                {acc.status === 'done' && acc.result
+                {acc.result
                   ? `${acc.result.totalQuantity} ${t('inventoryScanner.itemUnit', 'items')} · ${formatVND(acc.result.totalPrice)}`
                   : !acc.url.trim()
                     ? t('inventoryScanner.notLinked')
                     : t('inventoryScanner.readyToScan')}
               </span>
-              {acc.status === 'done' &&
+              {acc.result &&
                 acc.result?.walletBalance &&
                 (() => {
                   const displayWallet = acc.result.walletBalance
@@ -244,7 +249,7 @@ export function AccountCard({
             </span>
           </button>
 
-          {acc.status === 'done' && (
+          {acc.result && (
             <button
               type="button"
               onClick={onToggleExpandAccId}
@@ -279,23 +284,47 @@ export function AccountCard({
       {/* Warning/Error Badges */}
       {(acc.result?.marketScanWarning ||
         isCookieInvalid ||
+        hasFamilyViewError ||
         (!acc.steamCookie && acc.status !== 'scanning')) && (
         <div className="flex flex-wrap gap-1">
-          {isCookieInvalid ? (
+          {hasFamilyViewError ? (
             <span
-              className="cursor-help rounded border border-red-500/20 bg-red-500/5 px-1.5 py-0.5 text-[9px] font-semibold text-red-400"
-              title={t('inventoryScanner.cookieExpiredTooltip')}
+              className="cursor-help rounded border border-amber-300 bg-amber-50 px-1.5 py-0.5 text-[9px] font-semibold text-amber-700 dark:border-amber-500/25 dark:bg-amber-500/10 dark:text-amber-300"
+              title={accountErrorMessage}
+            >
+              {t('inventoryScanner.familyViewErrorBadge')}
+            </span>
+          ) : isCookieInvalid ? (
+            <span
+              className="cursor-help rounded border border-red-300 bg-red-50 px-1.5 py-0.5 text-[9px] font-semibold text-red-700 dark:border-red-500/25 dark:bg-red-500/10 dark:text-red-300"
+              title={
+                cookieStatus?.message ||
+                accountErrorMessage ||
+                t('inventoryScanner.cookieExpiredTooltip')
+              }
             >
               {t('inventoryScanner.cookieErrorExpired')}
             </span>
           ) : acc.result?.marketScanWarning || (!acc.steamCookie && acc.status !== 'scanning') ? (
             <span
-              className="cursor-help rounded border border-amber-500/20 bg-amber-500/5 px-1.5 py-0.5 text-[9px] font-semibold text-amber-400"
+              className="cursor-help rounded border border-amber-300 bg-amber-50 px-1.5 py-0.5 text-[9px] font-semibold text-amber-700 dark:border-amber-500/25 dark:bg-amber-500/10 dark:text-amber-300"
               title={t('inventoryScanner.missingCookieWarningTooltip')}
             >
               {t('inventoryScanner.missingCookieWarning')}
             </span>
           ) : null}
+          {showPrivacySettingsLink && (
+            <a
+              href={STEAM_PRIVACY_SETTINGS_URL}
+              target="_blank"
+              rel="noreferrer"
+              className="inline-flex items-center gap-1 rounded border border-blue-300 bg-blue-50 px-1.5 py-0.5 text-[9px] font-semibold text-blue-700 transition-colors hover:border-blue-400 hover:text-blue-900 dark:border-blue-500/25 dark:bg-blue-500/10 dark:text-blue-300 dark:hover:text-blue-200"
+              title={t('inventoryScanner.openSteamPrivacySettings', 'Open Steam Privacy Settings')}
+            >
+              {t('inventoryScanner.setInventoryPublic', 'Set Inventory Public')}
+              <ExternalLink className="size-2.5" />
+            </a>
+          )}
         </div>
       )}
 
@@ -313,7 +342,7 @@ export function AccountCard({
             disabled={acc.status === 'scanning'}
             className={`text-stone-150 w-full rounded border bg-stone-950/80 py-1.5 pr-20 pl-3 text-xs placeholder-stone-600 transition-all duration-200 focus:ring-1 focus:ring-blue-500/30 focus:outline-none disabled:opacity-50 ${
               acc.status === 'error'
-                ? 'border-red-500/30 bg-red-950/5 focus:border-red-500'
+                ? 'border-red-300 bg-red-50/70 focus:border-red-500 dark:border-red-500/30 dark:bg-red-950/5'
                 : acc.status === 'done'
                   ? 'border-emerald-500/20 bg-emerald-950/5 focus:border-emerald-500'
                   : 'focus:border-stone-750 border-stone-800'
@@ -339,6 +368,7 @@ export function AccountCard({
         <AccountCookieConfig
           acc={acc}
           isCookieInvalid={isCookieInvalid}
+          hasFamilyViewError={hasFamilyViewError}
           isExpanded={isCookiesExpanded}
           onToggleExpand={() => setShowCookies((prev) => !prev)}
           onUpdateCookie={(val) => {

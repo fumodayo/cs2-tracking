@@ -1,7 +1,7 @@
 'use client';
 
 import React from 'react';
-import { Users, ShoppingBag } from 'lucide-react';
+import { ShoppingBag } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import type { Table } from '@tanstack/react-table';
 import { PortfolioSyncSection } from './portfolio-sync-section';
@@ -47,12 +47,15 @@ interface ScannerResultsProps {
   totalSi: number;
   totalLe: number;
   totalWalletVnd: number;
-  tableData: ScanResultItem[];
   table: Table<ScanResultItem>;
   selectedStatuses: string[];
   setSelectedStatuses: (statuses: string[]) => void;
   selectedAccounts: string[];
   setSelectedAccounts: (accounts: string[]) => void;
+  selectedSourceFilters: string[];
+  setSelectedSourceFilters: (sources: string[]) => void;
+  selectedPriceSourceFilters: string[];
+  setSelectedPriceSourceFilters: (sources: string[]) => void;
   accountOptions: Array<{ steamId64: string; name: string }>;
   rowSelection: Record<string, boolean>;
   setRowSelection: React.Dispatch<React.SetStateAction<Record<string, boolean>>>;
@@ -67,7 +70,6 @@ interface ScannerResultsProps {
   googleConfigured: boolean;
   importInventoryToPortfolio: () => void;
   zeroPricedItems: ScanResultItem[];
-  inspectingKeys: Set<string>;
   isMobile?: boolean;
   onSelectItem?: (item: ScanResultItem) => void;
 }
@@ -88,12 +90,15 @@ export function ScannerResults({
   totalSi,
   totalLe,
   totalWalletVnd,
-  tableData,
   table,
   selectedStatuses,
   setSelectedStatuses,
   selectedAccounts,
   setSelectedAccounts,
+  selectedSourceFilters,
+  setSelectedSourceFilters,
+  selectedPriceSourceFilters,
+  setSelectedPriceSourceFilters,
   accountOptions,
   rowSelection,
   setRowSelection,
@@ -108,7 +113,6 @@ export function ScannerResults({
   googleConfigured,
   importInventoryToPortfolio,
   zeroPricedItems,
-  inspectingKeys,
   isMobile = false,
   onSelectItem,
 }: ScannerResultsProps) {
@@ -117,7 +121,7 @@ export function ScannerResults({
   const totalUnfilteredItemsCount = React.useMemo(() => {
     const manualCount = state.manualItems.length;
     const scannedCount = state.accounts.reduce((sum, acc) => {
-      if (acc.status === 'done' && acc.result) {
+      if (acc.result) {
         return sum + acc.result.items.length;
       }
       return sum;
@@ -129,27 +133,6 @@ export function ScannerResults({
 
   return (
     <div className="space-y-6">
-      {merged.accountCount > 0 && (
-        <div className="flex flex-wrap items-center gap-3 rounded-xl border border-sky-100 bg-sky-50 px-5 py-3.5 text-sm text-sky-700 dark:border-sky-500/20 dark:bg-sky-950/20 dark:text-sky-200">
-          <Users className="size-4 text-sky-500 dark:text-sky-400" />
-          <span>
-            {t('inventoryScanner.mergedResultsFrom')}{' '}
-            <span className="font-semibold text-sky-900 dark:text-sky-100">
-              {t('inventoryScanner.accountsCount', { count: merged.accountCount })}
-            </span>
-            {state.manualItems.length > 0 && (
-              <>
-                {' '}
-                +{' '}
-                <span className="font-semibold text-sky-900 dark:text-sky-100">
-                  {t('inventoryScanner.manualItemsCount', { count: state.manualItems.length })}
-                </span>
-              </>
-            )}
-          </span>
-        </div>
-      )}
-
       <PortfolioSyncSection
         user={user}
         googleConfigured={googleConfigured}
@@ -158,7 +141,7 @@ export function ScannerResults({
         portfolioImportStatus={state.portfolioImportStatus}
         portfolioImportMessage={state.portfolioImportMessage}
         portfolioImportError={state.portfolioImportError}
-        hasItemsToImport={!!state.accounts.some((a) => a.status === 'done' && a.result)}
+        hasItemsToImport={!!state.accounts.some((a) => a.result)}
         zeroPricedItems={zeroPricedItems}
         retryingPrices={state.retryingPrices}
         retryStatus={state.retryStatus}
@@ -179,7 +162,7 @@ export function ScannerResults({
           <AddCaseSearch
             onAdd={addManualItem}
             scannedAccounts={state.accounts
-              .filter((a) => a.status === 'done' && a.result?.profile)
+              .filter((a) => a.result?.profile)
               .map((a) => ({
                 steamId64: a.result!.steamId64,
                 name: a.result!.profile.name,
@@ -220,6 +203,10 @@ export function ScannerResults({
           setSelectedStatuses={setSelectedStatuses}
           selectedAccounts={selectedAccounts}
           setSelectedAccounts={setSelectedAccounts}
+          selectedSourceFilters={selectedSourceFilters}
+          setSelectedSourceFilters={setSelectedSourceFilters}
+          selectedPriceSourceFilters={selectedPriceSourceFilters}
+          setSelectedPriceSourceFilters={setSelectedPriceSourceFilters}
           accountOptions={accountOptions}
           selectedIds={Object.keys(rowSelection).filter((k) => rowSelection[k])}
           setRowSelection={setRowSelection}
@@ -227,9 +214,6 @@ export function ScannerResults({
           handleDeleteSelected={handleDeleteSelected}
           onRefreshPrices={refreshPrices}
           isRefreshingPrices={isRefreshingPrices || state.scanningAll || isAnyScanPending}
-          buffLoadingKeys={state.buffLoadingKeys}
-          inspectingKeys={inspectingKeys}
-          buffPriceErrors={state.buffPriceErrors}
         />
       ) : (
         <div className="flex flex-col items-center justify-center rounded-xl border border-dashed border-stone-800 bg-stone-900/30 px-4 py-16 text-center">
@@ -241,7 +225,7 @@ export function ScannerResults({
           <AddCaseSearch
             onAdd={addManualItem}
             scannedAccounts={state.accounts
-              .filter((a) => a.status === 'done' && a.result?.profile)
+              .filter((a) => a.result?.profile)
               .map((a) => ({
                 steamId64: a.result!.steamId64,
                 name: a.result!.profile.name,

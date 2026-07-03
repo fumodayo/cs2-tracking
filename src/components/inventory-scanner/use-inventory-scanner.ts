@@ -1,19 +1,9 @@
-"use client";
+'use client';
 
-import {
-  useCallback,
-  useEffect,
-  useMemo,
-  useReducer,
-  useRef,
-  useState,
-} from "react";
-import { useLocalStorage } from "@/hooks/use-local-storage";
-import { useSession } from "@/components/auth/use-session";
-import {
-  AccountEntry,
-  ScanResultItem,
-} from "./types";
+import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from 'react';
+import { useLocalStorage } from '@/hooks/use-local-storage';
+import { useSession } from '@/components/auth/use-session';
+import { AccountEntry, ScanResultItem } from './types';
 import {
   LS_ACCOUNTS,
   LS_BUFF_PRICES_CNY,
@@ -23,26 +13,23 @@ import {
   LS_RATE_LE,
   LS_BUFF_CNY_TO_VND_RATE,
   DEFAULT_BUFF_CNY_TO_VND_RATE,
-} from "./utils";
+} from './utils';
 
-import {
-  initScannerState,
-  scannerReducer,
-} from "./scanner-reducer";
+import { initScannerState, scannerReducer } from './scanner-reducer';
 
-import { useScannerDataMerged } from "./hooks/use-scanner-data-merged";
-import { useScannerAutoRetry } from "./hooks/use-scanner-auto-retry";
-import { useScannerPortfolioImport } from "./hooks/use-scanner-portfolio-import";
+import { useScannerDataMerged } from './hooks/use-scanner-data-merged';
+import { useScannerAutoRetry } from './hooks/use-scanner-auto-retry';
+import { useScannerPortfolioImport } from './hooks/use-scanner-portfolio-import';
 
-import { useScanState } from "./hooks/use-scan-state";
-import { useManualItems } from "./hooks/use-manual-items";
-import { useBuffPricing } from "./hooks/use-buff-pricing";
-import { useQueryParamsState, type ParamConfig } from "@/hooks/use-query-params";
+import { useScanState } from './hooks/use-scan-state';
+import { useManualItems } from './hooks/use-manual-items';
+import { useBuffPricing } from './hooks/use-buff-pricing';
+import { useQueryParamsState, type ParamConfig } from '@/hooks/use-query-params';
 
 const scannerQueryConfig = {
   q: {
-    defaultValue: "",
-    parse: (val: string | null) => val || "",
+    defaultValue: '',
+    parse: (val: string | null) => val || '',
     serialize: (val: string) => val || null,
     debounceMs: 300,
   } as ParamConfig<string>,
@@ -58,18 +45,28 @@ const scannerQueryConfig = {
   } as ParamConfig<number>,
   type: {
     defaultValue: [] as string[],
-    parse: (val: string | null) => (val ? val.split(",") : []),
-    serialize: (val: string[]) => (val.length > 0 ? val.join(",") : null),
+    parse: (val: string | null) => (val ? val.split(',') : []),
+    serialize: (val: string[]) => (val.length > 0 ? val.join(',') : null),
   } as ParamConfig<string[]>,
   status: {
     defaultValue: [] as string[],
-    parse: (val: string | null) => (val ? val.split(",") : []),
-    serialize: (val: string[]) => (val.length > 0 ? val.join(",") : null),
+    parse: (val: string | null) => (val ? val.split(',') : []),
+    serialize: (val: string[]) => (val.length > 0 ? val.join(',') : null),
   } as ParamConfig<string[]>,
   accounts: {
     defaultValue: [] as string[],
-    parse: (val: string | null) => (val ? val.split(",") : []),
-    serialize: (val: string[]) => (val.length > 0 ? val.join(",") : null),
+    parse: (val: string | null) => (val ? val.split(',') : []),
+    serialize: (val: string[]) => (val.length > 0 ? val.join(',') : null),
+  } as ParamConfig<string[]>,
+  source: {
+    defaultValue: [] as string[],
+    parse: (val: string | null) => (val ? val.split(',') : []),
+    serialize: (val: string[]) => (val?.length > 0 ? val.join(',') : null),
+  } as ParamConfig<string[]>,
+  priceSource: {
+    defaultValue: [] as string[],
+    parse: (val: string | null) => (val ? val.split(',') : []),
+    serialize: (val: string[]) => (val?.length > 0 ? val.join(',') : null),
   } as ParamConfig<string[]>,
 };
 
@@ -80,7 +77,7 @@ export function useInventoryScanner() {
   // Synchronize URL parameters -> Reducer state (one-way source of truth)
   useEffect(() => {
     if (urlState.q !== state.globalFilter) {
-      dispatch({ type: "SET_GLOBAL_FILTER", filter: urlState.q });
+      dispatch({ type: 'SET_GLOBAL_FILTER', filter: urlState.q });
     }
   }, [urlState.q, state.globalFilter]);
 
@@ -90,9 +87,9 @@ export function useInventoryScanner() {
       state.selectedTypes.size === targetSet.size &&
       Array.from(state.selectedTypes).every((v) => targetSet.has(v));
     if (!setsEqual) {
-      dispatch({ type: "CLEAR_TYPE_FILTERS" });
+      dispatch({ type: 'CLEAR_TYPE_FILTERS' });
       urlState.type.forEach((t) => {
-        dispatch({ type: "TOGGLE_TYPE_FILTER", itemType: t });
+        dispatch({ type: 'TOGGLE_TYPE_FILTER', itemType: t });
       });
     }
   }, [urlState.type, state.selectedTypes]);
@@ -100,8 +97,10 @@ export function useInventoryScanner() {
   // Reset URL params when import succeeds
   useEffect(() => {
     if (state.portfolioImportMessage) {
-      setters.q("");
+      setters.q('');
       setters.type([]);
+      setters.source([]);
+      setters.priceSource([]);
       setters.page(1);
     }
   }, [state.portfolioImportMessage, setters]);
@@ -111,11 +110,11 @@ export function useInventoryScanner() {
   const [rateLe, setRateLe] = useLocalStorage<number>(LS_RATE_LE, 65);
   const [buffCnyToVndRate, setBuffCnyToVndRate] = useLocalStorage<number>(
     LS_BUFF_CNY_TO_VND_RATE,
-    DEFAULT_BUFF_CNY_TO_VND_RATE,
+    DEFAULT_BUFF_CNY_TO_VND_RATE
   );
-  const [mode, setMode] = useLocalStorage<"case-summary" | "transactions">(
-    "cs2t_scanner_mode",
-    "case-summary"
+  const [mode, setMode] = useLocalStorage<'case-summary' | 'transactions'>(
+    'cs2t_scanner_mode',
+    'case-summary'
   );
 
   const [isLoaded, setIsLoaded] = useState(false);
@@ -153,8 +152,8 @@ export function useInventoryScanner() {
     }
 
     dispatch({
-      type: "INIT_LOAD",
-      accounts: savedAccs ?? [createAccount("")],
+      type: 'INIT_LOAD',
+      accounts: savedAccs ?? [createAccount('')],
       manualItems: savedManual ?? [],
       buffPricesCny: savedBuffPrices ?? {},
     });
@@ -174,32 +173,35 @@ export function useInventoryScanner() {
 
   useEffect(() => {
     if (!isLoaded) return;
-    localStorage.setItem(
-      LS_BUFF_PRICES_CNY,
-      JSON.stringify(state.buffPricesCny),
-    );
+    localStorage.setItem(LS_BUFF_PRICES_CNY, JSON.stringify(state.buffPricesCny));
   }, [state.buffPricesCny, isLoaded]);
 
   // For faceted filter toggling (synchronized via URL state)
-  const toggleTypeFilter = useCallback((itemType: string) => {
-    setters.type((prev) => {
-      const next = new Set(prev);
-      if (next.has(itemType)) {
-        next.delete(itemType);
-      } else {
-        next.add(itemType);
-      }
-      return Array.from(next);
-    });
-  }, [setters]);
+  const toggleTypeFilter = useCallback(
+    (itemType: string) => {
+      setters.type((prev) => {
+        const next = new Set(prev);
+        if (next.has(itemType)) {
+          next.delete(itemType);
+        } else {
+          next.add(itemType);
+        }
+        return Array.from(next);
+      });
+    },
+    [setters]
+  );
 
   const clearTypeFilters = useCallback(() => {
     setters.type([]);
   }, [setters]);
 
-  const setGlobalFilter = useCallback((filter: string) => {
-    setters.q(filter);
-  }, [setters]);
+  const setGlobalFilter = useCallback(
+    (filter: string) => {
+      setters.q(filter);
+    },
+    [setters]
+  );
 
   const selectedTypesSet = useMemo(() => new Set(urlState.type), [urlState.type]);
 
@@ -225,7 +227,7 @@ export function useInventoryScanner() {
     mode,
   });
 
-  const isAnyScanPending = state.accounts.some((a) => a.status === "scanning");
+  const isAnyScanPending = state.accounts.some((a) => a.status === 'scanning');
   const hasValidUrls = state.accounts.some((a) => a.url.trim());
 
   useScannerAutoRetry({
@@ -261,20 +263,11 @@ export function useInventoryScanner() {
     scanAbortControllerRef,
   });
 
-  const {
-    addManualItem,
-    updateManualItemQty,
-    updateManualItem,
-    removeItem,
-  } = useManualItems({
+  const { addManualItem, updateManualItemQty, updateManualItem, removeItem } = useManualItems({
     dispatch,
   });
 
-  const {
-    updateBuffPriceCny,
-    fetchBuffPrice,
-    refreshPrices,
-  } = useBuffPricing({
+  const { updateBuffPriceCny, fetchBuffPrice, refreshPrices } = useBuffPricing({
     state,
     dispatch,
     buffCnyToVndRate,

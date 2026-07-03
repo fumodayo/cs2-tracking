@@ -4,7 +4,12 @@ import { useCallback, useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import { toast } from '@/stores';
 import { AccountEntry, ScanProgress } from '../types';
-import { SCAN_PROGRESS_IDLE_TIMEOUT_MS, SCAN_REQUEST_TIMEOUT_MS, extractSteamKey } from '../utils';
+import {
+  SCAN_PROGRESS_IDLE_TIMEOUT_MS,
+  SCAN_REQUEST_TIMEOUT_MS,
+  extractSteamKey,
+  translateAccountError,
+} from '../utils';
 import { ScannerState, ScannerAction } from '../scanner-reducer';
 
 interface UseScanStateProps {
@@ -44,9 +49,12 @@ export function useScanState({ state, dispatch, scanAbortControllerRef }: UseSca
     [dispatch]
   );
 
-  const addAccount = useCallback(() => {
-    dispatch({ type: 'ADD_ACCOUNT' });
-  }, [dispatch]);
+  const addAccount = useCallback(
+    (payload?: { url: string; steamCookie: string; steamSessionId: string }) => {
+      dispatch({ type: 'ADD_ACCOUNT', payload });
+    },
+    [dispatch]
+  );
 
   const findUrlDuplicate = useCallback(
     (accountId: string, url: string, currentAccounts: AccountEntry[]): AccountEntry | undefined => {
@@ -161,9 +169,7 @@ export function useScanState({ state, dispatch, scanAbortControllerRef }: UseSca
         return t('inventoryScanner.apiErrors.errScanInventory', 'Cannot scan inventory.');
       }
 
-      const translationKey = `inventoryScanner.apiErrors.${rawErr}`;
-      const translated = t(translationKey);
-      return translated !== translationKey ? translated : rawErr;
+      return translateAccountError(rawErr, t);
     },
     [t]
   );
@@ -205,7 +211,10 @@ export function useScanState({ state, dispatch, scanAbortControllerRef }: UseSca
             dispatch({
               type: 'SCAN_FAILURE',
               accountId: account.id,
-              error: err instanceof Error ? err.message : t('common.error', 'Error'),
+              error:
+                err instanceof Error
+                  ? translateAccountError(err.message, t)
+                  : t('common.error', 'Error'),
             });
           }
         } finally {
@@ -300,12 +309,7 @@ export function useScanState({ state, dispatch, scanAbortControllerRef }: UseSca
               )
             );
           }
-          const errorMsg = data.message
-            ? t(`inventoryScanner.apiErrors.${data.message}`) !==
-              `inventoryScanner.apiErrors.${data.message}`
-              ? t(`inventoryScanner.apiErrors.${data.message}`)
-              : data.message
-            : null;
+          const errorMsg = data.message ? translateAccountError(data.message, t) : null;
           throw new Error(
             errorMsg ||
               t('inventoryScanner.apiErrors.errScanRequestGeneric', 'Scan request failed.')
@@ -361,7 +365,7 @@ export function useScanState({ state, dispatch, scanAbortControllerRef }: UseSca
           } else {
             toast.error(
               err instanceof Error
-                ? err.message
+                ? translateAccountError(err.message, t)
                 : t('inventoryScanner.apiErrors.scanFailed', 'Scan failed.'),
               {
                 path: '/inventory-scanner',
@@ -379,7 +383,10 @@ export function useScanState({ state, dispatch, scanAbortControllerRef }: UseSca
           dispatch({
             type: 'SCAN_FAILURE',
             accountId,
-            error: err instanceof Error ? err.message : t('common.error', 'Error'),
+            error:
+              err instanceof Error
+                ? translateAccountError(err.message, t)
+                : t('common.error', 'Error'),
           });
         }
       }
@@ -456,7 +463,9 @@ export function useScanState({ state, dispatch, scanAbortControllerRef }: UseSca
         } else {
           toast.error(
             t('inventoryScanner.apiErrors.scanFailedPrefix', 'Scan failed: ') +
-              (err instanceof Error ? err.message : t('common.error', 'Error')),
+              (err instanceof Error
+                ? translateAccountError(err.message, t)
+                : t('common.error', 'Error')),
             {
               path: '/inventory-scanner',
             }

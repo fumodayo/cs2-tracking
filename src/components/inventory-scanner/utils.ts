@@ -152,6 +152,8 @@ export function colorWithAlpha(hex: string, alpha: number): string {
 
 export { getLocalApiKey, removeLocalApiKey, saveLocalApiKey } from '@/utils/local-api-key';
 
+export const STEAM_PRIVACY_SETTINGS_URL = 'https://steamcommunity.com/my/edit/settings';
+
 export function translateScanProgressMessage(
   msg: string | null | undefined,
   t: (key: string, options?: any) => string,
@@ -243,6 +245,13 @@ export function translateAccountError(
 ): string {
   if (!error) return '';
 
+  if (isFamilyViewAccountError(error)) {
+    if (error.includes('familyViewCookieRequired')) {
+      return t('inventoryScanner.apiErrors.familyViewCookieRequired');
+    }
+    return t('inventoryScanner.apiErrors.familyViewInvalidParentalCookie');
+  }
+
   // Structured key checks
   if (error.startsWith('duplicateAccountError:')) {
     const parts = error.substring('duplicateAccountError:'.length).split(',');
@@ -273,13 +282,6 @@ export function translateAccountError(
       cookieSteamId: params.cookieSteamId || '',
       steamId64: params.steamId64 || '',
     });
-  }
-
-  if (error.startsWith('familyViewInvalidParentalCookie:')) {
-    const debugInfo = decodeURIComponent(
-      error.substring('familyViewInvalidParentalCookie:debugInfo='.length)
-    );
-    return t('inventoryScanner.apiErrors.familyViewInvalidParentalCookie', { debugInfo });
   }
 
   if (error.startsWith('steamHttpError:')) {
@@ -442,6 +444,56 @@ export function translateAccountError(
   }
 
   return error;
+}
+
+export function isFamilyViewAccountError(error: string | null | undefined): boolean {
+  if (!error) return false;
+
+  const normalized = safeDecodeURIComponent(error).toLowerCase();
+  return (
+    normalized.includes('familyview') ||
+    normalized.includes('family view') ||
+    normalized.includes('steamparental')
+  );
+}
+
+export function isCookieCredentialError(error: string | null | undefined): boolean {
+  if (!error || isFamilyViewAccountError(error)) return false;
+
+  const normalized = safeDecodeURIComponent(error).toLowerCase();
+  return (
+    normalized.includes('cookie') ||
+    normalized.includes('session') ||
+    normalized.includes('hết hạn') ||
+    normalized.includes('expired') ||
+    normalized.includes('unauthorized') ||
+    normalized.includes('login required') ||
+    normalized.includes('privateinventory')
+  );
+}
+
+export function isPrivateInventoryAccountError(error: string | null | undefined): boolean {
+  if (!error) return false;
+
+  const normalized = safeDecodeURIComponent(error).toLowerCase();
+  return (
+    normalized.includes('privateinventory') ||
+    normalized.includes('emptyorprivateinventory') ||
+    normalized.includes('private inventory') ||
+    normalized.includes('inventory is private') ||
+    normalized.includes('inventory may be private') ||
+    normalized.includes('inventory đang private') ||
+    normalized.includes('hòm đồ đang riêng tư') ||
+    normalized.includes('hòm đồ có thể đang riêng tư')
+  );
+}
+
+function safeDecodeURIComponent(value: string): string {
+  try {
+    return decodeURIComponent(value);
+  } catch {
+    return value;
+  }
 }
 
 export function translateSyncMessage(

@@ -132,33 +132,6 @@ export function buildInventoryColumns({
 
   return [
     {
-      id: 'select',
-      enableHiding: false,
-      header: ({ table }) => (
-        <div className="flex justify-center">
-          <input
-            type="checkbox"
-            className="border-stone-750 size-4 cursor-pointer rounded bg-stone-900 text-blue-500 accent-blue-500"
-            checked={table.getIsAllPageRowsSelected()}
-            onChange={(e) => table.toggleAllPageRowsSelected(e.target.checked)}
-            aria-label={t('inventoryScanner.selectAll')}
-          />
-        </div>
-      ),
-      cell: ({ row }) => (
-        <div className="flex justify-center">
-          <input
-            type="checkbox"
-            className="border-stone-750 size-4 cursor-pointer rounded bg-stone-900 text-blue-500 accent-blue-500"
-            checked={row.getIsSelected()}
-            onChange={(e) => row.toggleSelected(e.target.checked)}
-            aria-label={t('inventoryScanner.selectRow')}
-          />
-        </div>
-      ),
-      enableSorting: false,
-    },
-    {
       id: 'case',
       enableHiding: false,
       header: t('inventoryScanner.item'),
@@ -212,14 +185,10 @@ export function buildInventoryColumns({
               onClick={(e) => {
                 e.preventDefault();
                 e.stopPropagation();
-                if (isMobile) {
-                  row.toggleSelected(!row.getIsSelected());
-                } else {
-                  onSelectItem?.(row.original);
-                }
+                row.toggleSelected(!row.getIsSelected());
               }}
               className="group relative flex shrink-0 cursor-pointer items-center justify-center overflow-hidden rounded-lg border border-stone-800 bg-stone-900 transition-all duration-300 hover:border-blue-500/40 hover:shadow-lg focus:outline-none active:scale-95 max-md:size-14"
-              title={t('inventoryScanner.clickToViewDetails', 'Click to view details')}
+              title={t('inventoryScanner.clickToSelect', 'Click to select')}
             >
               <CaseThumbnail
                 imageUrl={row.original.caseItem.imageUrl ?? undefined}
@@ -227,7 +196,7 @@ export function buildInventoryColumns({
                 size="lg"
                 className="max-md:size-14"
               />
-              {isMobile && row.getIsSelected() && (
+              {row.getIsSelected() && (
                 <div className="absolute inset-0 flex items-center justify-center bg-blue-500/20 backdrop-blur-[1px]">
                   <div className="flex size-6 items-center justify-center rounded-full bg-blue-500 shadow-md">
                     <svg
@@ -323,59 +292,65 @@ export function buildInventoryColumns({
                     {t('portfolio.inStorageUnit', 'trong Storage Unit')}
                   </span>
                 ) : null}
-                {(() => {
-                  const breakdown = getScannerItemStatusBreakdown(row.original);
-                  return (
-                    <>
-                      {breakdown.tradeable > 0 && breakdown.tradeable !== row.original.quantity ? (
-                        <span
-                          aria-label={t(
-                            'portfolio.tradeableStatusWithQty',
-                            '{{count}} tradeable items',
-                            { count: breakdown.tradeable }
-                          )}
-                          className="inline-flex items-center rounded border border-emerald-500/20 bg-emerald-500/10 px-1.5 py-0.5 text-[10px] font-bold text-emerald-400"
-                        >
-                          🟢 {breakdown.tradeable}
-                        </span>
-                      ) : null}
-                      {breakdown.onMarket > 0 ? (
-                        <span
-                          aria-label={t(
-                            'portfolio.onMarketStatusWithQty',
-                            '{{count}} items on market',
-                            { count: breakdown.onMarket }
-                          )}
-                          className="inline-flex items-center rounded border border-amber-500/35 bg-amber-500/15 px-1.5 py-0.5 text-[10px] font-bold text-amber-700 dark:border-amber-500/20 dark:bg-amber-500/10 dark:text-amber-400"
-                        >
-                          🟡 {breakdown.onMarket} Market
-                        </span>
-                      ) : null}
-                      {breakdown.tradeProtected > 0 ? (
-                        <span
-                          aria-label={t(
-                            'portfolio.tradeProtectedStatusWithQty',
-                            '{{count}} trade-protected items',
-                            { count: breakdown.tradeProtected }
-                          )}
-                          className="inline-flex items-center rounded border border-cyan-500/20 bg-cyan-500/10 px-1.5 py-0.5 text-[10px] font-bold text-cyan-400"
-                        >
-                          🔵 {breakdown.tradeProtected} Protected
-                        </span>
-                      ) : null}
-                      {breakdown.hold > 0 && breakdown.hold !== row.original.quantity ? (
-                        <span
-                          aria-label={t('portfolio.holdStatusWithQty', '{{count}} items on hold', {
-                            count: breakdown.hold,
-                          })}
-                          className="inline-flex items-center rounded border border-red-500/20 bg-red-500/10 px-1.5 py-0.5 text-[10px] font-bold text-red-400"
-                        >
-                          🔴 {breakdown.hold} Hold
-                        </span>
-                      ) : null}
-                    </>
-                  );
-                })()}
+                {row.original.quantity > 1 &&
+                  (() => {
+                    const breakdown = getScannerItemStatusBreakdown(row.original);
+                    return (
+                      <>
+                        {breakdown.tradeable > 0 &&
+                        breakdown.tradeable !== row.original.quantity ? (
+                          <span
+                            aria-label={t(
+                              'portfolio.tradeableStatusWithQty',
+                              '{{count}} tradeable items',
+                              { count: breakdown.tradeable }
+                            )}
+                            className="inline-flex items-center rounded border border-emerald-500/20 bg-emerald-500/10 px-1.5 py-0.5 text-[10px] font-bold text-emerald-400"
+                          >
+                            🟢 {breakdown.tradeable}
+                          </span>
+                        ) : null}
+                        {breakdown.onMarket > 0 ? (
+                          <span
+                            aria-label={t(
+                              'portfolio.onMarketStatusWithQty',
+                              '{{count}} items on market',
+                              { count: breakdown.onMarket }
+                            )}
+                            className="inline-flex items-center rounded border border-amber-500/35 bg-amber-500/15 px-1.5 py-0.5 text-[10px] font-bold text-amber-700 dark:border-amber-500/20 dark:bg-amber-500/10 dark:text-amber-400"
+                          >
+                            🟡 {breakdown.onMarket} Market
+                          </span>
+                        ) : null}
+                        {breakdown.tradeProtected > 0 ? (
+                          <span
+                            aria-label={t(
+                              'portfolio.tradeProtectedStatusWithQty',
+                              '{{count}} trade-protected items',
+                              { count: breakdown.tradeProtected }
+                            )}
+                            className="inline-flex items-center rounded border border-cyan-500/20 bg-cyan-500/10 px-1.5 py-0.5 text-[10px] font-bold text-cyan-400"
+                          >
+                            🔵 {breakdown.tradeProtected} Protected
+                          </span>
+                        ) : null}
+                        {breakdown.hold > 0 && breakdown.hold !== row.original.quantity ? (
+                          <span
+                            aria-label={t(
+                              'portfolio.holdStatusWithQty',
+                              '{{count}} items on hold',
+                              {
+                                count: breakdown.hold,
+                              }
+                            )}
+                            className="inline-flex items-center rounded border border-red-500/20 bg-red-500/10 px-1.5 py-0.5 text-[10px] font-bold text-red-400"
+                          >
+                            🔴 {breakdown.hold} Hold
+                          </span>
+                        ) : null}
+                      </>
+                    );
+                  })()}
               </div>
               {row.original.sourceAccounts && row.original.sourceAccounts.length > 0 ? (
                 <div

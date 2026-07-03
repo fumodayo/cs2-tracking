@@ -27,7 +27,14 @@ export type ScannerAction =
       manualItems: ScanResultItem[];
       buffPricesCny: Record<string, number>;
     }
-  | { type: 'ADD_ACCOUNT' }
+  | {
+      type: 'ADD_ACCOUNT';
+      payload?: {
+        url: string;
+        steamCookie: string;
+        steamSessionId: string;
+      };
+    }
   | { type: 'REMOVE_ACCOUNT'; id: string }
   | { type: 'UPDATE_ACCOUNT_URL'; id: string; url: string }
   | { type: 'UPDATE_ACCOUNT_COOKIE'; id: string; cookie: string }
@@ -179,11 +186,17 @@ export function scannerReducer(state: ScannerState, action: ScannerAction): Scan
         buffPricesCny: action.buffPricesCny,
       };
 
-    case 'ADD_ACCOUNT':
+    case 'ADD_ACCOUNT': {
+      const newAcc = createAccount(action.payload?.url || '');
+      if (action.payload) {
+        newAcc.steamCookie = action.payload.steamCookie;
+        newAcc.steamSessionId = action.payload.steamSessionId;
+      }
       return {
         ...state,
-        accounts: [...state.accounts, createAccount('')],
+        accounts: [...state.accounts, newAcc],
       };
+    }
 
     case 'REMOVE_ACCOUNT':
       return {
@@ -283,7 +296,7 @@ export function scannerReducer(state: ScannerState, action: ScannerAction): Scan
         items: action.result.items.map(normalizeScanItemType),
       };
       const existingDupe = state.accounts.find(
-        (a) => a.id !== accountId && a.status === 'done' && a.result?.steamId64 === result.steamId64
+        (a) => a.id !== accountId && a.result?.steamId64 === result.steamId64
       );
 
       if (existingDupe) {

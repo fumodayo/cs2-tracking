@@ -18,9 +18,13 @@ import { AddCaseSearch } from './add-case-search';
 import { CookieGuideModal } from '@/components/shared/cookie-guide-modal';
 import { ScanResultItem } from './types';
 import { buildInventoryColumns } from './inventory-scanner-columns';
-import { groupItemsForSummary } from './hooks/use-scanner-data-merged';
+import { groupItemsForSummary, groupCommoditiesForMobile } from './hooks/use-scanner-data-merged';
 
 import { AccountsSection } from './components/accounts-section';
+import { AddAccountDialog } from '@/components/steam-accounts/components/add-account-dialog';
+import { parseSteamCookies } from '@/utils/steam-cookies';
+import { extractSteamKey } from './utils';
+import { toast } from '@/stores';
 import { CS2CapModal } from '@/components/auth/cs2cap-modal';
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import { SellSelectedDialog } from '../portfolio/sell-selected-dialog';
@@ -140,6 +144,13 @@ export function InventoryScanner() {
     }
   }, [state.portfolioImportError]);
 
+  // Listen for global cookie guide event from the add account dialog
+  useEffect(() => {
+    const handleShowGuide = () => setShowCookieGuide(true);
+    window.addEventListener('show-cookie-guide', handleShowGuide);
+    return () => window.removeEventListener('show-cookie-guide', handleShowGuide);
+  }, []);
+
   const hasScannedAccount = useMemo(() => state.accounts.some((a) => a.result), [state.accounts]);
 
   const selectedAccounts = urlState.accounts;
@@ -147,6 +158,15 @@ export function InventoryScanner() {
 
   const selectedStatuses = urlState.status;
   const setSelectedStatuses = setters.status;
+
+  const selectedSourceFilters = useMemo(() => urlState.source ?? [], [urlState.source]);
+  const setSelectedSourceFilters = setters.source;
+
+  const selectedPriceSourceFilters = useMemo(
+    () => urlState.priceSource ?? [],
+    [urlState.priceSource]
+  );
+  const setSelectedPriceSourceFilters = setters.priceSource;
 
   const pagination = useMemo(
     () => ({
@@ -186,8 +206,17 @@ export function InventoryScanner() {
       setters.page(1);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [urlState.q, urlState.type, urlState.status, urlState.accounts, setters]);
+  }, [
+    urlState.q,
+    urlState.type,
+    urlState.status,
+    urlState.accounts,
+    urlState.source,
+    urlState.priceSource,
+    setters,
+  ]);
   const [showCookieGuide, setShowCookieGuide] = useState<boolean>(false);
+  const [showAddAccountModal, setShowAddAccountModal] = useState<boolean>(false);
 
   const accountOptions = useMemo(
     () =>
@@ -201,9 +230,35 @@ export function InventoryScanner() {
     [state.accounts]
   );
 
+  const matchesSourceFilter = useCallback(
+    (item: ScanResultItem) => {
+      if (selectedSourceFilters.length === 0) return true;
+
+      return selectedSourceFilters.some((source) => {
+        if (source === 'manual') return !!item.isManual;
+        if (source === 'existing') return !item.isManual;
+        return false;
+      });
+    },
+    [selectedSourceFilters]
+  );
+
+  const matchesPriceSourceFilter = useCallback(
+    (item: ScanResultItem) => {
+      if (selectedPriceSourceFilters.length === 0) return true;
+
+      const priceSource = item.priceSource === 'buff163' ? 'buff' : 'steam';
+      return selectedPriceSourceFilters.includes(priceSource);
+    },
+    [selectedPriceSourceFilters]
+  );
+
   const filteredScannedItems = useMemo(
     () =>
       (merged?.scannedItems ?? []).filter((item) => {
+        if (!matchesSourceFilter(item)) return false;
+        if (!matchesPriceSourceFilter(item)) return false;
+
         // Account filter
         if (selectedAccounts.length > 0) {
           const matchesAccount =
@@ -231,12 +286,22 @@ export function InventoryScanner() {
         }
         return true;
       }),
-    [selectedAccounts, selectedStatuses, merged?.scannedItems]
+    [
+      selectedAccounts,
+      selectedStatuses,
+      merged?.scannedItems,
+      matchesSourceFilter,
+      matchesPriceSourceFilter,
+    ]
   );
 
   const visibleManualItems = useMemo(() => {
-    return selectedAccounts.length === 0 ? filteredManualItems : [];
-  }, [selectedAccounts, filteredManualItems]);
+    if (selectedAccounts.length > 0) return [];
+
+    return filteredManualItems.filter(
+      (item) => matchesSourceFilter(item) && matchesPriceSourceFilter(item)
+    );
+  }, [selectedAccounts, filteredManualItems, matchesSourceFilter, matchesPriceSourceFilter]);
 
   const sellDialogSourceItems = useMemo(
     () => [...visibleManualItems, ...filteredScannedItems],
@@ -245,11 +310,14 @@ export function InventoryScanner() {
 
   const tableData = useMemo(() => {
     const rawData = sellDialogSourceItems;
+    if (isMobile) {
+      return groupCommoditiesForMobile(rawData);
+    }
     if (activeMode === 'case-summary') {
       return groupItemsForSummary(rawData);
     }
     return rawData;
-  }, [sellDialogSourceItems, activeMode]);
+  }, [sellDialogSourceItems, activeMode, isMobile]);
 
   const [rowSelection, setRowSelection] = useState<Record<string, boolean>>({});
 
@@ -881,7 +949,7 @@ export function InventoryScanner() {
           updateAccountUrl={updateAccountUrl}
           updateAccountCookie={updateAccountCookie}
           updateAccountSessionId={updateAccountSessionId}
-          addAccount={addAccount}
+          addAccount={() => setShowAddAccountModal(true)}
           setShowCookieGuide={setShowCookieGuide}
         />
 
@@ -903,12 +971,15 @@ export function InventoryScanner() {
           totalSi={totalSi}
           totalLe={totalLe}
           totalWalletVnd={totalWalletVnd}
-          tableData={tableData}
           table={table}
           selectedStatuses={selectedStatuses}
           setSelectedStatuses={setSelectedStatuses}
           selectedAccounts={selectedAccounts}
           setSelectedAccounts={setSelectedAccounts}
+          selectedSourceFilters={selectedSourceFilters}
+          setSelectedSourceFilters={setSelectedSourceFilters}
+          selectedPriceSourceFilters={selectedPriceSourceFilters}
+          setSelectedPriceSourceFilters={setSelectedPriceSourceFilters}
           accountOptions={accountOptions}
           rowSelection={rowSelection}
           setRowSelection={setRowSelection}
@@ -923,7 +994,6 @@ export function InventoryScanner() {
           googleConfigured={googleConfigured}
           importInventoryToPortfolio={importInventoryToPortfolio}
           zeroPricedItems={zeroPricedItems}
-          inspectingKeys={inspectingKeys}
         />
       </section>
 
@@ -936,6 +1006,39 @@ export function InventoryScanner() {
       )}
 
       <CookieGuideModal open={showCookieGuide} onClose={() => setShowCookieGuide(false)} />
+
+      <AddAccountDialog
+        open={showAddAccountModal}
+        onClose={() => setShowAddAccountModal(false)}
+        onSubmit={(payload) => {
+          const parsed = parseSteamCookies(payload.steamCookie);
+          const newUrlKey = extractSteamKey(payload.steamUrl);
+
+          const duplicateAccount = state.accounts.find((a) => {
+            const existingKey = extractSteamKey(a.url);
+            return existingKey && newUrlKey && existingKey === newUrlKey;
+          });
+
+          if (duplicateAccount) {
+            const dupeName = duplicateAccount.result?.profile?.name || duplicateAccount.url;
+            toast.error(
+              t('inventoryScanner.apiErrors.duplicateUrlError', {
+                name: dupeName,
+                defaultValue: `URL matches "${dupeName}". Please enter a different account.`,
+              })
+            );
+            return;
+          }
+
+          addAccount({
+            url: payload.steamUrl,
+            steamCookie: payload.steamCookie,
+            steamSessionId: parsed.sessionid || '',
+          });
+          setShowAddAccountModal(false);
+        }}
+        isPending={false}
+      />
 
       <CS2CapModal open={showGuestKeyModal} onOpenChange={setShowGuestKeyModal} mode="guest" />
 

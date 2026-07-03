@@ -331,24 +331,19 @@ export async function runScanJob(
 
             if (ownerId) {
               const db = await getDatabase();
+              const cookieError = fallbackRes.ok
+                ? 'familyViewCookieRequired'
+                : 'privateInventoryCookieRequired';
               await db.collection('portfolio_accounts').updateOne(
                 { steamId64, ownerId },
                 {
-                  $set: {
-                    steamCookie: '',
-                    cookieError: fallbackRes.ok
-                      ? 'familyViewCookieRequired'
-                      : 'privateInventoryCookieRequired',
-                  },
+                  $set: fallbackRes.ok ? { cookieError } : { steamCookie: '', cookieError },
                 }
               );
             }
 
             if (fallbackRes.ok) {
-              const debugInfo = `[Debug: steamLoginSecure=${cookieValue ? 'present' : 'empty'}, steamparental=${parentalCookie ? 'present' : 'empty'}, sessionid=${sessionidCookie ? 'present' : 'empty'}]`;
-              throw new Error(
-                `familyViewInvalidParentalCookie:debugInfo=${encodeURIComponent(debugInfo)}`
-              );
+              throw new Error('familyViewInvalidParentalCookie');
             } else {
               throw new Error('privateInventoryCookieRequired');
             }
@@ -1059,7 +1054,8 @@ export async function runScanJob(
         (err.message.includes('Cookie') ||
           err.message.includes('cookie') ||
           err.message.includes('privateInventory') ||
-          err.message.includes('Family View'));
+          err.message.includes('Family View') ||
+          err.message.includes('familyView'));
       if (isCookieError) {
         try {
           const db = await getDatabase();
