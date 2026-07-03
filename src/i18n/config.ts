@@ -3,6 +3,7 @@ import { initReactI18next } from "react-i18next";
 import vi from "./vi.json";
 import en from "./en.json";
 
+// Force refresh translations after editing JSON files
 const STORAGE_KEY = "cs2t_lang";
 
 function getInitialLanguage(): string {
