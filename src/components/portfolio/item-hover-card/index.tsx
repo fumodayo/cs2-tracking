@@ -10,41 +10,31 @@ import {
   fetchSteamAccounts,
   fetchAccountStorageUnits,
 } from '@/lib/api-client/steam-accounts-api';
-import { TbPackage } from 'react-icons/tb';
 import { SlidePanel, SlidePanelContent } from '@/components/ui/slide-panel';
 
-import { CaseThumbnail } from '../case-thumbnail';
-import {
-  formatIntegerViInput,
-  formatDecimalViInput,
-  parseViFloat,
-  formatVND,
-} from '@/utils/format';
-import {
-  DopplerBadge,
-  FadeBadge,
-  BlueGemBadge,
-  MarbleFadeBadge,
-} from '@/components/shared/pattern-badge';
-import { estimateOverpay } from '@/services/pattern/overpay-calculator';
+import { formatIntegerViInput, formatDecimalViInput, parseViFloat } from '@/utils/format';
 
 import { PortfolioTableRow } from '../portfolio-table-model';
-import {
-  getItemTypeColor,
-  getItemTypeLabel,
-  colorWithAlpha,
-  toInputNumber,
-} from '../portfolio-table-utils';
+import { getItemTypeColor, toInputNumber } from '../portfolio-table-utils';
 
 import { VirtualItemCard } from '../components/virtual-item-card';
 import { AccountAllocationBreakdown } from '@/components/steam-accounts';
 import { ItemLotsList } from '../components/item-lots-list';
-import { calculateTradeHoldUntil } from '@/utils/date';
 
-import { ItemHoldSection } from './item-hold-section';
-import { ItemPriceSection } from './item-price-section';
 import { ItemActions } from './item-actions';
-import { StickerCharmSection } from './sticker-charm-section';
+import { ItemHoverCardHeader } from './item-hover-card-header';
+import { PatternInspectSection } from './pattern-inspect-section';
+import { SingleLotEditSection } from './single-lot-edit-section';
+import { StorageUnitAllocationSection } from './storage-unit-allocation-section';
+import {
+  buildLotSourceAccounts,
+  getDefaultItemTradeState,
+  getItemHoverCardTargetId,
+  getTradeHoldUntilForState,
+  type ItemTradeState,
+} from './lot-update-helpers';
+
+type ItemPatternInfo = NonNullable<PortfolioTableRow['patternInfo']>;
 
 export function ItemHoverCard({
   item,
@@ -63,10 +53,7 @@ export function ItemHoverCard({
   embedded = false,
   readOnly = false,
   onSelectOpenChange,
-  onDirtyChange,
-  onOpenDetails,
   useSellLabel = false,
-  defaultEditing = false,
   onClose,
   onSellItem,
   onSellAll,
@@ -88,7 +75,7 @@ export function ItemHoverCard({
       storageUnitId?: string;
       tradeHoldUntil?: string | null;
       dopplerPhase?: string;
-      patternInfo?: any;
+      patternInfo?: PortfolioTableRow['patternInfo'];
       stickerPriceRate?: number;
       stickerBuyPriceRate?: number;
       stickerScanTotalPrice?: number;
@@ -117,7 +104,6 @@ export function ItemHoverCard({
   isGuest?: boolean;
 }) {
   const { t } = useTranslation();
-  const [isEditing, setIsEditing] = useState(defaultEditing ?? false);
   const [selectedEditingLot, setSelectedEditingLot] = useState<PortfolioTableRow | null>(null);
 
   const hasBuff = useMemo(() => {
@@ -129,12 +115,6 @@ export function ItemHoverCard({
       isSkin && currentVal > 0 && steamVal > 0 && currentVal !== steamVal;
     return hasBuffPrice || currentDiffersFromSteam;
   }, [item, buffPricesCny]);
-
-  useEffect(() => {
-    if (defaultEditing) {
-      setIsEditing(true);
-    }
-  }, [defaultEditing]);
 
   const [quantity, setQuantity] = useState(() => formatIntegerViInput(item.quantity));
   const [priceCny, setPriceCny] = useState(() => {
@@ -181,22 +161,28 @@ export function ItemHoverCard({
   const { inspectingKeys, inspectPattern } = usePatternInspect();
   const [inspectError, setInspectError] = useState<string | null>(null);
   const isInspecting = inspectingKeys.has(item.case.marketHashName);
+  async function applyPatternInspectResult(patternInfo: ItemPatternInfo, inspectLink?: string) {
+    const updatePayload = {
+      dopplerPhase: patternInfo.dopplerPhase || item.dopplerPhase,
+      patternInfo,
+      ...(inspectLink ? { inspectLink } : {}),
+    };
+
+    if (item.itemIds && item.itemIds.length > 0) {
+      for (const id of item.itemIds) {
+        await onUpdateLot?.(id, updatePayload);
+      }
+    } else {
+      await onUpdateLot?.(item.id, updatePayload);
+    }
+  }
+
   const handleInspect = async () => {
     if (!item.inspectLink) return;
     setInspectError(null);
     const res = await inspectPattern(item.inspectLink, item.case.marketHashName, item.dopplerPhase);
     if (res.success && res.data?.patternInfo) {
-      const updatePayload = {
-        dopplerPhase: res.data.patternInfo.dopplerPhase || item.dopplerPhase,
-        patternInfo: res.data.patternInfo,
-      };
-      if (item.itemIds && item.itemIds.length > 0) {
-        for (const id of item.itemIds) {
-          await onUpdateLot?.(id, updatePayload);
-        }
-      } else {
-        await onUpdateLot?.(item.id, updatePayload);
-      }
+      await applyPatternInspectResult(res.data.patternInfo);
     } else {
       setInspectError(res.error || 'failedToInspectFromCSFloat');
     }
@@ -213,18 +199,7 @@ export function ItemHoverCard({
       item.dopplerPhase
     );
     if (res.success && res.data?.patternInfo) {
-      const updatePayload = {
-        dopplerPhase: res.data.patternInfo.dopplerPhase || item.dopplerPhase,
-        patternInfo: res.data.patternInfo,
-        inspectLink: manualInspectLink.trim(),
-      };
-      if (item.itemIds && item.itemIds.length > 0) {
-        for (const id of item.itemIds) {
-          await onUpdateLot?.(id, updatePayload);
-        }
-      } else {
-        await onUpdateLot?.(item.id, updatePayload);
-      }
+      await applyPatternInspectResult(res.data.patternInfo, manualInspectLink.trim());
     } else {
       setInspectError(res.error || 'failedToInspectFromCSFloat');
     }
@@ -256,18 +231,7 @@ export function ItemHoverCard({
           item.dopplerPhase
         );
         if (scanRes.success && scanRes.data?.patternInfo) {
-          const updatePayload = {
-            dopplerPhase: scanRes.data.patternInfo.dopplerPhase || item.dopplerPhase,
-            patternInfo: scanRes.data.patternInfo,
-            inspectLink: data.inspectLink,
-          };
-          if (item.itemIds && item.itemIds.length > 0) {
-            for (const id of item.itemIds) {
-              await onUpdateLot?.(id, updatePayload);
-            }
-          } else {
-            await onUpdateLot?.(item.id, updatePayload);
-          }
+          await applyPatternInspectResult(scanRes.data.patternInfo, data.inspectLink);
         } else {
           setInspectError(scanRes.error || 'failedToInspectFromCSFloat');
           setFindStatus('error');
@@ -275,37 +239,21 @@ export function ItemHoverCard({
       } else {
         setFindStatus('error');
       }
-    } catch (err) {
+    } catch {
       setFindStatus('error');
     } finally {
       setIsFindingLink(false);
     }
   };
 
-  const initialHoldDays = useMemo(() => {
-    if (!item.tradeHoldUntil) return 0;
-    const parsedHoldUntil = new Date(item.tradeHoldUntil);
-    if (isNaN(parsedHoldUntil.getTime())) return 0;
-    const diffMs = parsedHoldUntil.getTime() - new Date().getTime();
-    const diffDays = Math.ceil(diffMs / (1000 * 60 * 60 * 24));
-    return Math.max(0, diffDays);
-  }, [item.tradeHoldUntil]);
-
-  const initialIsProtected = Boolean(
-    item.sourceAccounts?.[0]?.breakdown?.tradeProtected &&
-    item.sourceAccounts[0].breakdown.tradeProtected > 0
-  );
-
   const [editAccountId, setEditAccountId] = useState(
     () => item.sourceAccounts?.[0]?.steamId64 ?? ''
   );
   const [editStorageUnitId, setEditStorageUnitId] = useState(() => item.storageUnitId ?? '');
-  const [editState, setEditState] = useState<'tradeable' | 'hold' | 'protected'>(() =>
-    initialIsProtected ? 'protected' : initialHoldDays > 0 ? 'hold' : 'tradeable'
+  const [editState, setEditState] = useState<ItemTradeState>(
+    () => getDefaultItemTradeState(item).state
   );
-  const [editHoldDays, setEditHoldDays] = useState(() =>
-    initialHoldDays > 0 ? String(initialHoldDays) : ''
-  );
+  const [editHoldDays, setEditHoldDays] = useState(() => getDefaultItemTradeState(item).holdDays);
 
   const accountsQuery = useQuery({
     queryKey: STEAM_ACCOUNTS_QUERY_KEY,
@@ -418,29 +366,12 @@ export function ItemHoverCard({
       setEditAccountId(steamId);
       setEditStorageUnitId(item.storageUnitId ?? '');
 
-      const lotHoldDays = (() => {
-        if (!item.tradeHoldUntil) return 0;
-        const parsedHoldUntil = new Date(item.tradeHoldUntil);
-        if (isNaN(parsedHoldUntil.getTime())) return 0;
-        const diffMs = parsedHoldUntil.getTime() - new Date().getTime();
-        const diffDays = Math.ceil(diffMs / (1000 * 60 * 60 * 24));
-        return Math.max(0, diffDays);
-      })();
-
-      const isProtected = Boolean(
-        item.sourceAccounts?.[0]?.breakdown?.tradeProtected &&
-        item.sourceAccounts[0].breakdown.tradeProtected > 0
-      );
-      if (isProtected) {
-        setEditState('protected');
-        setEditHoldDays('');
-      } else if (lotHoldDays > 0) {
-        setEditState('hold');
-        setEditHoldDays(String(lotHoldDays));
-      } else {
-        setEditState('tradeable');
-        setEditHoldDays('');
-      }
+      const defaultTradeState = getDefaultItemTradeState({
+        sourceAccounts: item.sourceAccounts,
+        tradeHoldUntil: item.tradeHoldUntil,
+      });
+      setEditState(defaultTradeState.state);
+      setEditHoldDays(defaultTradeState.holdDays);
 
       setStickerRate(String(item.stickerPriceRate ?? 0));
       setStickerBuyRate(String(item.stickerBuyPriceRate ?? 0));
@@ -451,6 +382,8 @@ export function ItemHoverCard({
     item.id,
     item.quantity,
     item.buyPrice,
+    item.currentPrice,
+    item.steamPrice,
     item.note,
     buffCnyToVndRate,
     item.sourceAccounts,
@@ -465,19 +398,7 @@ export function ItemHoverCard({
 
   // Check if form values match default values from props
   const isDefault = useMemo(() => {
-    const lotHoldDays = (() => {
-      if (!item.tradeHoldUntil) return 0;
-      const parsedHoldUntil = new Date(item.tradeHoldUntil);
-      if (isNaN(parsedHoldUntil.getTime())) return 0;
-      const diffMs = parsedHoldUntil.getTime() - new Date().getTime();
-      const diffDays = Math.ceil(diffMs / (1000 * 60 * 60 * 24));
-      return Math.max(0, diffDays);
-    })();
-    const isProtected = Boolean(
-      item.sourceAccounts?.[0]?.breakdown?.tradeProtected &&
-      item.sourceAccounts[0].breakdown.tradeProtected > 0
-    );
-    const defaultEditState = isProtected ? 'protected' : lotHoldDays > 0 ? 'hold' : 'tradeable';
+    const defaultTradeState = getDefaultItemTradeState(item);
 
     const defaultMarket = hasBuff
       ? (item.buyPrice || item.steamPrice || item.currentPrice || 0) / (buffCnyToVndRate ?? 3600)
@@ -497,8 +418,8 @@ export function ItemHoverCard({
       note === (item.note ?? '') &&
       editAccountId === (item.sourceAccounts?.[0]?.steamId64 ?? '') &&
       editStorageUnitId === (item.storageUnitId ?? '') &&
-      editState === defaultEditState &&
-      (editState !== 'hold' || editHoldDays === String(lotHoldDays)) &&
+      editState === defaultTradeState.state &&
+      (editState !== 'hold' || editHoldDays === defaultTradeState.holdDays) &&
       parseViFloat(stickerRate) === (item.stickerPriceRate ?? 0) &&
       parseViFloat(stickerBuyRate) === (item.stickerBuyPriceRate ?? 0) &&
       capturedScanTotal === (item.stickerScanTotalPrice ?? null) &&
@@ -632,49 +553,20 @@ export function ItemHoverCard({
 
     setSaving(true);
     try {
+      const targetId = getItemHoverCardTargetId(item, relatedRows);
       if (onUpdateLot) {
-        let sourceAccounts = undefined;
-        if (editAccountId) {
-          const selectedAccount = accountOptions.find((acc) => acc.steamId64 === editAccountId);
-          if (selectedAccount) {
-            const breakdown = {
-              tradeable: editState === 'tradeable' ? nextQuantity : 0,
-              onMarket: 0,
-              tradeProtected: editState === 'protected' ? nextQuantity : 0,
-              hold: editState === 'hold' ? nextQuantity : 0,
-              holdDetails:
-                editState === 'hold' || editState === 'protected'
-                  ? [
-                      {
-                        quantity: nextQuantity,
-                        holdDays: Number(editHoldDays) || 0,
-                      },
-                    ]
-                  : [],
-            };
-            sourceAccounts = [
-              {
-                steamId64: editAccountId,
-                name: selectedAccount.name,
-                breakdown,
-              },
-            ];
-          }
-        } else {
-          sourceAccounts = [];
-        }
-
-        let tradeHoldUntil = null;
-        if ((editState === 'hold' || editState === 'protected') && editHoldDays) {
-          const days = Number(editHoldDays) || 0;
-          if (days > 0) {
-            const baseDate = item.buyDate ? new Date(item.buyDate) : new Date();
-            const holdDate = calculateTradeHoldUntil(baseDate, days);
-            tradeHoldUntil = holdDate.toISOString();
-          }
-        }
-
-        const targetId = relatedRows.length === 1 ? relatedRows[0].id : item.id;
+        const sourceAccounts = buildLotSourceAccounts({
+          editAccountId,
+          accountOptions,
+          editState,
+          quantity: nextQuantity,
+          editHoldDays,
+        });
+        const tradeHoldUntil = getTradeHoldUntilForState({
+          editState,
+          editHoldDays,
+          buyDate: item.buyDate,
+        });
         const stickerPriceRateVal = parseViFloat(stickerRate);
         const stickerBuyPriceRateVal = parseViFloat(stickerBuyRate);
 
@@ -693,7 +585,6 @@ export function ItemHoverCard({
           stickerScanPriceCapturedAt: capturedScanDate,
         });
       } else {
-        const targetId = relatedRows.length === 1 ? relatedRows[0].id : item.id;
         if (onUpdateQuantity && nextQuantity !== item.quantity) {
           await onUpdateQuantity(targetId, nextQuantity);
         }
@@ -748,28 +639,9 @@ export function ItemHoverCard({
     setCapturedScanTotal(item.stickerScanTotalPrice ?? null);
     setCapturedScanDate(item.stickerScanPriceCapturedAt);
     setStickerFormulaTotal(null);
-    const lotHoldDays = (() => {
-      if (!item.tradeHoldUntil) return 0;
-      const parsedHoldUntil = new Date(item.tradeHoldUntil);
-      if (isNaN(parsedHoldUntil.getTime())) return 0;
-      const diffMs = parsedHoldUntil.getTime() - new Date().getTime();
-      const diffDays = Math.ceil(diffMs / (1000 * 60 * 60 * 24));
-      return Math.max(0, diffDays);
-    })();
-    const isProtected = Boolean(
-      item.sourceAccounts?.[0]?.breakdown?.tradeProtected &&
-      item.sourceAccounts[0].breakdown.tradeProtected > 0
-    );
-    if (isProtected) {
-      setEditState('protected');
-      setEditHoldDays('');
-    } else if (lotHoldDays > 0) {
-      setEditState('hold');
-      setEditHoldDays(String(lotHoldDays));
-    } else {
-      setEditState('tradeable');
-      setEditHoldDays('');
-    }
+    const defaultTradeState = getDefaultItemTradeState(item);
+    setEditState(defaultTradeState.state);
+    setEditHoldDays(defaultTradeState.holdDays);
     setTimeout(() => {
       setIsResetting(false);
       onClose?.();
@@ -807,458 +679,77 @@ export function ItemHoverCard({
           />
         )}
 
-        <div
-          className={`flex items-center gap-4 border-b border-stone-800/40 px-4 py-4 ${
-            embedded ? 'sticky top-0 z-10 bg-stone-950/95 pt-5 backdrop-blur-md' : ''
-          }`}
-          style={{
-            backgroundImage: `linear-gradient(to right, ${colorWithAlpha(typeColor, 0.08)}, var(--card) 95%)`,
-          }}
-        >
-          <div className="group relative flex shrink-0 items-center justify-center rounded-xl border border-stone-800 bg-stone-950/80 p-1.5 shadow-[inset_0_1.5px_3px_rgba(255,255,255,0.05)] transition-all duration-200">
-            <CaseThumbnail imageUrl={item.case.imageUrl} name={item.case.name} size="lg" />
-            <div
-              className="absolute inset-0 -z-10 rounded-xl opacity-20 blur-md transition-opacity duration-300 group-hover:opacity-30"
-              style={{ backgroundColor: typeColor }}
-            />
-          </div>
-          <div className="min-w-0 flex-1">
-            <p
-              className="text-sm leading-snug font-extrabold tracking-wide text-stone-100"
-              title={item.case.name}
-            >
-              {item.case.name}
-            </p>
-            <div className="mt-1.5 flex flex-wrap items-center gap-1.5 text-xs">
-              <span
-                className="inline-flex rounded-md border px-2 py-0.5 text-[9px] font-extrabold tracking-wider uppercase"
-                style={{
-                  backgroundColor: colorWithAlpha(typeColor, 0.12),
-                  borderColor: colorWithAlpha(typeColor, 0.25),
-                  color: typeColor,
-                }}
-              >
-                {getItemTypeLabel(item.itemType)}
-              </span>
-              {item.dopplerPhase && <DopplerBadge phase={item.dopplerPhase} />}
-              {item.patternInfo?.fadePercentage !== undefined && (
-                <FadeBadge percentage={item.patternInfo.fadePercentage} />
-              )}
-              {item.patternInfo?.blueGemTier && item.patternInfo.blueGemTier !== 'Normal' && (
-                <BlueGemBadge tier={item.patternInfo.blueGemTier} />
-              )}
-              {item.patternInfo?.marbleFadeTier && item.patternInfo.marbleFadeTier !== 'Normal' && (
-                <MarbleFadeBadge tier={item.patternInfo.marbleFadeTier} />
-              )}
-              {item.case.rarity ? (
-                <span className="inline-flex items-center gap-1 text-[10px] font-bold text-stone-400">
-                  <span
-                    className="size-1.5 rounded-full shadow-sm"
-                    style={{ backgroundColor: item.case.rarity.color }}
-                  />
-                  {item.case.rarity.name}
-                </span>
-              ) : null}
-            </div>
-          </div>
-        </div>
+        <ItemHoverCardHeader item={item} typeColor={typeColor} embedded={embedded} />
 
         <div
           className={`p-4 ${embedded ? 'flex-1' : 'max-h-[440px] overflow-y-auto [&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-stone-800/80 hover:[&::-webkit-scrollbar-thumb]:bg-stone-700/80 [&::-webkit-scrollbar-track]:bg-transparent'}`}
         >
           <AccountAllocationBreakdown relatedRows={relatedRows} />
 
-          {/* Interactive Pattern Inspect (if inspectLink is available) */}
-          {relatedRows.length <= 1 &&
-            item.itemType === 'skin' &&
-            (item.inspectLink ? (
-              <div className="mb-5 space-y-3 border-b border-stone-800/60 pb-5 text-xs">
-                <div className="text-[10px] font-bold tracking-wider text-stone-500 uppercase">
-                  {t('inventoryScanner.patternInfo', 'Thông tin Pattern')}
-                </div>
+          <PatternInspectSection
+            item={item}
+            relatedRows={relatedRows}
+            buffPricesCny={buffPricesCny}
+            buffCnyToVndRate={buffCnyToVndRate}
+            isInspecting={isInspecting}
+            inspectError={inspectError}
+            onInspect={handleInspect}
+            manualInspectLink={manualInspectLink}
+            onManualInspectLinkChange={setManualInspectLink}
+            onManualInspect={handleManualInspect}
+            onAutoFind={handleAutoFind}
+            isFindingLink={isFindingLink}
+            findStatus={findStatus}
+            t={t}
+          />
 
-                {!item.patternInfo ? (
-                  <div className="flex flex-col items-center gap-3 rounded-xl border border-stone-800 bg-stone-900/60 p-3.5 text-center">
-                    <div className="text-[11px] leading-relaxed text-stone-300">
-                      {t(
-                        'portfolio.patternInspectPrompt',
-                        'Vật phẩm này có link inspect từ Steam. Bạn có muốn quét Pattern & Overpay không?'
-                      )}
-                    </div>
-                    <button
-                      onClick={handleInspect}
-                      disabled={isInspecting}
-                      className="bg-blue-650 flex h-8 w-full items-center justify-center rounded-lg text-xs font-bold text-white shadow-md transition-all hover:bg-blue-600 active:scale-[0.98] disabled:pointer-events-none disabled:opacity-50"
-                    >
-                      {isInspecting ? (
-                        <span className="flex items-center justify-center gap-1.5">
-                          <svg
-                            className="h-3.5 w-3.5 animate-spin text-white"
-                            fill="none"
-                            viewBox="0 0 24 24"
-                          >
-                            <circle
-                              className="opacity-25"
-                              cx="12"
-                              cy="12"
-                              r="10"
-                              stroke="currentColor"
-                              strokeWidth="4"
-                            />
-                            <path
-                              className="opacity-75"
-                              fill="currentColor"
-                              d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"
-                            />
-                          </svg>
-                          {t('inventoryScanner.scanningPattern', 'Đang kiểm tra...')}
-                        </span>
-                      ) : (
-                        t('inventoryScanner.inspectPatternButton', 'Kiểm tra Pattern')
-                      )}
-                    </button>
-                    {inspectError && (
-                      <div className="mt-1 text-[10px] font-semibold text-red-400">
-                        {t(`inventoryScanner.apiErrors.${inspectError}`, inspectError)}
-                      </div>
-                    )}
-                  </div>
-                ) : (
-                  <div className="grid gap-2">
-                    {item.patternInfo.paintSeed !== undefined && (
-                      <div className="flex justify-between text-stone-300">
-                        <span>{t('inventoryScanner.paintSeed', 'Paint Seed')}</span>
-                        <span className="font-semibold text-stone-100">
-                          {item.patternInfo.paintSeed}
-                        </span>
-                      </div>
-                    )}
-                    {item.patternInfo.floatValue !== undefined && (
-                      <div className="flex justify-between text-stone-300">
-                        <span>{t('inventoryScanner.floatValue', 'Float Value')}</span>
-                        <span className="font-semibold text-stone-100">
-                          {item.patternInfo.floatValue.toFixed(8)}
-                        </span>
-                      </div>
-                    )}
-                    {(() => {
-                      const buffPriceCny = buffPricesCny?.[item.case.marketHashName];
-                      if (buffPriceCny && buffCnyToVndRate) {
-                        const overpay = estimateOverpay(item.patternInfo, buffPriceCny);
-                        if (overpay) {
-                          return (
-                            <div className="text-emerald-450 mt-2 rounded-xl border border-emerald-500/20 bg-emerald-500/10 p-3">
-                              <div className="text-[10px] font-bold tracking-wider text-emerald-500 uppercase">
-                                {t('inventoryScanner.overpayEstimate', 'Ước tính Overpay')} (
-                                {overpay.multiplierSource})
-                              </div>
-                              <div className="mt-1 flex justify-between text-[11px] font-semibold">
-                                <span>BUFF + Overpay:</span>
-                                <span className="font-mono">
-                                  {formatVND(
-                                    Math.round(overpay.estimatedTypical * buffCnyToVndRate)
-                                  )}{' '}
-                                  <span className="font-sans text-[10px] font-normal text-stone-400">
-                                    (
-                                    {new Intl.NumberFormat('vi-VN').format(
-                                      overpay.estimatedTypical
-                                    )}{' '}
-                                    x {new Intl.NumberFormat('vi-VN').format(buffCnyToVndRate)})
-                                  </span>
-                                </span>
-                              </div>
-                              <div className="mt-1 text-[9px] text-stone-400">
-                                {t(
-                                  'inventoryScanner.overpayDisclaimer',
-                                  'Giá trị chỉ mang tính chất tham khảo dựa trên pattern.'
-                                )}
-                              </div>
-                            </div>
-                          );
-                        }
-                      }
-                      return null;
-                    })()}
-                  </div>
-                )}
-              </div>
-            ) : /* Paste Inspect Link section (if no inspectLink but is a skin) */
-            item.patternInfo ? (
-              /* If patternInfo is already scanned/present, display it statically */
-              <div className="mb-5 space-y-3 border-b border-stone-800/60 pb-5 text-xs">
-                <div className="text-[10px] font-bold tracking-wider text-stone-500 uppercase">
-                  {t('inventoryScanner.patternInfo', 'Thông tin Pattern')}
-                </div>
-                <div className="grid gap-2">
-                  {item.patternInfo.paintSeed !== undefined && (
-                    <div className="flex justify-between text-stone-300">
-                      <span>{t('inventoryScanner.paintSeed', 'Paint Seed')}</span>
-                      <span className="font-semibold text-stone-100">
-                        {item.patternInfo.paintSeed}
-                      </span>
-                    </div>
-                  )}
-                  {item.patternInfo.floatValue !== undefined && (
-                    <div className="flex justify-between text-stone-300">
-                      <span>{t('inventoryScanner.floatValue', 'Float Value')}</span>
-                      <span className="font-semibold text-stone-100">
-                        {item.patternInfo.floatValue.toFixed(8)}
-                      </span>
-                    </div>
-                  )}
-                  {(() => {
-                    const buffPriceCny = buffPricesCny?.[item.case.marketHashName];
-                    if (buffPriceCny && buffCnyToVndRate) {
-                      const overpay = estimateOverpay(item.patternInfo, buffPriceCny);
-                      if (overpay) {
-                        return (
-                          <div className="text-emerald-450 mt-2 rounded-xl border border-emerald-500/20 bg-emerald-500/10 p-3">
-                            <div className="text-[10px] font-bold tracking-wider text-emerald-500 uppercase">
-                              {t('inventoryScanner.overpayEstimate', 'Ước tính Overpay')} (
-                              {overpay.multiplierSource})
-                            </div>
-                            <div className="mt-1 flex justify-between text-[11px] font-semibold">
-                              <span>BUFF + Overpay:</span>
-                              <span className="font-mono">
-                                {formatVND(Math.round(overpay.estimatedTypical * buffCnyToVndRate))}{' '}
-                                <span className="font-sans text-[10px] font-normal text-stone-400">
-                                  ({new Intl.NumberFormat('vi-VN').format(overpay.estimatedTypical)}{' '}
-                                  x {new Intl.NumberFormat('vi-VN').format(buffCnyToVndRate)})
-                                </span>
-                              </span>
-                            </div>
-                            <div className="mt-1 text-[9px] text-stone-400">
-                              {t(
-                                'inventoryScanner.overpayDisclaimer',
-                                'Giá trị chỉ mang tính chất tham khảo dựa trên pattern.'
-                              )}
-                            </div>
-                          </div>
-                        );
-                      }
-                    }
-                    return null;
-                  })()}
-                </div>
-              </div>
-            ) : item.itemType === 'skin' ? (
-              /* If no inspectLink, no patternInfo, and it is a skin, let the user enter manual inspectLink */
-              <div className="mb-5 space-y-3 border-b border-stone-800/60 pb-5 text-xs">
-                <div className="flex items-center justify-between">
-                  <div className="text-[10px] font-bold tracking-wider text-stone-500 uppercase">
-                    {t('inventoryScanner.patternInfo', 'Thông tin Pattern')}
-                  </div>
-                  <button
-                    onClick={handleAutoFind}
-                    disabled={isFindingLink || isInspecting}
-                    className="text-blue-450 hover:text-blue-350 flex items-center gap-1 text-[10px] font-semibold disabled:opacity-50"
-                  >
-                    {isFindingLink ? (
-                      <>
-                        <svg
-                          className="text-blue-450 h-3 w-3 animate-spin"
-                          fill="none"
-                          viewBox="0 0 24 24"
-                        >
-                          <circle
-                            className="opacity-25"
-                            cx="12"
-                            cy="12"
-                            r="10"
-                            stroke="currentColor"
-                            strokeWidth="4"
-                          />
-                          <path
-                            className="opacity-75"
-                            fill="currentColor"
-                            d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"
-                          />
-                        </svg>
-                        {t('portfolio.findingLink', 'Đang tìm...')}
-                      </>
-                    ) : (
-                      t('portfolio.autoFindInspectLink', 'Tự động tìm link')
-                    )}
-                  </button>
-                </div>
-                <div className="flex flex-col gap-3 rounded-xl border border-stone-800 bg-stone-900/60 p-3.5">
-                  <div className="text-center text-[11px] leading-relaxed text-stone-300">
-                    {t(
-                      'portfolio.noInspectLinkPrompt',
-                      'Dán Inspect Link từ Steam để kiểm tra Pattern & Overpay:'
-                    )}
-                  </div>
-                  <div className="space-y-2">
-                    <input
-                      type="text"
-                      placeholder="steam://rungame/730/... +csgo_econ_action_preview%20..."
-                      value={manualInspectLink}
-                      onChange={(e) => setManualInspectLink(e.target.value)}
-                      className="border-stone-805 h-9 w-full rounded-lg border bg-stone-950 px-3 text-xs text-stone-200 transition-all placeholder:text-stone-600 focus:border-blue-500/50 focus:ring-1 focus:ring-blue-500/50 focus:outline-none"
-                    />
-                    <button
-                      onClick={handleManualInspect}
-                      disabled={isInspecting || !manualInspectLink.trim()}
-                      className="bg-blue-650 flex h-8 w-full items-center justify-center rounded-lg text-xs font-bold text-white shadow-md transition-all hover:bg-blue-600 active:scale-[0.98] disabled:pointer-events-none disabled:opacity-50"
-                    >
-                      {isInspecting ? (
-                        <span className="flex items-center justify-center gap-1.5">
-                          <svg
-                            className="h-3.5 w-3.5 animate-spin text-white"
-                            fill="none"
-                            viewBox="0 0 24 24"
-                          >
-                            <circle
-                              className="opacity-25"
-                              cx="12"
-                              cy="12"
-                              r="10"
-                              stroke="currentColor"
-                              strokeWidth="4"
-                            />
-                            <path
-                              className="opacity-75"
-                              fill="currentColor"
-                              d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"
-                            />
-                          </svg>
-                          {t('inventoryScanner.scanningPattern', 'Đang kiểm tra...')}
-                        </span>
-                      ) : (
-                        t('inventoryScanner.inspectPatternButton', 'Kiểm tra Pattern')
-                      )}
-                    </button>
-                  </div>
-                  {findStatus === 'error' && (
-                    <div className="mt-1 text-center text-[10px] font-semibold text-amber-400">
-                      {t(
-                        'portfolio.autoFindNotFound',
-                        'Không tìm thấy Inspect Link trong dữ liệu scan kho đồ của bạn. Hãy quét lại kho đồ hoặc dán thủ công.'
-                      )}
-                    </div>
-                  )}
-                  {findStatus === 'success' && (
-                    <div className="mt-1 text-center text-[10px] font-semibold text-emerald-400">
-                      {t(
-                        'portfolio.autoFindSuccess',
-                        'Đã tìm thấy link! Đang tiến hành kiểm tra...'
-                      )}
-                    </div>
-                  )}
-                  {inspectError && (
-                    <div className="mt-1 text-center text-[10px] font-semibold text-red-400">
-                      {t(`inventoryScanner.apiErrors.${inspectError}`, inspectError)}
-                    </div>
-                  )}
-                </div>
-              </div>
-            ) : null)}
-
-          {item.storageUnitDetails && item.storageUnitDetails.length > 0 && (
-            <div className="mb-5 space-y-3 border-b border-stone-800/60 pb-5">
-              <div className="flex items-center gap-1.5 text-[10px] font-bold tracking-wider text-stone-500 uppercase">
-                <TbPackage className="size-3.5 text-stone-400" />
-                {t('portfolio.storageUnitAllocation', 'Stored in Storage Unit')}
-              </div>
-              <div className="grid gap-2">
-                {item.storageUnitDetails.map((su) => {
-                  const account = accountOptions.find((a) => a.steamId64 === su.steamId64);
-                  const accountName = account ? account.name : '';
-                  return (
-                    <div
-                      key={su.storageUnitId}
-                      className="flex items-center justify-between rounded-xl border border-stone-800/40 bg-stone-950/20 px-3 py-2.5 transition duration-200 hover:bg-stone-900/10"
-                    >
-                      <span className="flex min-w-0 flex-1 items-center gap-2 text-xs font-semibold text-stone-300">
-                        <span className="flex size-5.5 shrink-0 items-center justify-center rounded-lg bg-amber-500/10 text-amber-500">
-                          <TbPackage className="size-3" />
-                        </span>
-                        <span className="truncate">{su.storageUnitName}</span>
-                        {accountName && (
-                          <span className="inline-flex max-w-[7rem] shrink-0 items-center gap-0.5 truncate rounded border border-sky-500/10 bg-sky-500/5 px-1.5 py-0.5 text-[8.5px] font-bold tracking-wide text-sky-400">
-                            {accountName}
-                          </span>
-                        )}
-                      </span>
-                      <span className="shrink-0 font-mono text-xs font-extrabold text-amber-400">
-                        {su.quantity}
-                      </span>
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
-          )}
+          <StorageUnitAllocationSection
+            storageUnitDetails={item.storageUnitDetails}
+            accounts={accountOptions}
+            t={t}
+          />
           {relatedRows.length <= 1 ? (
-            <div
-              className={`space-y-4 transition-all duration-350 ${isResetting ? 'animate-reset-flash' : ''}`}
-            >
-              <ItemHoldSection
-                item={item}
-                editAccountId={editAccountId}
-                setEditAccountId={setEditAccountId}
-                editStorageUnitId={editStorageUnitId}
-                setEditStorageUnitId={setEditStorageUnitId}
-                editState={editState}
-                setEditState={setEditState}
-                editHoldDays={editHoldDays}
-                setEditHoldDays={setEditHoldDays}
-                accounts={accountOptions}
-                storageUnits={storageUnitsQuery.data}
-                onSelectOpenChange={onSelectOpenChange}
-              />
-
-              {(() => {
-                const stickers = item.patternInfo?.stickers ?? [];
-                const charms = item.patternInfo?.charms ?? [];
-                const hasAccessories = stickers.length > 0 || charms.length > 0;
-                const hasScanSnapshot = (capturedScanTotal ?? item.stickerScanTotalPrice ?? 0) > 0;
-
-                return (
-                  <>
-                    <StickerCharmSection
-                      patternInfo={item.patternInfo}
-                      skinPrice={item.currentPrice ?? item.steamPrice ?? 0}
-                      buyPrice={parseViFloat(priceVnd)}
-                      savedStickerRate={item.stickerPriceRate}
-                      savedStickerBuyRate={item.stickerBuyPriceRate}
-                      stickerBuyRate={stickerBuyRate}
-                      stickerRate={stickerRate}
-                      stickerScanTotalPrice={capturedScanTotal ?? undefined}
-                      stickerScanPriceCapturedAt={capturedScanDate}
-                      onStickerBuyRateChange={setStickerBuyRate}
-                      onStickerRateChange={setStickerRate}
-                      onStickerFormulaTotalChange={setStickerFormulaTotal}
-                      onStickerTotalPriceChange={(val) => setPriceVnd(formatIntegerViInput(val))}
-                      shouldApplyStickerTotal={true}
-                      readOnly={readOnly}
-                    />
-
-                    <ItemPriceSection
-                      item={item}
-                      quantity={quantity}
-                      setQuantity={setQuantity}
-                      priceCny={priceCny}
-                      updateCny={updateCny}
-                      buyRate={buyRate}
-                      updateBuyRate={updateBuyRate}
-                      sellRate={sellRate}
-                      updateSellRate={updateSellRate}
-                      note={note}
-                      setNote={setNote}
-                      priceVnd={priceVnd}
-                      updateVnd={updateVnd}
-                      submit={submit}
-                      showStickerFormulaTotal={hasAccessories && hasScanSnapshot}
-                      stickerFormulaTotalPrice={stickerFormulaTotal}
-                      hasBuff={hasBuff}
-                      useSellLabel={useSellLabel}
-                      isGuest={isGuest}
-                    />
-                  </>
-                );
-              })()}
-            </div>
+            <SingleLotEditSection
+              item={item}
+              isResetting={isResetting}
+              editAccountId={editAccountId}
+              setEditAccountId={setEditAccountId}
+              editStorageUnitId={editStorageUnitId}
+              setEditStorageUnitId={setEditStorageUnitId}
+              editState={editState}
+              setEditState={setEditState}
+              editHoldDays={editHoldDays}
+              setEditHoldDays={setEditHoldDays}
+              accounts={accountOptions}
+              storageUnits={storageUnitsQuery.data}
+              onSelectOpenChange={onSelectOpenChange}
+              priceVnd={priceVnd}
+              setPriceVnd={setPriceVnd}
+              quantity={quantity}
+              setQuantity={setQuantity}
+              priceCny={priceCny}
+              updateCny={updateCny}
+              buyRate={buyRate}
+              updateBuyRate={updateBuyRate}
+              sellRate={sellRate}
+              updateSellRate={updateSellRate}
+              note={note}
+              setNote={setNote}
+              updateVnd={updateVnd}
+              submit={submit}
+              stickerBuyRate={stickerBuyRate}
+              setStickerBuyRate={setStickerBuyRate}
+              stickerRate={stickerRate}
+              setStickerRate={setStickerRate}
+              capturedScanTotal={capturedScanTotal}
+              capturedScanDate={capturedScanDate}
+              setStickerFormulaTotal={setStickerFormulaTotal}
+              stickerFormulaTotal={stickerFormulaTotal}
+              hasBuff={hasBuff}
+              useSellLabel={useSellLabel}
+              isGuest={isGuest}
+              readOnly={readOnly}
+            />
           ) : (
             <ItemLotsList
               relatedRows={relatedRows}

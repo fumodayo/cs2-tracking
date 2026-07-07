@@ -1,8 +1,7 @@
 'use client';
 
-import { useEffect, useMemo } from 'react';
+import { useEffect } from 'react';
 import type { ReactNode } from 'react';
-import { useQuery } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
 import {
   Badge,
@@ -17,13 +16,7 @@ import type { PatternInfo } from '@/domain/pattern-info';
 import { formatVND } from '@/utils/format';
 import { proxySteamUrl } from '@/utils/url';
 import { Input } from '@/components/ui/input';
-import { Button } from '@/components/ui/button';
-import { formatDateVi } from '@/utils/date';
-
-type AccessoryPrice = {
-  marketHashName: string;
-  price: number;
-};
+import { useAccessoryPrices } from '@/hooks/use-accessory-prices';
 
 type StickerCharmSectionProps = {
   patternInfo?: PatternInfo;
@@ -53,12 +46,10 @@ export function StickerCharmSection({
   stickerBuyRate,
   stickerRate,
   stickerScanTotalPrice,
-  stickerScanPriceCapturedAt,
   onStickerBuyRateChange,
   onStickerRateChange,
   onStickerFormulaTotalChange,
   onStickerTotalPriceChange,
-  onCaptureScanSnapshot,
   shouldApplyStickerTotal = false,
   readOnly = false,
 }: StickerCharmSectionProps) {
@@ -66,43 +57,7 @@ export function StickerCharmSection({
   const stickers = patternInfo?.stickers ?? [];
   const charms = patternInfo?.charms ?? [];
   const hasAccessories = stickers.length > 0 || charms.length > 0;
-  const marketHashNames = useMemo(
-    () =>
-      Array.from(
-        new Set(
-          [...stickers, ...charms]
-            .map((item) => item.marketHashName)
-            .filter((name): name is string => Boolean(name))
-        )
-      ),
-    [stickers, charms]
-  );
-
-  const pricesQuery = useQuery({
-    queryKey: ['sticker-charm-prices', marketHashNames],
-    queryFn: async () => {
-      const res = await fetch('/api/inventory/sticker-prices', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ marketHashNames }),
-      });
-      if (!res.ok) throw new Error('failedToFetchStickerPrices');
-      const data = (await res.json()) as { results?: AccessoryPrice[] };
-      return new Map((data.results ?? []).map((item) => [item.marketHashName, item.price]));
-    },
-    enabled: marketHashNames.length > 0,
-    staleTime: 15 * 60 * 1000,
-  });
-
-  const priceMap = pricesQuery.data ?? new Map<string, number>();
-  const currentAccessoryTotal = useMemo(
-    () =>
-      [...stickers, ...charms].reduce((sum, accessory) => {
-        if (!accessory.marketHashName) return sum;
-        return sum + (priceMap.get(accessory.marketHashName) ?? 0);
-      }, 0),
-    [charms, priceMap, stickers]
-  );
+  const { priceMap, totalPrice: currentAccessoryTotal } = useAccessoryPrices(stickers, charms);
 
   const safeStickerRate = parseRate(stickerRate);
   const safeStickerBuyRate = parseRate(stickerBuyRate);
