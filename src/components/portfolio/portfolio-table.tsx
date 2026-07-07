@@ -348,9 +348,15 @@ export function PortfolioTable({
         handleDeleteSelected={handleDeleteSelected}
         isDeletingMany={isDeletingMany}
         isMobile={isMobile}
+        visibleCount={tableState.visibleCount}
       />
 
-      <PortfolioTableBody table={table} isMobile={isMobile} />
+      <PortfolioTableBody
+        table={table}
+        isMobile={isMobile}
+        visibleCount={tableState.visibleCount}
+        setVisibleCount={tableState.setVisibleCount}
+      />
 
       {!isMobile && (
         <TablePagination table={table} className="rounded-b-xl border-t border-stone-800" />

@@ -39,6 +39,8 @@ export function usePortfolioTableState({
 
   const [sorting, setSorting] = useState<SortingState>([{ id: 'buyPrice', desc: true }]);
 
+  const [visibleCount, setVisibleCount] = useState(10);
+
   // Persisted state using useLocalStorage hook
   const [rowSelection, setRowSelection] = useLocalStorage<Record<string, boolean>>(
     'cs2t_portfolio_rowSelection',
@@ -86,6 +88,7 @@ export function usePortfolioTableState({
       if (prev.pageIndex === 0) return prev;
       return { ...prev, pageIndex: 0 };
     });
+    setVisibleCount(10);
   }, [
     globalFilter,
     sourceFilters,
@@ -120,5 +123,7 @@ export function usePortfolioTableState({
     setRowSelection,
     columnVisibility,
     setColumnVisibility,
+    visibleCount,
+    setVisibleCount,
   };
 }

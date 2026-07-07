@@ -2,7 +2,7 @@
 import React, { useEffect, useState } from 'react';
 import { FaSteam, FaCoins } from 'react-icons/fa';
 import { TbPencil, TbDatabase } from 'react-icons/tb';
-import { ListChecks, RefreshCcw, Search, X } from 'lucide-react';
+import { RefreshCcw, Search, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { motion } from 'framer-motion';
 import { FilterPopover, ResetButton, ViewButton } from '@/components/ui/actions';
@@ -51,6 +51,7 @@ export interface PortfolioTableToolbarProps {
   isRefreshingPrices?: boolean;
   table: Table<PortfolioTableRow>;
   isMobile?: boolean;
+  visibleCount: number;
 
   // Bulk actions
   selectedIds: string[];
@@ -115,6 +116,7 @@ export function PortfolioTableToolbar({
   handleDeleteSelected,
   isDeletingMany = false,
   isMobile = false,
+  visibleCount,
 }: PortfolioTableToolbarProps) {
   const [localQuery, setLocalQuery] = useState(globalFilter);
 
@@ -159,13 +161,14 @@ export function PortfolioTableToolbar({
       !option.value.startsWith('group:') &&
       !option.value.startsWith('subtype:')
   );
-  const filteredRows = table.getFilteredRowModel().rows;
-  const filteredRowCount = filteredRows.length;
-  const selectedFilteredCount = filteredRows.filter((row) => row.getIsSelected()).length;
-  const hasSelectableRows = filteredRowCount > 0;
+  const displayRows = isMobile
+    ? table.getSortedRowModel().rows.slice(0, visibleCount)
+    : table.getRowModel().rows;
+  const displayRowCount = displayRows.length;
+  const selectedDisplayCount = displayRows.filter((row) => row.getIsSelected()).length;
   const handleSelectAllFiltered = () => {
     const nextSelection: Record<string, boolean> = {};
-    for (const row of filteredRows) {
+    for (const row of displayRows) {
       nextSelection[row.id] = true;
     }
     setRowSelection(nextSelection);
@@ -376,20 +379,6 @@ export function PortfolioTableToolbar({
           </div>
 
           <div className="flex items-center justify-between gap-3 lg:shrink-0">
-            {hasSelectableRows && selectedIds.length === 0 && (
-              <button
-                type="button"
-                onClick={handleSelectAllFiltered}
-                className="hover:bg-stone-850 inline-flex h-8 cursor-pointer items-center justify-center gap-1.5 rounded-md border border-blue-500/25 bg-blue-500/10 px-3 text-xs font-semibold text-blue-300 transition-all hover:border-blue-500/40 hover:text-blue-200"
-                title={t(
-                  'portfolio.selectAllFilteredTooltip',
-                  'Select all items matching the current filters'
-                )}
-              >
-                <ListChecks className="size-3.5" />
-                {t('portfolio.selectAllRows', 'Chọn tất cả')}
-              </button>
-            )}
             <ResetButton isVisible={hasActiveFilters} onReset={clearAllFilters} />
             <ViewButton table={table} />
           </div>
@@ -510,22 +499,6 @@ export function PortfolioTableToolbar({
               </button>
             </div>
           )}
-          {hasSelectableRows && selectedIds.length === 0 && (
-            <div className="px-3 pt-1">
-              <button
-                type="button"
-                onClick={handleSelectAllFiltered}
-                className="inline-flex h-8 w-full cursor-pointer items-center justify-center gap-1.5 rounded-lg border border-blue-500/25 bg-blue-500/10 text-xs font-semibold text-blue-300 transition-all hover:border-blue-500/40 hover:text-blue-200"
-                title={t(
-                  'portfolio.selectAllFilteredTooltip',
-                  'Select all items matching the current filters'
-                )}
-              >
-                <ListChecks className="size-3.5" />
-                {t('portfolio.selectAllRows', 'Chọn tất cả')}
-              </button>
-            </div>
-          )}
         </div>
       )}
 
@@ -533,8 +506,8 @@ export function PortfolioTableToolbar({
       {selectedIds.length > 0 && (
         <PortfolioBulkActions
           selectedCount={selectedIds.length}
-          selectedFilteredCount={selectedFilteredCount}
-          totalFilteredCount={filteredRowCount}
+          selectedFilteredCount={selectedDisplayCount}
+          totalFilteredCount={displayRowCount}
           onSelectAllFiltered={handleSelectAllFiltered}
           onClearSelection={() => setRowSelection({})}
           onSellSelected={() => setSellDialogOpen(true)}

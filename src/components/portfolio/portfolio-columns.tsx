@@ -1,6 +1,7 @@
 /* eslint-disable react-refresh/only-export-components */
 import { type ColumnDef, type HeaderContext } from '@tanstack/react-table';
 import type { TFunction } from 'i18next';
+import { cn } from '@/utils/cn';
 import { FaSteam, FaCoins } from 'react-icons/fa';
 import { TbLock } from 'react-icons/tb';
 import type { PortfolioReportRowDto } from '@/types/report';
@@ -219,21 +220,7 @@ export function buildColumns({
           <div className="flex flex-col items-end gap-0.5">
             <span className="text-foreground flex items-center justify-end gap-1 font-medium">
               {formatCurrency(item.buyPrice)}
-              {item.isTemporaryPrice && (
-                <span
-                  className="inline-block size-1.5 shrink-0 animate-pulse rounded-full bg-amber-500"
-                  title={t(
-                    'portfolio.temporaryPriceTooltip',
-                    'Temporary buy price based on Steam Market (Auto sync).'
-                  )}
-                />
-              )}
             </span>
-            {item.isTemporaryPrice && (
-              <span className="text-[8px] leading-none font-semibold text-amber-500 select-none">
-                {t('portfolio.temporaryPriceBadge', 'Temporary')}
-              </span>
-            )}
           </div>
         );
       },
@@ -280,24 +267,55 @@ export function buildColumns({
 
             {/* Buff Price */}
             {hasBuffPrice && (
-              <div className="group relative flex cursor-help items-center gap-1.5">
+              <div
+                className={cn(
+                  'group relative flex cursor-help transition-colors hover:text-blue-300',
+                  isMobile ? 'flex-col items-end gap-0.5' : 'items-center gap-1.5'
+                )}
+              >
                 <span
-                  className={`text-[13px] font-medium ${overpayInfo ? 'text-emerald-400' : 'text-accent'}`}
+                  className={cn(
+                    'text-right font-medium',
+                    overpayInfo ? 'text-emerald-400' : 'text-accent',
+                    isMobile
+                      ? 'flex flex-col items-end text-[11px]'
+                      : 'text-[13px] group-hover:underline'
+                  )}
                 >
-                  {formatCurrency(
-                    Math.round((overpayInfo ? overpayInfo.estimatedTypical : buffPriceCny) * rate)
-                  )}{' '}
-                  <span className="text-muted-foreground text-[10px] font-normal">
-                    (
-                    {new Intl.NumberFormat('vi-VN').format(
-                      overpayInfo ? overpayInfo.estimatedTypical : buffPriceCny
-                    )}{' '}
-                    x {new Intl.NumberFormat('vi-VN').format(rate)})
+                  <span>
+                    {formatCurrency(
+                      Math.round((overpayInfo ? overpayInfo.estimatedTypical : buffPriceCny) * rate)
+                    )}
                   </span>
+                  {isMobile ? (
+                    <span className="flex flex-col items-end font-sans text-[9px] leading-tight font-normal text-stone-500">
+                      <span>
+                        ¥
+                        {new Intl.NumberFormat('vi-VN').format(
+                          overpayInfo ? overpayInfo.estimatedTypical : buffPriceCny
+                        )}
+                      </span>
+                      <span>x {new Intl.NumberFormat('vi-VN').format(rate)}</span>
+                    </span>
+                  ) : (
+                    <span className="text-muted-foreground ml-1 text-[10px] font-normal">
+                      (
+                      {new Intl.NumberFormat('vi-VN').format(
+                        overpayInfo ? overpayInfo.estimatedTypical : buffPriceCny
+                      )}{' '}
+                      x {new Intl.NumberFormat('vi-VN').format(rate)})
+                    </span>
+                  )}
                 </span>
-                <FaCoins
-                  className={`size-3.5 ${overpayInfo ? 'text-emerald-400' : 'text-accent'}`}
-                />
+                {!isMobile && (
+                  <FaCoins
+                    className={cn(
+                      'transition-transform group-hover:scale-110',
+                      overpayInfo ? 'text-emerald-400' : 'text-accent',
+                      'size-3.5'
+                    )}
+                  />
+                )}
 
                 {/* Premium Tooltip */}
                 <div className="pointer-events-none absolute bottom-full left-1/2 z-50 mb-2 -translate-x-1/2 rounded border border-slate-800/80 bg-slate-950 px-2 py-1 text-[10px] font-medium whitespace-nowrap text-slate-200 opacity-0 shadow-[0_4px_12px_rgba(0,0,0,0.5)] transition-all duration-200 group-hover:opacity-100">

@@ -70,7 +70,7 @@ function ScanResultTableRowComponent({
               'py-4 whitespace-nowrap',
               isMobile ? (cell.column.id === 'quantity' ? 'px-0.5' : 'px-1.5') : 'px-5',
               cell.column.id === 'quantity' && isMobile && 'w-[48px] max-w-[48px] min-w-[48px]',
-              cell.column.id === 'price' && isMobile && 'w-[110px] max-w-[110px] min-w-[110px]',
+              cell.column.id === 'price' && isMobile && 'w-[120px] max-w-[120px] min-w-[120px]',
               isCaseCol &&
                 cn(
                   'max-md:sticky max-md:left-0 max-md:z-10 max-md:max-w-[240px] max-md:min-w-[200px] max-md:border-r max-md:border-stone-800/50 max-md:whitespace-normal',
@@ -177,7 +177,6 @@ export function ResultsTable({
     displayRows,
     sentinelRef,
     isLoadingMore,
-    hasSelectableRows,
     canSelectMoreFiltered,
     hasMore,
     hasActiveFilters,
@@ -431,20 +430,6 @@ export function ResultsTable({
           </div>
 
           <div className="flex items-center justify-between gap-3 lg:shrink-0">
-            {hasSelectableRows && selectedIds.length === 0 && (
-              <button
-                type="button"
-                onClick={handleSelectAllFiltered}
-                className="hover:bg-stone-850 inline-flex h-8 cursor-pointer items-center justify-center gap-1.5 rounded-md border border-blue-500/25 bg-blue-500/10 px-3 text-xs font-semibold text-blue-300 transition-all hover:border-blue-500/40 hover:text-blue-200"
-                title={t(
-                  'portfolio.selectAllFilteredTooltip',
-                  'Select all items matching the current filters'
-                )}
-              >
-                <ListChecks className="size-3.5" />
-                {t('portfolio.selectAllRows', 'Chọn tất cả')}
-              </button>
-            )}
             <ResetButton isVisible={hasActiveFilters} onReset={clearAllFilters} />
             <ViewButton table={table} />
           </div>
@@ -538,42 +523,26 @@ export function ResultsTable({
               </button>
             </div>
           )}
-          {hasSelectableRows && selectedIds.length === 0 && (
-            <div className="px-3 pt-1">
-              <button
-                type="button"
-                onClick={handleSelectAllFiltered}
-                className="inline-flex h-8 w-full cursor-pointer items-center justify-center gap-1.5 rounded-lg border border-blue-500/25 bg-blue-500/10 text-xs font-semibold text-blue-300 transition-all hover:border-blue-500/40 hover:text-blue-200"
-                title={t(
-                  'portfolio.selectAllFilteredTooltip',
-                  'Select all items matching the current filters'
-                )}
-              >
-                <ListChecks className="size-3.5" />
-                {t('portfolio.selectAllRows', 'Chọn tất cả')}
-              </button>
-            </div>
-          )}
         </div>
       )}
 
       {/* Bulk Action Banner */}
       {selectedIds.length > 0 && (
-        <div className="border-stone-850 animate-fade-slide-in flex items-center justify-between border-b bg-stone-900/90 px-4 py-2.5">
+        <div className="border-stone-850 animate-fade-slide-in flex flex-col gap-3 border-b bg-stone-900/90 p-3 md:flex-row md:items-center md:justify-between md:px-4 md:py-2.5">
           <div className="flex items-center gap-2">
-            <span className="inline-flex size-5 items-center justify-center rounded-full bg-blue-500/10 text-xs font-bold text-blue-400">
+            <span className="inline-flex size-5 shrink-0 items-center justify-center rounded-full bg-blue-500/10 text-xs font-bold text-blue-400">
               {selectedIds.length}
             </span>
-            <span className="text-xs font-semibold text-stone-300">
+            <span className="text-xs font-semibold whitespace-nowrap text-stone-300">
               Đã chọn {selectedIds.length} vật phẩm
             </span>
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex w-full flex-wrap items-center gap-2 md:w-auto">
             {canSelectMoreFiltered && (
               <button
                 type="button"
                 onClick={handleSelectAllFiltered}
-                className="hover:bg-stone-850 inline-flex h-8 cursor-pointer items-center justify-center gap-1.5 rounded-md border border-blue-500/25 bg-blue-500/10 px-3 text-xs font-semibold text-blue-300 transition-all hover:border-blue-500/40 hover:text-blue-200"
+                className="hover:bg-stone-850 inline-flex h-8 flex-grow cursor-pointer items-center justify-center gap-1.5 rounded-md border border-blue-500/25 bg-blue-500/10 px-3 text-xs font-semibold whitespace-nowrap text-blue-300 transition-all hover:border-blue-500/40 hover:text-blue-200 md:flex-grow-0"
                 title={t(
                   'portfolio.selectAllFilteredTooltip',
                   'Select all items matching the current filters'
@@ -586,14 +555,14 @@ export function ResultsTable({
             <button
               type="button"
               onClick={() => setRowSelection({})}
-              className="hover:bg-stone-850 inline-flex h-8 cursor-pointer items-center justify-center rounded-md border border-stone-800 bg-stone-900/60 px-3 text-xs font-semibold text-stone-400 transition-all hover:border-stone-700 hover:text-stone-200"
+              className="hover:bg-stone-850 inline-flex h-8 flex-grow cursor-pointer items-center justify-center rounded-md border border-stone-800 bg-stone-900/60 px-3 text-xs font-semibold whitespace-nowrap text-stone-400 transition-all hover:border-stone-700 hover:text-stone-200 md:flex-grow-0"
             >
               Hủy chọn
             </button>
             <button
               type="button"
               onClick={() => setSellDialogOpen(true)}
-              className="inline-flex h-8 cursor-pointer items-center justify-center gap-1.5 rounded-md bg-blue-500 px-3.5 text-xs font-bold text-white shadow-md shadow-blue-500/25 transition-all hover:bg-blue-600 active:scale-95"
+              className="inline-flex h-8 flex-grow cursor-pointer items-center justify-center gap-1.5 rounded-md bg-blue-500 px-3.5 text-xs font-bold whitespace-nowrap text-white shadow-md shadow-blue-500/25 transition-all hover:bg-blue-600 active:scale-95 md:flex-grow-0"
             >
               <FaBoxOpen className="size-3.5" />
               <span>Bán ({selectedIds.length})</span>
@@ -601,7 +570,7 @@ export function ResultsTable({
             <button
               type="button"
               onClick={handleDeleteSelected}
-              className="inline-flex h-8 cursor-pointer items-center justify-center gap-1.5 rounded-md border border-red-500/20 bg-red-500/5 px-3.5 text-xs font-bold text-red-400 shadow-sm transition-all hover:border-red-500/30 hover:bg-red-500/15 hover:text-red-300 active:scale-95"
+              className="inline-flex h-8 flex-grow cursor-pointer items-center justify-center gap-1.5 rounded-md border border-red-500/20 bg-red-500/5 px-3.5 text-xs font-bold whitespace-nowrap text-red-400 shadow-sm transition-all hover:border-red-500/30 hover:bg-red-500/15 hover:text-red-300 active:scale-95 md:flex-grow-0"
             >
               <FaTrashAlt className="size-3" />
               <span>Xóa ({selectedIds.length})</span>
@@ -611,7 +580,7 @@ export function ResultsTable({
       )}
 
       <div className="overflow-x-auto">
-        <table className="w-full text-left text-sm text-stone-300">
+        <table className="w-full text-left text-sm text-stone-300 max-md:min-w-[450px]">
           <thead className="bg-stone-900/80 text-xs text-stone-400 uppercase">
             {table.getHeaderGroups().map((headerGroup) => (
               <tr key={headerGroup.id}>
@@ -638,7 +607,7 @@ export function ResultsTable({
                           'w-[48px] max-w-[48px] min-w-[48px]',
                         header.column.id === 'price' &&
                           isMobile &&
-                          'w-[110px] max-w-[110px] min-w-[110px]',
+                          'w-[120px] max-w-[120px] min-w-[120px]',
                         isCaseCol &&
                           cn(
                             'max-md:sticky max-md:left-0 max-md:z-20 max-md:max-w-[240px] max-md:min-w-[200px] max-md:border-r max-md:border-stone-800/50 max-md:bg-stone-900 max-md:whitespace-normal',

@@ -8,6 +8,8 @@ import { cn } from '@/utils/cn';
 interface PortfolioTableBodyProps {
   table: Table<PortfolioTableRow>;
   isMobile?: boolean;
+  visibleCount: number;
+  setVisibleCount: (val: number | ((prev: number) => number)) => void;
 }
 
 function PortfolioTableRowComponent({
@@ -102,7 +104,7 @@ function PortfolioTableRowComponent({
               cell.column.id === 'quantity' && isMobile && 'w-[48px] max-w-[48px] min-w-[48px]',
               (cell.column.id === 'buyPrice' || cell.column.id === 'currentPrice') &&
                 isMobile &&
-                'w-[112px] max-w-[112px] min-w-[112px]',
+                'w-[120px] max-w-[120px] min-w-[120px]',
               cell.column.id === 'profitPercent' &&
                 isMobile &&
                 'w-[72px] max-w-[72px] min-w-[72px]',
@@ -117,9 +119,13 @@ function PortfolioTableRowComponent({
   );
 }
 
-export function PortfolioTableBody({ table, isMobile = false }: PortfolioTableBodyProps) {
+export function PortfolioTableBody({
+  table,
+  isMobile = false,
+  visibleCount,
+  setVisibleCount,
+}: PortfolioTableBodyProps) {
   const { t } = useTranslation();
-  const [visibleCount, setVisibleCount] = useState(10);
   const [isLoadingMore, setIsLoadingMore] = useState(false);
   const sentinelRef = useRef<HTMLDivElement>(null);
 
@@ -135,6 +141,7 @@ export function PortfolioTableBody({ table, isMobile = false }: PortfolioTableBo
     tableState.sorting,
     tableState.columnVisibility,
     allFilteredRows.length,
+    setVisibleCount,
   ]);
 
   useEffect(() => {
@@ -163,12 +170,12 @@ export function PortfolioTableBody({ table, isMobile = false }: PortfolioTableBo
         observer.unobserve(currentSentinel);
       }
     };
-  }, [allFilteredRows.length, hasMore, isLoadingMore, isMobile]);
+  }, [allFilteredRows.length, hasMore, isLoadingMore, isMobile, setVisibleCount]);
 
   return (
     <>
       <div className="overflow-x-auto">
-        <table className="w-full border-collapse text-left text-sm text-stone-300">
+        <table className="w-full border-collapse text-left text-sm text-stone-300 max-md:min-w-[650px]">
           <thead className="bg-stone-900/80 text-xs text-stone-400 uppercase">
             {table.getHeaderGroups().map((headerGroup) => (
               <tr key={headerGroup.id}>
@@ -200,7 +207,7 @@ export function PortfolioTableBody({ table, isMobile = false }: PortfolioTableBo
                           'w-[48px] max-w-[48px] min-w-[48px]',
                         (header.column.id === 'buyPrice' || header.column.id === 'currentPrice') &&
                           isMobile &&
-                          'w-[112px] max-w-[112px] min-w-[112px]',
+                          'w-[120px] max-w-[120px] min-w-[120px]',
                         header.column.id === 'profitPercent' &&
                           isMobile &&
                           'w-[72px] max-w-[72px] min-w-[72px]',

@@ -56,19 +56,24 @@ export function useResultsTableState({
   ]);
 
   const allFilteredRows = table.getSortedRowModel().rows;
-  const filteredRowCount = allFilteredRows.length;
-  const selectedFilteredCount = allFilteredRows.filter((row) => row.getIsSelected()).length;
-  const hasSelectableRows = filteredRowCount > 0;
-  const canSelectMoreFiltered = hasSelectableRows && selectedFilteredCount < filteredRowCount;
   const hasMore = visibleCount < allFilteredRows.length;
+
+  const displayRows: Row<ScanResultItem>[] = isMobile
+    ? allFilteredRows.slice(0, visibleCount)
+    : table.getRowModel().rows;
+
+  const displayRowsCount = displayRows.length;
+  const selectedDisplayCount = displayRows.filter((row) => row.getIsSelected()).length;
+  const hasSelectableRows = displayRowsCount > 0;
+  const canSelectMoreFiltered = hasSelectableRows && selectedDisplayCount < displayRowsCount;
 
   const handleSelectAllFiltered = useCallback(() => {
     const nextSelection: Record<string, boolean> = {};
-    for (const row of allFilteredRows) {
+    for (const row of displayRows) {
       nextSelection[row.id] = true;
     }
     setRowSelection(nextSelection);
-  }, [allFilteredRows, setRowSelection]);
+  }, [displayRows, setRowSelection]);
 
   useEffect(() => {
     if (!isMobile || !hasMore || isLoadingMore) return;
@@ -97,10 +102,6 @@ export function useResultsTableState({
       }
     };
   }, [isMobile, hasMore, isLoadingMore, allFilteredRows.length]);
-
-  const displayRows: Row<ScanResultItem>[] = isMobile
-    ? allFilteredRows.slice(0, visibleCount)
-    : table.getRowModel().rows;
 
   const hasActiveFilters =
     selectedSourceFilters.length > 0 ||
