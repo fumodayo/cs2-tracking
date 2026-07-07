@@ -1,11 +1,9 @@
-import { useMemo } from 'react';
-import { useQuery } from '@tanstack/react-query';
 import { type ColumnDef } from '@tanstack/react-table';
-import { Loader2, Badge, Sparkles } from 'lucide-react';
+import type { TFunction } from 'i18next';
+import { Loader2 } from 'lucide-react';
 import { FaSteam, FaCoins, FaSyncAlt, FaSearch } from 'react-icons/fa';
 import { cn } from '@/utils/cn';
 import * as HoverCard from '@radix-ui/react-hover-card';
-import { motion } from 'framer-motion';
 
 import { Tooltip } from '@/components/ui/tooltip';
 import { CopyButton, DataTableColumnHeader } from '@/components/ui/actions';
@@ -13,25 +11,14 @@ import { formatRelative } from '@/utils/date';
 import { CaseThumbnail } from '@/components/portfolio';
 import type { ScanResultItem } from './types';
 import { Button } from '@/components/ui/button';
-import {
-  DopplerBadge,
-  FadeBadge,
-  BlueGemBadge,
-  MarbleFadeBadge,
-} from '@/components/shared/pattern-badge';
 import type { InspectPatternResult } from './hooks/use-pattern-inspect';
-import type { StickerInfo, CharmInfo } from '@/domain/pattern-info';
-import { proxySteamUrl } from '@/utils/url';
-import {
-  getSteamMarketListingUrl,
-  getItemTypeColor,
-  colorWithAlpha,
-  formatVND,
-  formatPlainNumber,
-} from './utils';
+import { AccessoryPricePreviewStrip } from './inventory-scanner-accessories';
+import { InventoryScannerItemHoverCardContent } from './inventory-scanner-item-hover-card';
+import { InventoryScannerStatusBadges } from './inventory-scanner-status-badges';
+import { getSteamMarketListingUrl, getItemTypeColor, formatPlainNumber } from './utils';
 
 export type BuildInventoryColumnsParams = {
-  t: any;
+  t: TFunction;
   buffLoadingKeys: Set<string>;
   buffPricesCny: Record<string, number>;
   buffPriceErrors: Record<string, string>;
@@ -49,52 +36,6 @@ export type BuildInventoryColumnsParams = {
   onSelectItem?: (item: ScanResultItem) => void;
   isMobile?: boolean;
 };
-
-function getScannerItemStatusBreakdown(item: {
-  isManual?: boolean;
-  quantity: number;
-  holdDays?: number;
-  sourceAccounts?: Array<{
-    steamId64: string;
-    name: string;
-    breakdown?: {
-      tradeable: number;
-      onMarket: number;
-      tradeProtected: number;
-      hold: number;
-    };
-  }>;
-}) {
-  const consolidated = {
-    tradeable: 0,
-    onMarket: 0,
-    tradeProtected: 0,
-    hold: 0,
-  };
-
-  let hasBreakdown = false;
-  if (item.sourceAccounts && item.sourceAccounts.length > 0) {
-    for (const acc of item.sourceAccounts) {
-      if (acc.breakdown) {
-        hasBreakdown = true;
-        consolidated.tradeable += acc.breakdown.tradeable ?? 0;
-        consolidated.onMarket += acc.breakdown.onMarket ?? 0;
-        consolidated.tradeProtected += acc.breakdown.tradeProtected ?? 0;
-        consolidated.hold += acc.breakdown.hold ?? 0;
-      }
-    }
-  }
-
-  if (!hasBreakdown) {
-    if (item.holdDays && item.holdDays > 0) {
-      consolidated.hold = item.quantity;
-    } else {
-      consolidated.tradeable = item.quantity;
-    }
-  }
-
-  return consolidated;
-}
 
 export function buildInventoryColumns({
   t,
@@ -146,9 +87,6 @@ export function buildInventoryColumns({
         const isLoadingBuff = buffLoadingKeys.has(marketHashName);
         const patternInfo = row.original.patternInfo ?? patternResults[marketHashName]?.patternInfo;
         const dopplerPhase = row.original.dopplerPhase ?? patternInfo?.dopplerPhase;
-        const fadePercentage = patternInfo?.fadePercentage;
-        const blueGemTier = patternInfo?.blueGemTier;
-        const marbleFadeTier = patternInfo?.marbleFadeTier;
         const overpayInfo = patternResults[marketHashName]?.overpay;
         const buffPriceCny = row.original.buffPriceCny ?? buffPricesCny[marketHashName];
         const hasBuffPrice = Number.isFinite(buffPriceCny) && buffPriceCny > 0;
@@ -264,94 +202,12 @@ export function buildInventoryColumns({
                   </span>
                 )}
               </div>
-              <div className="mt-1 flex flex-wrap items-center gap-1.5">
-                {dopplerPhase && <DopplerBadge phase={dopplerPhase} />}
-                {fadePercentage !== undefined && <FadeBadge percentage={fadePercentage} />}
-                {blueGemTier && blueGemTier !== 'Normal' && <BlueGemBadge tier={blueGemTier} />}
-                {marbleFadeTier && marbleFadeTier !== 'Normal' && (
-                  <MarbleFadeBadge tier={marbleFadeTier} />
-                )}
-                {row.original.onMarket ? (
-                  <span className="inline-flex items-center rounded border border-amber-500/35 bg-amber-500/15 px-1.5 py-0.5 text-[10px] font-bold tracking-wider text-amber-700 uppercase dark:border-amber-500/20 dark:bg-amber-500/10 dark:text-amber-400">
-                    Market
-                  </span>
-                ) : null}
-                {row.original.tradeProtected ? (
-                  <span className="inline-flex items-center rounded border border-cyan-500/20 bg-cyan-500/10 px-1.5 py-0.5 text-[10px] font-bold tracking-wider text-cyan-400 uppercase">
-                    Trade Protected
-                  </span>
-                ) : null}
-                {row.original.holdDays && row.original.holdDays > 0 ? (
-                  <span className="inline-flex items-center rounded border border-red-500/20 bg-red-500/10 px-1.5 py-0.5 text-[10px] font-bold tracking-wider text-red-400 uppercase">
-                    {t('inventoryScanner.holdDaysCount', { count: row.original.holdDays })}
-                  </span>
-                ) : null}
-                {row.original.storageUnitQuantity && row.original.storageUnitQuantity > 0 ? (
-                  <span className="inline-flex items-center rounded border border-amber-500/35 bg-amber-500/15 px-1.5 py-0.5 text-[10px] font-bold text-amber-700 dark:border-amber-500/20 dark:bg-amber-500/10 dark:text-amber-400">
-                    🔒 {row.original.storageUnitQuantity}{' '}
-                    {t('portfolio.inStorageUnit', 'trong Storage Unit')}
-                  </span>
-                ) : null}
-                {row.original.quantity > 1 &&
-                  (() => {
-                    const breakdown = getScannerItemStatusBreakdown(row.original);
-                    return (
-                      <>
-                        {breakdown.tradeable > 0 &&
-                        breakdown.tradeable !== row.original.quantity ? (
-                          <span
-                            aria-label={t(
-                              'portfolio.tradeableStatusWithQty',
-                              '{{count}} tradeable items',
-                              { count: breakdown.tradeable }
-                            )}
-                            className="inline-flex items-center rounded border border-emerald-500/20 bg-emerald-500/10 px-1.5 py-0.5 text-[10px] font-bold text-emerald-400"
-                          >
-                            🟢 {breakdown.tradeable}
-                          </span>
-                        ) : null}
-                        {breakdown.onMarket > 0 ? (
-                          <span
-                            aria-label={t(
-                              'portfolio.onMarketStatusWithQty',
-                              '{{count}} items on market',
-                              { count: breakdown.onMarket }
-                            )}
-                            className="inline-flex items-center rounded border border-amber-500/35 bg-amber-500/15 px-1.5 py-0.5 text-[10px] font-bold text-amber-700 dark:border-amber-500/20 dark:bg-amber-500/10 dark:text-amber-400"
-                          >
-                            🟡 {breakdown.onMarket} Market
-                          </span>
-                        ) : null}
-                        {breakdown.tradeProtected > 0 ? (
-                          <span
-                            aria-label={t(
-                              'portfolio.tradeProtectedStatusWithQty',
-                              '{{count}} trade-protected items',
-                              { count: breakdown.tradeProtected }
-                            )}
-                            className="inline-flex items-center rounded border border-cyan-500/20 bg-cyan-500/10 px-1.5 py-0.5 text-[10px] font-bold text-cyan-400"
-                          >
-                            🔵 {breakdown.tradeProtected} Protected
-                          </span>
-                        ) : null}
-                        {breakdown.hold > 0 && breakdown.hold !== row.original.quantity ? (
-                          <span
-                            aria-label={t(
-                              'portfolio.holdStatusWithQty',
-                              '{{count}} items on hold',
-                              {
-                                count: breakdown.hold,
-                              }
-                            )}
-                            className="inline-flex items-center rounded border border-red-500/20 bg-red-500/10 px-1.5 py-0.5 text-[10px] font-bold text-red-400"
-                          >
-                            🔴 {breakdown.hold} Hold
-                          </span>
-                        ) : null}
-                      </>
-                    );
-                  })()}
-              </div>
+              <InventoryScannerStatusBadges
+                item={row.original}
+                patternInfo={patternInfo}
+                dopplerPhase={dopplerPhase}
+                t={t}
+              />
               {row.original.sourceAccounts && row.original.sourceAccounts.length > 0 ? (
                 <div
                   className="mt-1 flex max-w-[28rem] flex-wrap gap-1 max-md:hidden"
@@ -381,10 +237,19 @@ export function buildInventoryColumns({
                   return (
                     <div className="mt-1.5 flex items-center gap-2">
                       {stickers.length > 0 && (
-                        <StickerPreviewStrip stickers={stickers} t={t} isMobile={isMobile} />
+                        <AccessoryPricePreviewStrip
+                          accessories={stickers}
+                          kind="sticker"
+                          t={t}
+                          isMobile={isMobile}
+                        />
                       )}
                       {charms.length > 0 && (
-                        <CharmPreviewStrip charms={charms} t={t} isMobile={isMobile} />
+                        <AccessoryPricePreviewStrip
+                          accessories={charms}
+                          kind="charm"
+                          isMobile={isMobile}
+                        />
                       )}
                     </div>
                   );
@@ -482,199 +347,14 @@ export function buildInventoryColumns({
                 className="z-[100] outline-none"
                 asChild
               >
-                <motion.div
-                  initial={{ opacity: 0, x: -8, scale: 0.95 }}
-                  animate={{ opacity: 1, x: 0, scale: 1 }}
-                  transition={{ duration: 0.18, ease: [0.25, 0.25, 0, 1] }}
-                  className="w-80 rounded-xl border border-stone-800 bg-stone-950 p-4 text-stone-100 shadow-[0_12px_36px_rgba(0,0,0,0.15)] backdrop-blur-md dark:shadow-[0_12px_36px_rgba(0,0,0,0.55)]"
-                >
-                  <div className="mb-3 flex items-center justify-between border-b border-stone-800/80 pb-2.5">
-                    <div className="text-accent max-w-[14rem] truncate text-xs font-bold">
-                      {row.original.caseItem.name}
-                    </div>
-                    <span className="text-[10px] font-medium text-stone-500">
-                      {t('inventoryScanner.totalItems', { count: row.original.quantity })}
-                    </span>
-                  </div>
-
-                  {/* Consolidated breakdown */}
-                  <div className="mb-3 space-y-2 border-b border-stone-800/80 pb-3 text-xs">
-                    <div className="mb-1.5 text-[10px] font-bold tracking-wider text-stone-500 uppercase">
-                      {t('inventoryScanner.statusBreakdown')}
-                    </div>
-                    {consolidated.tradeable > 0 && (
-                      <div className="flex items-center justify-between text-stone-300">
-                        <span className="flex items-center gap-1.5">
-                          <span className="size-1.5 rounded-full bg-emerald-400" />
-                          <span>{t('inventoryScanner.tradeableNow')}</span>
-                        </span>
-                        <span className="font-bold text-emerald-400">{consolidated.tradeable}</span>
-                      </div>
-                    )}
-                    {consolidated.onMarket > 0 && (
-                      <div className="flex items-center justify-between text-stone-300">
-                        <span className="flex items-center gap-1.5">
-                          <span className="size-1.5 rounded-full bg-amber-400" />
-                          <span>{t('inventoryScanner.onMarketNow')}</span>
-                        </span>
-                        <span className="font-bold text-amber-400">{consolidated.onMarket}</span>
-                      </div>
-                    )}
-                    {consolidated.tradeProtected > 0 && (
-                      <div className="flex items-center justify-between text-stone-300">
-                        <span className="flex items-center gap-1.5">
-                          <span className="size-1.5 rounded-full bg-cyan-400" />
-                          <span>Trade Protected</span>
-                        </span>
-                        <span className="font-bold text-cyan-400">
-                          {consolidated.tradeProtected}
-                        </span>
-                      </div>
-                    )}
-                    {consolidated.hold > 0 && (
-                      <div className="flex items-center justify-between text-stone-300">
-                        <span className="flex items-center gap-1.5">
-                          <span className="size-1.5 animate-pulse rounded-full bg-red-400" />
-                          <span>{t('inventoryScanner.holdTrade')}</span>
-                        </span>
-                        <span className="font-bold text-red-400">{consolidated.hold}</span>
-                      </div>
-                    )}
-                  </div>
-
-                  {/* Pattern Info Section */}
-                  {patternInfo && (
-                    <div className="mb-3 space-y-2 border-b border-stone-800/80 pb-3 text-xs">
-                      <div className="mb-1 text-[10px] font-bold tracking-wider text-stone-500 uppercase">
-                        {t('inventoryScanner.patternInfo')}
-                      </div>
-                      <div className="flex flex-wrap gap-1.5">
-                        {dopplerPhase && <DopplerBadge phase={dopplerPhase} />}
-                        {fadePercentage !== undefined && <FadeBadge percentage={fadePercentage} />}
-                        {blueGemTier && blueGemTier !== 'Normal' && (
-                          <BlueGemBadge tier={blueGemTier} />
-                        )}
-                        {marbleFadeTier && marbleFadeTier !== 'Normal' && (
-                          <MarbleFadeBadge tier={marbleFadeTier} />
-                        )}
-                      </div>
-                      {patternInfo.paintSeed !== undefined && (
-                        <div className="flex justify-between text-stone-300">
-                          <span>{t('inventoryScanner.paintSeed')}</span>
-                          <span className="font-semibold text-stone-100">
-                            {patternInfo.paintSeed}
-                          </span>
-                        </div>
-                      )}
-                      {patternInfo.floatValue !== undefined && (
-                        <div className="flex justify-between text-stone-300">
-                          <span>{t('inventoryScanner.floatValue')}</span>
-                          <span className="font-semibold text-stone-100">
-                            {patternInfo.floatValue.toFixed(8)}
-                          </span>
-                        </div>
-                      )}
-                      {overpayInfo && (
-                        <div className="mt-2 rounded border border-emerald-500/20 bg-emerald-500/10 p-2 text-emerald-400">
-                          <div className="text-[10px] font-bold tracking-wider text-emerald-500 uppercase">
-                            {t('inventoryScanner.overpayEstimate')} ({overpayInfo.multiplierSource})
-                          </div>
-                          <div className="mt-1 flex justify-between text-[11px] font-semibold">
-                            <span>BUFF + Overpay:</span>
-                            <span className="font-mono">
-                              {formatVND(
-                                Math.round(overpayInfo.estimatedTypical * buffCnyToVndRate)
-                              )}{' '}
-                              <span className="font-sans text-[10px] font-normal text-stone-400">
-                                (
-                                {new Intl.NumberFormat('vi-VN').format(
-                                  overpayInfo.estimatedTypical
-                                )}{' '}
-                                x {new Intl.NumberFormat('vi-VN').format(buffCnyToVndRate)})
-                              </span>
-                            </span>
-                          </div>
-                          <div className="mt-1 text-[9px] text-stone-400">
-                            {t('inventoryScanner.overpayDisclaimer')}
-                          </div>
-                        </div>
-                      )}
-                    </div>
-                  )}
-
-                  {/* Sticker & Charm Section in Hover Card */}
-                  {patternInfo && (patternInfo.stickers?.length || patternInfo.charms?.length) ? (
-                    <HoverCardAccessorySection patternInfo={patternInfo} t={t} />
-                  ) : null}
-
-                  {/* Per-account list breakdown */}
-                  <div className="max-h-48 space-y-2.5 overflow-y-auto pr-1 text-xs">
-                    <div className="mb-1.5 text-[10px] font-bold tracking-wider text-stone-500 uppercase">
-                      {t('inventoryScanner.detailsByAccount')}
-                    </div>
-                    {row.original.sourceAccounts.map((account) => {
-                      const accHold = account.breakdown?.hold ?? 0;
-                      const accMarket = account.breakdown?.onMarket ?? 0;
-                      const accProtected = account.breakdown?.tradeProtected ?? 0;
-                      const accTradeable = account.breakdown?.tradeable ?? 0;
-
-                      return (
-                        <div
-                          key={account.steamId64}
-                          className="border-stone-850 rounded border bg-stone-900/40 p-2"
-                        >
-                          <div className="text-accent mb-1.5 flex justify-between text-[11px] font-semibold">
-                            <span className="max-w-[12rem] truncate">{account.name}</span>
-                            <span>x{account.quantity}</span>
-                          </div>
-                          <div className="space-y-1 text-[10px] text-stone-200">
-                            {accTradeable > 0 && (
-                              <div className="flex justify-between">
-                                <span>{t('inventoryScanner.tradeableLabel')}</span>
-                                <span className="font-semibold text-emerald-400">
-                                  {accTradeable}
-                                </span>
-                              </div>
-                            )}
-                            {accMarket > 0 && (
-                              <div className="flex justify-between">
-                                <span>{t('inventoryScanner.onMarketLabel')}</span>
-                                <span className="font-semibold text-amber-400">{accMarket}</span>
-                              </div>
-                            )}
-                            {accProtected > 0 && (
-                              <div className="flex justify-between">
-                                <span>{t('inventoryScanner.tradeProtectedLabel')}</span>
-                                <span className="font-semibold text-cyan-400">{accProtected}</span>
-                              </div>
-                            )}
-                            {accHold > 0 && (
-                              <div className="flex justify-between">
-                                <span>{t('inventoryScanner.holdTradeLabel')}</span>
-                                <span className="font-semibold text-red-400">{accHold}</span>
-                              </div>
-                            )}
-                            {account.breakdown?.holdDetails &&
-                              account.breakdown.holdDetails.length > 0 && (
-                                <div className="border-stone-850 mt-1.5 space-y-0.5 border-t pt-1 text-[9px] text-stone-400">
-                                  {account.breakdown.holdDetails.map((detail, dIdx) => (
-                                    <div key={dIdx} className="flex justify-between">
-                                      <span>• Qty: {detail.quantity}</span>
-                                      <span>
-                                        {t('inventoryScanner.holdDaysValue', {
-                                          count: detail.holdDays,
-                                        })}
-                                      </span>
-                                    </div>
-                                  ))}
-                                </div>
-                              )}
-                          </div>
-                        </div>
-                      );
-                    })}
-                  </div>
-                </motion.div>
+                <InventoryScannerItemHoverCardContent
+                  item={row.original}
+                  patternInfo={patternInfo}
+                  dopplerPhase={dopplerPhase}
+                  overpayInfo={overpayInfo}
+                  buffCnyToVndRate={buffCnyToVndRate}
+                  t={t}
+                />
               </HoverCard.Content>
             </HoverCard.Portal>
           </HoverCard.Root>
@@ -793,7 +473,6 @@ export function buildInventoryColumns({
         }
 
         const marketHashName = item.caseItem.marketHashName;
-        const patternInfo = item.patternInfo ?? patternResults[marketHashName]?.patternInfo;
         const overpayInfo = patternResults[marketHashName]?.overpay;
         const buffPriceCny = item.buffPriceCny ?? buffPricesCny[marketHashName];
         const rawItem = mergedRawItems?.find((i) => i.caseItem.marketHashName === marketHashName);
@@ -918,7 +597,6 @@ export function buildInventoryColumns({
       cell: ({ row }) => {
         const item = row.original;
         const marketHashName = item.caseItem.marketHashName;
-        const patternInfo = item.patternInfo ?? patternResults[marketHashName]?.patternInfo;
         const overpayInfo = patternResults[marketHashName]?.overpay;
 
         let basePrice = item.price;
@@ -1012,399 +690,4 @@ export function buildInventoryColumns({
       ),
     },
   ];
-}
-
-type AccessoryPrice = {
-  marketHashName: string;
-  price: number;
-};
-
-function StickerPreviewStrip({
-  stickers,
-  t,
-  isMobile = false,
-}: {
-  stickers: StickerInfo[];
-  t: any;
-  isMobile?: boolean;
-}) {
-  const marketHashNames = useMemo(
-    () =>
-      Array.from(
-        new Set(
-          stickers
-            .map((item) => item.marketHashName)
-            .filter((name): name is string => Boolean(name))
-        )
-      ),
-    [stickers]
-  );
-
-  const pricesQuery = useQuery({
-    queryKey: ['sticker-charm-prices', marketHashNames],
-    queryFn: async () => {
-      const res = await fetch('/api/inventory/sticker-prices', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ marketHashNames }),
-      });
-      if (!res.ok) throw new Error('failedToFetchStickerPrices');
-      const data = (await res.json()) as { results?: AccessoryPrice[] };
-      return new Map((data.results ?? []).map((item) => [item.marketHashName, item.price]));
-    },
-    enabled: marketHashNames.length > 0,
-    staleTime: 15 * 60 * 1000,
-  });
-
-  const priceMap = pricesQuery.data ?? new Map<string, number>();
-
-  const totalStickerPrice = useMemo(
-    () =>
-      stickers.reduce((sum: number, sticker: any) => {
-        if (!sticker.marketHashName) return sum;
-        return sum + (priceMap.get(sticker.marketHashName) ?? 0);
-      }, 0),
-    [stickers, priceMap]
-  );
-
-  return (
-    <div className={cn('inline-flex items-center gap-1.5', isMobile ? 'h-5' : 'h-9')}>
-      <div className={cn('inline-flex items-center gap-0.5', isMobile ? 'h-5' : 'h-9')}>
-        {stickers.map((sticker, index) => {
-          const wearPercent = formatStickerWearPercent(sticker.wear);
-          const intact =
-            sticker.wear !== undefined && Number.isFinite(sticker.wear)
-              ? 100 - Math.round(Math.max(0, Math.min(1, sticker.wear)) * 100)
-              : null;
-          const stickerPrice = sticker.marketHashName
-            ? priceMap.get(sticker.marketHashName)
-            : undefined;
-          const titleParts = [
-            sticker.name,
-            stickerPrice ? `Price: ${new Intl.NumberFormat('vi-VN').format(stickerPrice)}đ` : null,
-            wearPercent
-              ? t('inventoryScanner.stickerCondition', '{{percent}} intact', {
-                  percent: wearPercent,
-                })
-              : null,
-            sticker.slot !== undefined ? `Slot ${sticker.slot + 1}` : null,
-          ].filter(Boolean);
-
-          return (
-            <span
-              key={`sticker-${sticker.id ?? index}-${sticker.slot ?? index}`}
-              className={cn(
-                'relative inline-flex shrink-0 items-center justify-center overflow-hidden rounded border border-stone-700/70 bg-stone-950 shadow-sm',
-                isMobile ? 'size-5' : 'size-9'
-              )}
-              title={titleParts.join(' - ')}
-            >
-              {sticker.imageUrl ? (
-                <img
-                  src={proxySteamUrl(sticker.imageUrl)}
-                  alt={sticker.name}
-                  className="size-full object-contain p-0.5"
-                  loading="lazy"
-                />
-              ) : (
-                <Badge className="size-4 text-stone-500" />
-              )}
-              {wearPercent ? (
-                <span
-                  className={cn(
-                    'absolute inset-x-0 bottom-0 bg-black/70 px-0.5 text-center font-black text-white shadow-[0_-1px_4px_rgba(0,0,0,0.5)]',
-                    isMobile
-                      ? 'origin-bottom scale-[0.8] text-[6px] leading-[8px]'
-                      : 'text-[8px] leading-3'
-                  )}
-                >
-                  {isMobile ? intact : wearPercent}
-                </span>
-              ) : null}
-            </span>
-          );
-        })}
-      </div>
-      {totalStickerPrice > 0 && !isMobile && (
-        <span
-          className="rounded border border-emerald-500/10 bg-emerald-500/5 px-1.5 py-0.5 font-mono text-[10px] font-bold text-emerald-400 transition-colors hover:bg-emerald-500/10"
-          title="Total sticker value (Steam Market)"
-        >
-          +{new Intl.NumberFormat('vi-VN').format(totalStickerPrice)}đ
-        </span>
-      )}
-    </div>
-  );
-}
-
-function CharmPreviewStrip({
-  charms,
-  t,
-  isMobile = false,
-}: {
-  charms: CharmInfo[];
-  t: any;
-  isMobile?: boolean;
-}) {
-  const marketHashNames = useMemo(
-    () =>
-      Array.from(
-        new Set(
-          charms.map((item) => item.marketHashName).filter((name): name is string => Boolean(name))
-        )
-      ),
-    [charms]
-  );
-
-  const pricesQuery = useQuery({
-    queryKey: ['sticker-charm-prices', marketHashNames],
-    queryFn: async () => {
-      const res = await fetch('/api/inventory/sticker-prices', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ marketHashNames }),
-      });
-      if (!res.ok) throw new Error('failedToFetchStickerPrices');
-      const data = (await res.json()) as { results?: AccessoryPrice[] };
-      return new Map((data.results ?? []).map((item) => [item.marketHashName, item.price]));
-    },
-    enabled: marketHashNames.length > 0,
-    staleTime: 15 * 60 * 1000,
-  });
-
-  const priceMap = pricesQuery.data ?? new Map<string, number>();
-
-  const totalCharmPrice = useMemo(
-    () =>
-      charms.reduce((sum: number, charm: any) => {
-        if (!charm.marketHashName) return sum;
-        return sum + (priceMap.get(charm.marketHashName) ?? 0);
-      }, 0),
-    [charms, priceMap]
-  );
-
-  return (
-    <div className={cn('inline-flex items-center gap-1.5', isMobile ? 'h-5' : 'h-9')}>
-      <div className={cn('inline-flex items-center gap-0.5', isMobile ? 'h-5' : 'h-9')}>
-        {charms.map((charm, index) => {
-          const charmPrice = charm.marketHashName ? priceMap.get(charm.marketHashName) : undefined;
-          const titleParts = [
-            charm.name,
-            charmPrice ? `Price: ${new Intl.NumberFormat('vi-VN').format(charmPrice)}đ` : null,
-          ].filter(Boolean);
-
-          return (
-            <span
-              key={`charm-${charm.id ?? index}-${charm.slot ?? index}`}
-              className={cn(
-                'relative inline-flex shrink-0 items-center justify-center overflow-hidden rounded border border-amber-700/40 bg-stone-950 shadow-sm',
-                isMobile ? 'size-5' : 'size-9'
-              )}
-              title={titleParts.join(' - ')}
-            >
-              {charm.imageUrl ? (
-                <img
-                  src={proxySteamUrl(charm.imageUrl)}
-                  alt={charm.name}
-                  className="size-full object-contain p-0.5"
-                  loading="lazy"
-                />
-              ) : (
-                <Sparkles className="size-4 text-amber-500/60" />
-              )}
-            </span>
-          );
-        })}
-      </div>
-      {totalCharmPrice > 0 && !isMobile && (
-        <span
-          className="rounded border border-emerald-500/10 bg-emerald-500/5 px-1.5 py-0.5 font-mono text-[10px] font-bold text-emerald-400 transition-colors hover:bg-emerald-500/10"
-          title="Total charm value (Steam Market)"
-        >
-          +{new Intl.NumberFormat('vi-VN').format(totalCharmPrice)}đ
-        </span>
-      )}
-    </div>
-  );
-}
-
-function HoverCardAccessorySection({ patternInfo, t }: { patternInfo: any; t: any }) {
-  const stickers = patternInfo?.stickers ?? [];
-  const charms = patternInfo?.charms ?? [];
-  const hasAccessories = stickers.length > 0 || charms.length > 0;
-
-  const marketHashNames = useMemo(
-    () =>
-      Array.from(
-        new Set(
-          [...stickers, ...charms]
-            .map((item) => item.marketHashName)
-            .filter((name): name is string => Boolean(name))
-        )
-      ),
-    [stickers, charms]
-  );
-
-  const pricesQuery = useQuery({
-    queryKey: ['sticker-charm-prices', marketHashNames],
-    queryFn: async () => {
-      const res = await fetch('/api/inventory/sticker-prices', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ marketHashNames }),
-      });
-      if (!res.ok) throw new Error('failedToFetchStickerPrices');
-      const data = (await res.json()) as { results?: AccessoryPrice[] };
-      return new Map((data.results ?? []).map((item) => [item.marketHashName, item.price]));
-    },
-    enabled: marketHashNames.length > 0,
-    staleTime: 15 * 60 * 1000,
-  });
-
-  const priceMap = pricesQuery.data ?? new Map<string, number>();
-
-  const totalStickerPrice = useMemo(
-    () =>
-      stickers.reduce((sum: number, sticker: any) => {
-        if (!sticker.marketHashName) return sum;
-        return sum + (priceMap.get(sticker.marketHashName) ?? 0);
-      }, 0),
-    [stickers, priceMap]
-  );
-
-  const totalCharmPrice = useMemo(
-    () =>
-      charms.reduce((sum: number, charm: any) => {
-        if (!charm.marketHashName) return sum;
-        return sum + (priceMap.get(charm.marketHashName) ?? 0);
-      }, 0),
-    [charms, priceMap]
-  );
-
-  const totalAccessoryPrice = totalStickerPrice + totalCharmPrice;
-
-  if (!hasAccessories) return null;
-
-  return (
-    <div className="mb-3 space-y-2.5 border-b border-stone-800/80 pb-3 text-xs">
-      {stickers.length > 0 && (
-        <>
-          <div className="mb-1 flex items-center justify-between text-[10px] font-bold tracking-wider text-stone-500 uppercase">
-            <span>{t('inventoryScanner.stickersLabel', 'Stickers')}</span>
-            {totalStickerPrice > 0 && (
-              <span className="font-mono text-[10px] font-bold text-emerald-400">
-                {formatVND(totalStickerPrice)}
-              </span>
-            )}
-          </div>
-          <div className="grid gap-1.5">
-            {stickers.map((sticker: any, sIdx: number) => {
-              const wearPercent = formatStickerWearPercent(sticker.wear);
-              const stickerPrice = sticker.marketHashName
-                ? priceMap.get(sticker.marketHashName)
-                : undefined;
-              return (
-                <div
-                  key={`hc-sticker-${sticker.id ?? sIdx}-${sticker.slot ?? sIdx}`}
-                  className="flex items-center justify-between gap-1.5 rounded border border-stone-800/60 bg-stone-900/40 px-2 py-1.5 transition-colors hover:bg-stone-900/80"
-                >
-                  <div className="flex min-w-0 items-center gap-1.5">
-                    {sticker.imageUrl ? (
-                      <img
-                        src={proxySteamUrl(sticker.imageUrl)}
-                        alt={sticker.name}
-                        className="size-7 shrink-0 object-contain"
-                        loading="lazy"
-                      />
-                    ) : (
-                      <Badge className="size-4 shrink-0 text-stone-500" />
-                    )}
-                    <div className="flex min-w-0 flex-col">
-                      <span className="truncate pr-1 text-[10px] font-medium text-stone-200">
-                        {sticker.name}
-                      </span>
-                      {wearPercent && (
-                        <span className="text-[9px] font-bold text-stone-400">
-                          {t('inventoryScanner.stickerCondition', '{{percent}} intact', {
-                            percent: wearPercent,
-                          })}
-                        </span>
-                      )}
-                    </div>
-                  </div>
-                  {stickerPrice !== undefined && stickerPrice > 0 && (
-                    <span className="shrink-0 rounded border border-emerald-500/10 bg-emerald-500/5 px-1 py-0.5 font-mono text-[10px] font-bold text-emerald-400">
-                      {formatVND(stickerPrice)}
-                    </span>
-                  )}
-                </div>
-              );
-            })}
-          </div>
-        </>
-      )}
-
-      {charms.length > 0 && (
-        <>
-          <div className="mt-2 mb-1 flex items-center justify-between text-[10px] font-bold tracking-wider text-stone-500 uppercase">
-            <span>{t('inventoryScanner.charmsLabel', 'Charms')}</span>
-            {totalCharmPrice > 0 && (
-              <span className="font-mono text-[10px] font-bold text-emerald-400">
-                {formatVND(totalCharmPrice)}
-              </span>
-            )}
-          </div>
-          <div className="grid gap-1.5">
-            {charms.map((charm: any, cIdx: number) => {
-              const charmPrice = charm.marketHashName
-                ? priceMap.get(charm.marketHashName)
-                : undefined;
-              return (
-                <div
-                  key={`hc-charm-${charm.id ?? cIdx}-${charm.slot ?? cIdx}`}
-                  className="flex items-center justify-between gap-1.5 rounded border border-stone-800/60 bg-stone-900/40 px-2 py-1.5 transition-colors hover:bg-stone-900/80"
-                >
-                  <div className="flex min-w-0 items-center gap-1.5">
-                    {charm.imageUrl ? (
-                      <img
-                        src={proxySteamUrl(charm.imageUrl)}
-                        alt={charm.name}
-                        className="size-7 shrink-0 object-contain"
-                        loading="lazy"
-                      />
-                    ) : (
-                      <Sparkles className="size-4 shrink-0 text-stone-500" />
-                    )}
-                    <span className="truncate pr-1 text-[10px] font-medium text-stone-200">
-                      {charm.name}
-                    </span>
-                  </div>
-                  {charmPrice !== undefined && charmPrice > 0 && (
-                    <span className="shrink-0 rounded border border-emerald-500/10 bg-emerald-500/5 px-1 py-0.5 font-mono text-[10px] font-bold text-emerald-400">
-                      {formatVND(charmPrice)}
-                    </span>
-                  )}
-                </div>
-              );
-            })}
-          </div>
-        </>
-      )}
-
-      {totalAccessoryPrice > 0 && (
-        <div className="flex items-center justify-between border-t border-stone-800/50 pt-2 text-[10px] font-semibold text-stone-400">
-          <span>{t('inventoryScanner.accessoryTotalLabel', 'Total Sticker/Charm Value:')}</span>
-          <span className="font-mono text-[11px] font-extrabold text-emerald-400">
-            {formatVND(totalAccessoryPrice)}
-          </span>
-        </div>
-      )}
-    </div>
-  );
-}
-
-function formatStickerWearPercent(wear?: number) {
-  if (wear === undefined || !Number.isFinite(wear)) return null;
-  const intact = 100 - Math.round(Math.max(0, Math.min(1, wear)) * 100);
-  return `${intact}%`;
 }

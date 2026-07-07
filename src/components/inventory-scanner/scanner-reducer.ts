@@ -73,7 +73,7 @@ export type ScannerAction =
       stickerBuyPriceRate?: number;
       stickerScanTotalPrice?: number;
       stickerScanPriceCapturedAt?: string;
-      patternInfo?: any;
+      patternInfo?: ScanResultItem['patternInfo'];
       dopplerPhase?: string;
       inspectLink?: string;
     }

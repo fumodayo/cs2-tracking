@@ -24,7 +24,12 @@ import { useScannerPortfolioImport } from './hooks/use-scanner-portfolio-import'
 import { useScanState } from './hooks/use-scan-state';
 import { useManualItems } from './hooks/use-manual-items';
 import { useBuffPricing } from './hooks/use-buff-pricing';
-import { useQueryParamsState, type ParamConfig } from '@/hooks/use-query-params';
+import {
+  useQueryParamsState,
+  type ParamConfig,
+  type QueryParamsSetters,
+  type QueryParamsState,
+} from '@/hooks/use-query-params';
 
 const scannerQueryConfig = {
   q: {
@@ -69,6 +74,9 @@ const scannerQueryConfig = {
     serialize: (val: string[]) => (val?.length > 0 ? val.join(',') : null),
   } as ParamConfig<string[]>,
 };
+
+export type ScannerQueryState = QueryParamsState<typeof scannerQueryConfig>;
+export type ScannerQuerySetters = QueryParamsSetters<typeof scannerQueryConfig>;
 
 export function useInventoryScanner() {
   const [state, dispatch] = useReducer(scannerReducer, null, initScannerState);

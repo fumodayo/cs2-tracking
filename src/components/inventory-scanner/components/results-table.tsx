@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React from 'react';
 import { flexRender, type Table, type Row } from '@tanstack/react-table';
 import { ListChecks, RefreshCw, Search, Loader2, X } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
@@ -11,6 +11,7 @@ import { cn } from '@/utils/cn';
 import type { ScanResultItem } from '../types';
 import { Button } from '@/components/ui/button';
 import { FaBoxOpen, FaTrashAlt } from 'react-icons/fa';
+import { useResultsTableState } from './use-results-table-state';
 
 function ScanResultTableRowComponent({
   row,
@@ -170,89 +171,29 @@ export function ResultsTable({
 }: ResultsTableProps) {
   const { t } = useTranslation();
 
-  const [localQuery, setLocalQuery] = useState(globalFilter);
-
-  // Sync local query if global filter changes externally (like reset)
-  useEffect(() => {
-    setLocalQuery(globalFilter);
-  }, [globalFilter]);
-
-  // Debounce calling setGlobalFilter
-  useEffect(() => {
-    const timer = setTimeout(() => {
-      if (localQuery !== globalFilter) {
-        setGlobalFilter(localQuery);
-      }
-    }, 300);
-    return () => clearTimeout(timer);
-  }, [localQuery, globalFilter, setGlobalFilter]);
-
-  const [visibleCount, setVisibleCount] = useState(10);
-  const [isLoadingMore, setIsLoadingMore] = useState(false);
-  const sentinelRef = React.useRef<HTMLDivElement>(null);
-
-  // Reset visibleCount when filters or query changes
-  useEffect(() => {
-    setVisibleCount(10);
-  }, [
+  const {
+    localQuery,
+    setLocalQuery,
+    displayRows,
+    sentinelRef,
+    isLoadingMore,
+    hasSelectableRows,
+    canSelectMoreFiltered,
+    hasMore,
+    hasActiveFilters,
+    handleSelectAllFiltered,
+  } = useResultsTableState({
+    table,
     globalFilter,
+    setGlobalFilter,
     selectedTypes,
     selectedStatuses,
     selectedAccounts,
     selectedSourceFilters,
     selectedPriceSourceFilters,
-  ]);
-
-  const allFilteredRows = table.getSortedRowModel().rows;
-  const filteredRowCount = allFilteredRows.length;
-  const selectedFilteredCount = allFilteredRows.filter((row) => row.getIsSelected()).length;
-  const hasSelectableRows = filteredRowCount > 0;
-  const canSelectMoreFiltered = hasSelectableRows && selectedFilteredCount < filteredRowCount;
-  const handleSelectAllFiltered = () => {
-    const nextSelection: Record<string, boolean> = {};
-    for (const row of allFilteredRows) {
-      nextSelection[row.id] = true;
-    }
-    setRowSelection(nextSelection);
-  };
-  const hasMore = visibleCount < allFilteredRows.length;
-
-  useEffect(() => {
-    if (!isMobile || !hasMore || isLoadingMore) return;
-
-    const observer = new IntersectionObserver(
-      (entries) => {
-        if (entries[0].isIntersecting) {
-          setIsLoadingMore(true);
-          setTimeout(() => {
-            setVisibleCount((prev) => Math.min(prev + 10, allFilteredRows.length));
-            setIsLoadingMore(false);
-          }, 500);
-        }
-      },
-      { threshold: 0.1 }
-    );
-
-    const currentSentinel = sentinelRef.current;
-    if (currentSentinel) {
-      observer.observe(currentSentinel);
-    }
-
-    return () => {
-      if (currentSentinel) {
-        observer.unobserve(currentSentinel);
-      }
-    };
-  }, [isMobile, hasMore, isLoadingMore, allFilteredRows.length]);
-
-  const displayRows = isMobile ? allFilteredRows.slice(0, visibleCount) : table.getRowModel().rows;
-
-  const hasActiveFilters =
-    selectedSourceFilters.length > 0 ||
-    selectedTypes.size > 0 ||
-    selectedAccounts.length > 0 ||
-    selectedStatuses.length > 0 ||
-    selectedPriceSourceFilters.length > 0;
+    setRowSelection,
+    isMobile,
+  });
 
   const clearAllFilters = () => {
     setSelectedSourceFilters([]);

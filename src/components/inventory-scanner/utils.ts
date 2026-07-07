@@ -1,5 +1,15 @@
-import { AccountEntry, InventoryItemType, ScanResponse, SourceAccount } from './types';
+import {
+  AccountEntry,
+  InventoryItemType,
+  ScanResponse,
+  ScanResultItem,
+  SourceAccount,
+} from './types';
 import { inferInventoryItemType } from '@/utils/cs2-item-type';
+
+type TranslationOptions = Record<string, unknown>;
+type TranslationFn = (key: string, options?: TranslationOptions) => string;
+type ProgressDetail = Record<string, string | number | boolean | undefined>;
 
 export const LS_RATE_ALL = 'cs2t_rateAll';
 export const LS_RATE_LE = 'cs2t_rateLe';
@@ -82,7 +92,7 @@ export function formatPlainNumber(value: number): string {
  */
 export function formatProgressDetail(
   detail: Record<string, number | string>,
-  t: (key: string, options?: any) => string
+  t: TranslationFn
 ): string {
   const parts: string[] = [];
   if (detail.page) parts.push(`page ${detail.page}`);
@@ -100,6 +110,25 @@ export function formatProgressDetail(
  */
 export function getInventoryItemType(name: string, marketHashName = name): InventoryItemType {
   return inferInventoryItemType({ name, marketHashName });
+}
+
+export function getScanResultItemRowId(
+  item: Pick<ScanResultItem, 'caseItem' | 'id' | 'identityKey' | 'isManual'>
+): string {
+  return item.isManual && item.id ? item.id : item.identityKey || item.caseItem.marketHashName;
+}
+
+export function getScanResultItemGroupKey(
+  item: Pick<ScanResultItem, 'caseItem' | 'dopplerPhase'>
+): string {
+  return `${item.caseItem.marketHashName}:${item.dopplerPhase ?? 'normal'}`;
+}
+
+export function findScannedItemByRowId(
+  items: ScanResultItem[],
+  rowId: string
+): ScanResultItem | undefined {
+  return items.find((item) => !item.isManual && getScanResultItemRowId(item) === rowId);
 }
 
 /**
@@ -154,16 +183,27 @@ export { getLocalApiKey, removeLocalApiKey, saveLocalApiKey } from '@/utils/loca
 
 export const STEAM_PRIVACY_SETTINGS_URL = 'https://steamcommunity.com/my/edit/settings';
 
+function parseStructuredParams(value: string): Record<string, string> {
+  const params: Record<string, string> = {};
+  for (const part of value.split(',')) {
+    const [key, paramValue] = part.split('=');
+    if (key && paramValue) {
+      params[key] = paramValue;
+    }
+  }
+  return params;
+}
+
 export function translateScanProgressMessage(
   msg: string | null | undefined,
-  t: (key: string, options?: any) => string,
-  detail?: any
+  t: TranslationFn,
+  detail?: ProgressDetail
 ): string {
   if (!msg) return '';
 
   // Try checking the direct key first
   const localKey = `inventoryScanner.apiErrors.${msg}`;
-  const options: Record<string, any> = {};
+  const options: TranslationOptions = {};
   if (detail) {
     if (detail.group !== undefined) {
       options.group =
@@ -239,10 +279,7 @@ export function translateScanProgressMessage(
   return msg;
 }
 
-export function translateAccountError(
-  error: string | null | undefined,
-  t: (key: string, options?: any) => string
-): string {
+export function translateAccountError(error: string | null | undefined, t: TranslationFn): string {
   if (!error) return '';
 
   if (isFamilyViewAccountError(error)) {
@@ -254,12 +291,7 @@ export function translateAccountError(
 
   // Structured key checks
   if (error.startsWith('duplicateAccountError:')) {
-    const parts = error.substring('duplicateAccountError:'.length).split(',');
-    const params: Record<string, string> = {};
-    parts.forEach((p) => {
-      const [k, v] = p.split('=');
-      if (k && v) params[k] = v;
-    });
+    const params = parseStructuredParams(error.substring('duplicateAccountError:'.length));
     return t('inventoryScanner.apiErrors.duplicateAccountError', {
       name: params.name || '',
       steamId: params.steamId || '',
@@ -272,12 +304,7 @@ export function translateAccountError(
   }
 
   if (error.startsWith('cookieSteamIdMismatch:')) {
-    const parts = error.substring('cookieSteamIdMismatch:'.length).split(',');
-    const params: Record<string, string> = {};
-    parts.forEach((p) => {
-      const [k, v] = p.split('=');
-      if (k && v) params[k] = v;
-    });
+    const params = parseStructuredParams(error.substring('cookieSteamIdMismatch:'.length));
     return t('inventoryScanner.apiErrors.cookieSteamIdMismatch', {
       cookieSteamId: params.cookieSteamId || '',
       steamId64: params.steamId64 || '',
@@ -295,12 +322,7 @@ export function translateAccountError(
   }
 
   if (error.startsWith('storageUnitFull:')) {
-    const parts = error.substring('storageUnitFull:'.length).split(',');
-    const params: Record<string, string> = {};
-    parts.forEach((p) => {
-      const [k, v] = p.split('=');
-      if (k && v) params[k] = v;
-    });
+    const params = parseStructuredParams(error.substring('storageUnitFull:'.length));
     return t('inventoryScanner.apiErrors.storageUnitFull', {
       name: params.name || '',
       currentCount: params.currentCount || '',
@@ -309,12 +331,7 @@ export function translateAccountError(
   }
 
   if (error.startsWith('storageUnitCapacityExceeded:')) {
-    const parts = error.substring('storageUnitCapacityExceeded:'.length).split(',');
-    const params: Record<string, string> = {};
-    parts.forEach((p) => {
-      const [k, v] = p.split('=');
-      if (k && v) params[k] = v;
-    });
+    const params = parseStructuredParams(error.substring('storageUnitCapacityExceeded:'.length));
     return t('inventoryScanner.apiErrors.storageUnitCapacityExceeded', {
       name: params.name || '',
       currentCount: params.currentCount || '',
@@ -324,12 +341,7 @@ export function translateAccountError(
   }
 
   if (error.startsWith('storageUnitItemsAdded:')) {
-    const parts = error.substring('storageUnitItemsAdded:'.length).split(',');
-    const params: Record<string, string> = {};
-    parts.forEach((p) => {
-      const [k, v] = p.split('=');
-      if (k && v) params[k] = v;
-    });
+    const params = parseStructuredParams(error.substring('storageUnitItemsAdded:'.length));
     return t('inventoryScanner.apiErrors.storageUnitItemsAdded', {
       count: params.count || '',
       name: params.name || '',
@@ -337,12 +349,7 @@ export function translateAccountError(
   }
 
   if (error.startsWith('processedMissingItemsResult:')) {
-    const parts = error.substring('processedMissingItemsResult:'.length).split(',');
-    const params: Record<string, string> = {};
-    parts.forEach((p) => {
-      const [k, v] = p.split('=');
-      if (k && v) params[k] = v;
-    });
+    const params = parseStructuredParams(error.substring('processedMissingItemsResult:'.length));
     return t('inventoryScanner.apiErrors.processedMissingItemsResult', {
       successCount: params.successCount || '',
       totalCount: params.totalCount || '',
@@ -375,12 +382,7 @@ export function translateAccountError(
   }
 
   if (error.startsWith('geminiQuotaExceeded:')) {
-    const parts = error.substring('geminiQuotaExceeded:'.length).split(',');
-    const params: Record<string, string> = {};
-    parts.forEach((p) => {
-      const [k, v] = p.split('=');
-      if (k && v) params[k] = v;
-    });
+    const params = parseStructuredParams(error.substring('geminiQuotaExceeded:'.length));
     const delay = params.retryDelay || params.retryAfter || '';
     const retryText = delay
       ? ` ${t('inventoryScanner.apiErrors.retryAfterText', { defaultValue: 'Retry after around {{delay}}.', delay })}`
@@ -404,12 +406,7 @@ export function translateAccountError(
   }
 
   if (error.startsWith('cannotFindSteamProfile:')) {
-    const parts = error.substring('cannotFindSteamProfile:'.length).split(',');
-    const params: Record<string, string> = {};
-    parts.forEach((p) => {
-      const [k, v] = p.split('=');
-      if (k && v) params[k] = v;
-    });
+    const params = parseStructuredParams(error.substring('cannotFindSteamProfile:'.length));
     return t('inventoryScanner.apiErrors.cannotFindSteamProfile', {
       vanityName: params.vanityName || '',
       status: params.status || '',
@@ -498,8 +495,8 @@ function safeDecodeURIComponent(value: string): string {
 
 export function translateSyncMessage(
   msg: string | null | undefined,
-  t: (key: string, options?: any) => string,
-  detail?: any
+  t: TranslationFn,
+  detail?: ProgressDetail
 ): string {
   if (!msg) return '';
 
@@ -521,12 +518,7 @@ export function translateSyncMessage(
   }
 
   if (msg.startsWith('syncDoneScan:')) {
-    const parts = msg.substring('syncDoneScan:'.length).split(',');
-    const params: Record<string, string> = {};
-    parts.forEach((p) => {
-      const [k, v] = p.split('=');
-      if (k && v) params[k] = v;
-    });
+    const params = parseStructuredParams(msg.substring('syncDoneScan:'.length));
     return t('dashboard.syncDoneScan', {
       name: params.name || '',
       count: parseInt(params.count || '0'),
@@ -534,12 +526,7 @@ export function translateSyncMessage(
   }
 
   if (msg.startsWith('syncErrorScan:')) {
-    const parts = msg.substring('syncErrorScan:'.length).split(',');
-    const params: Record<string, string> = {};
-    parts.forEach((p) => {
-      const [k, v] = p.split('=');
-      if (k && v) params[k] = v;
-    });
+    const params = parseStructuredParams(msg.substring('syncErrorScan:'.length));
     const rawErr = params.error || '';
     const translatedErr = translateAccountError(rawErr, t);
     return t('dashboard.syncErrorScan', {
@@ -559,12 +546,7 @@ export function translateSyncMessage(
   }
 
   if (msg.startsWith('syncComplete:')) {
-    const parts = msg.substring('syncComplete:'.length).split(',');
-    const params: Record<string, string> = {};
-    parts.forEach((p) => {
-      const [k, v] = p.split('=');
-      if (k && v) params[k] = v;
-    });
+    const params = parseStructuredParams(msg.substring('syncComplete:'.length));
     const scanned = params.scanned || '0';
     const total = params.total || '0';
     const imported = params.imported || '0';
@@ -586,12 +568,7 @@ export function translateSyncMessage(
   }
 
   if (msg.startsWith('syncSingleComplete:')) {
-    const parts = msg.substring('syncSingleComplete:'.length).split(',');
-    const params: Record<string, string> = {};
-    parts.forEach((p) => {
-      const [k, v] = p.split('=');
-      if (k && v) params[k] = v;
-    });
+    const params = parseStructuredParams(msg.substring('syncSingleComplete:'.length));
     const name = params.name || '';
     const missingCount = parseInt(params.missingCount || '0');
     const extraCount = parseInt(params.extraCount || '0');
@@ -632,7 +609,7 @@ export function translateSyncMessage(
     return t('dashboard.syncStartingScan', { name });
   }
   if (msg.includes('Ho\u00e0n t\u1ea5t qu\u00e9t:')) {
-    const match = msg.match(/Ho\u00e0n t\u1ea5t qu\u00e9t:\s*([^\(]+)\(([^)]+)\)/);
+    const match = msg.match(/Ho\u00e0n t\u1ea5t qu\u00e9t:\s*([^(]+)\(([^)]+)\)/);
     const name = match ? match[1].trim() : '';
     const countStr = match ? match[2].replace(/[^0-9]/g, '') : '0';
     return t('dashboard.syncDoneScan', { name, count: parseInt(countStr) });
@@ -657,7 +634,7 @@ export function translateSyncMessage(
 
 export function translateImportProgressMessage(
   msg: string | null | undefined,
-  t: (key: string, options?: any) => string
+  t: TranslationFn
 ): string {
   if (!msg) return '';
 
@@ -668,12 +645,7 @@ export function translateImportProgressMessage(
   }
 
   if (msg.startsWith('importProgressProcessingItem:')) {
-    const parts = msg.substring('importProgressProcessingItem:'.length).split(',');
-    const params: Record<string, string> = {};
-    parts.forEach((p) => {
-      const [k, v] = p.split('=');
-      if (k && v) params[k] = v;
-    });
+    const params = parseStructuredParams(msg.substring('importProgressProcessingItem:'.length));
     return t('inventoryScanner.apiErrors.importProgressProcessingItem', {
       current: params.current || '',
       total: params.total || '',
@@ -687,12 +659,7 @@ export function translateImportProgressMessage(
   }
 
   if (msg.startsWith('importProgressLinkingAccount:')) {
-    const parts = msg.substring('importProgressLinkingAccount:'.length).split(',');
-    const params: Record<string, string> = {};
-    parts.forEach((p) => {
-      const [k, v] = p.split('=');
-      if (k && v) params[k] = v;
-    });
+    const params = parseStructuredParams(msg.substring('importProgressLinkingAccount:'.length));
     return t('inventoryScanner.apiErrors.importProgressLinkingAccount', {
       current: params.current || '',
       total: params.total || '',
@@ -701,12 +668,7 @@ export function translateImportProgressMessage(
   }
 
   if (msg.startsWith('importDoneSaveResult:')) {
-    const parts = msg.substring('importDoneSaveResult:'.length).split(',');
-    const params: Record<string, string> = {};
-    parts.forEach((p) => {
-      const [k, v] = p.split('=');
-      if (k && v) params[k] = v;
-    });
+    const params = parseStructuredParams(msg.substring('importDoneSaveResult:'.length));
     const count = parseInt(params.count || '0');
     const skipped = parseInt(params.skipped || '0');
     if (skipped > 0) {

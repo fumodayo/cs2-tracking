@@ -1,7 +1,8 @@
 'use client';
 
 import { useCallback, useMemo } from 'react';
-import type { AccountEntry, ScanResponse, ScanResultItem } from '../types';
+import type { AccountEntry, ScanResponse, ScanResultItem, SourceAccount } from '../types';
+import { getScanResultItemGroupKey, getScanResultItemRowId } from '../utils';
 import { buildItemIdentityKey, buildItemVariantKey } from '@/utils/item-identity';
 
 interface UseScannerDataMergedProps {
@@ -20,7 +21,7 @@ interface UseScannerDataMergedProps {
 export function groupItemsForSummary(items: ScanResultItem[]): ScanResultItem[] {
   const map = new Map<string, ScanResultItem[]>();
   for (const item of items) {
-    const key = `${item.caseItem.marketHashName}:${item.dopplerPhase ?? 'normal'}`;
+    const key = getScanResultItemGroupKey(item);
     const list = map.get(key) ?? [];
     list.push(item);
     map.set(key, list);
@@ -34,11 +35,7 @@ export function groupItemsForSummary(items: ScanResultItem[]): ScanResultItem[] 
         identityKey: key,
         variantCount: 1,
         hasMixedVariants: false,
-        underlyingIds: [
-          first.isManual && first.id
-            ? first.id
-            : first.identityKey || first.caseItem.marketHashName,
-        ],
+        underlyingIds: [getScanResultItemRowId(first)],
         storageUnitQuantity:
           first.storageUnitQuantity ?? (first.storageUnitId ? first.quantity : undefined),
       };
@@ -55,7 +52,7 @@ export function groupItemsForSummary(items: ScanResultItem[]): ScanResultItem[] 
     }, 0);
 
     // Merge source accounts
-    const sourceAccountsMap = new Map<string, any>();
+    const sourceAccountsMap = new Map<string, SourceAccount>();
     for (const item of group) {
       if (item.sourceAccounts) {
         for (const sa of item.sourceAccounts) {
@@ -119,9 +116,7 @@ export function groupItemsForSummary(items: ScanResultItem[]): ScanResultItem[] 
       isManual: group.every((item) => item.isManual),
       variantCount: variantKeys.size,
       hasMixedVariants: variantKeys.size > 1,
-      underlyingIds: group.map((item) =>
-        item.isManual && item.id ? item.id : item.identityKey || item.caseItem.marketHashName
-      ),
+      underlyingIds: group.map(getScanResultItemRowId),
       storageUnitQuantity: totalStorageUnitQuantity || undefined,
     };
   });
@@ -153,7 +148,6 @@ export function useScannerDataMerged({
   buffCnyToVndRate,
   rateAll,
   rateLe,
-  mode: _mode,
 }: UseScannerDataMergedProps) {
   /**
    * Applies third-party BUFF163 exchange calculations to a scanned item.

@@ -1,9 +1,9 @@
-"use client";
+'use client';
 
-import { useEffect, useRef } from "react";
-import { useTranslation } from "react-i18next";
-import type { ScanResultItem } from "../types";
-import type { ScannerAction } from "../scanner-reducer";
+import { useEffect, useRef } from 'react';
+import { useTranslation } from 'react-i18next';
+import type { ScanResultItem } from '../types';
+import type { ScannerAction } from '../scanner-reducer';
 
 interface UseScannerAutoRetryProps {
   dispatch: React.Dispatch<ScannerAction>;
@@ -32,7 +32,7 @@ export function useScannerAutoRetry({
     if (prevScanPendingRef.current && !isAnyScanPending) {
       hasScanCompletedRef.current = true;
       autoRetryRoundRef.current = 0;
-      dispatch({ type: "PRICE_RETRY_STATUS", status: "" });
+      dispatch({ type: 'PRICE_RETRY_STATUS', status: '' });
     }
     prevScanPendingRef.current = isAnyScanPending;
   }, [isAnyScanPending, dispatch]);
@@ -47,19 +47,23 @@ export function useScannerAutoRetry({
     if (zeroPricedItems.length === 0) {
       if (autoRetryRoundRef.current > 0) {
         dispatch({
-          type: "PRICE_RETRY_STATUS",
-          status: t("inventoryScanner.apiErrors.allPricesUpdated", "Prices updated for all items!"),
+          type: 'PRICE_RETRY_STATUS',
+          status: t('inventoryScanner.apiErrors.allPricesUpdated', 'Prices updated for all items!'),
         });
       }
       return;
     }
     if (autoRetryRoundRef.current >= MAX_AUTO_RETRY_ROUNDS) {
       dispatch({
-        type: "PRICE_RETRY_STATUS",
-        status: t("inventoryScanner.apiErrors.retryRoundsLimit", "Tried {{max}} times, {{count}} items still 0 VND. Steam might not have prices for these items.", {
-          max: MAX_AUTO_RETRY_ROUNDS,
-          count: zeroPricedItems.length,
-        }),
+        type: 'PRICE_RETRY_STATUS',
+        status: t(
+          'inventoryScanner.apiErrors.retryRoundsLimit',
+          'Tried {{max}} times, {{count}} items still 0 VND. Steam might not have prices for these items.',
+          {
+            max: MAX_AUTO_RETRY_ROUNDS,
+            count: zeroPricedItems.length,
+          }
+        ),
       });
       return;
     }
@@ -69,34 +73,32 @@ export function useScannerAutoRetry({
 
     const timer = setTimeout(async () => {
       const itemsToRetry = zeroPricedItems.filter((item: ScanResultItem) => {
-        if (
-          item.type === "Skin" &&
-          buffPricesCny[item.caseItem.marketHashName] > 0
-        )
-          return false;
+        if (item.type === 'Skin' && buffPricesCny[item.caseItem.marketHashName] > 0) return false;
         return true;
       });
       if (!itemsToRetry.length) return;
 
       autoRetryRoundRef.current = round;
-      dispatch({ type: "START_PRICE_RETRY" });
+      dispatch({ type: 'START_PRICE_RETRY' });
       dispatch({
-        type: "PRICE_RETRY_STATUS",
-        status: t("inventoryScanner.apiErrors.retryRoundProgress", "Round {{round}}/{{max}}: fetching prices for {{count}} items...", {
-          round,
-          max: MAX_AUTO_RETRY_ROUNDS,
-          count: itemsToRetry.length,
-        }),
+        type: 'PRICE_RETRY_STATUS',
+        status: t(
+          'inventoryScanner.apiErrors.retryRoundProgress',
+          'Round {{round}}/{{max}}: fetching prices for {{count}} items...',
+          {
+            round,
+            max: MAX_AUTO_RETRY_ROUNDS,
+            count: itemsToRetry.length,
+          }
+        ),
       });
 
       try {
-        const res = await fetch("/api/inventory/retry-price", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
+        const res = await fetch('/api/inventory/retry-price', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            marketHashNames: itemsToRetry.map(
-              (i: ScanResultItem) => i.caseItem.marketHashName,
-            ),
+            marketHashNames: itemsToRetry.map((i: ScanResultItem) => i.caseItem.marketHashName),
           }),
         });
         const resText = await res.text();
@@ -115,42 +117,53 @@ export function useScannerAutoRetry({
         }
 
         if (res.ok && data && Array.isArray(data.results)) {
-          const matchedCount = data.results.filter(
-            (r: { price: number }) => r.price > 0,
-          ).length;
+          const matchedCount = data.results.filter((r: { price: number }) => r.price > 0).length;
           const remaining = itemsToRetry.length - matchedCount;
-          const statusText = t("inventoryScanner.apiErrors.retryRoundUpdated", "Round {{round}}: updated {{matched}}/{{total}} items.{{remaining}}", {
-            round,
-            matched: matchedCount,
-            total: itemsToRetry.length,
-            remaining: remaining > 0 ? t("inventoryScanner.apiErrors.waitingForNextRetry", " {{count}} items remaining, waiting to retry...", { count: remaining }) : "",
-          });
+          const statusText = t(
+            'inventoryScanner.apiErrors.retryRoundUpdated',
+            'Round {{round}}: updated {{matched}}/{{total}} items.{{remaining}}',
+            {
+              round,
+              matched: matchedCount,
+              total: itemsToRetry.length,
+              remaining:
+                remaining > 0
+                  ? t(
+                      'inventoryScanner.apiErrors.waitingForNextRetry',
+                      ' {{count}} items remaining, waiting to retry...',
+                      { count: remaining }
+                    )
+                  : '',
+            }
+          );
 
           dispatch({
-            type: "PRICE_RETRY_SUCCESS",
+            type: 'PRICE_RETRY_SUCCESS',
             results: data.results,
             status: statusText,
           });
         } else {
           dispatch({
-            type: "PRICE_RETRY_FAILURE",
-            status: t("inventoryScanner.apiErrors.retryRoundApiError", "Round {{round}}: API response error, retrying...", { round }),
+            type: 'PRICE_RETRY_FAILURE',
+            status: t(
+              'inventoryScanner.apiErrors.retryRoundApiError',
+              'Round {{round}}: API response error, retrying...',
+              { round }
+            ),
           });
         }
       } catch {
         dispatch({
-          type: "PRICE_RETRY_FAILURE",
-          status: t("inventoryScanner.apiErrors.retryRoundConnectionError", "Round {{round}}: connection error, retrying...", { round }),
+          type: 'PRICE_RETRY_FAILURE',
+          status: t(
+            'inventoryScanner.apiErrors.retryRoundConnectionError',
+            'Round {{round}}: connection error, retrying...',
+            { round }
+          ),
         });
       }
     }, delay);
 
     return () => clearTimeout(timer);
-  }, [
-    zeroPricedItems,
-    retryingPrices,
-    buffPricesCny,
-    buffCnyToVndRate,
-    dispatch,
-  ]);
+  }, [zeroPricedItems, retryingPrices, buffPricesCny, buffCnyToVndRate, dispatch, t]);
 }
