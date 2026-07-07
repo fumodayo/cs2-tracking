@@ -2,18 +2,17 @@ import type { PortfolioSourceAccount, CreatePortfolioItemInput } from '@/domain/
 
 export type { PortfolioSourceAccount, CreatePortfolioItemInput };
 import { isRecord } from '@/utils/type-guards';
-import { calculateTradeHoldUntil } from '@/utils/date';
 import type { Db } from 'mongodb';
-import crypto from 'node:crypto';
 import type { PatternInfo } from '@/domain/pattern-info';
-import { getDatabase } from '@/infrastructure/db/mongo-client';
-import { getInMemoryJob, type ScanJob } from '@/services/scan-job-store';
-import {
-  buildItemIdentityKey,
-  buildItemVariantKey,
-  type ItemIdentityInput,
-} from '@/utils/item-identity';
+import type { CaseItem } from '@/domain/case-item';
+import { mapCaseDocument } from '@/infrastructure/db/mappers';
+import { buildItemIdentityKey, type ItemIdentityInput } from '@/utils/item-identity';
 export { isRecord } from '@/utils/type-guards';
+export { pollJobProgress, startInventoryScanJob } from '@/services/scan-job-client';
+export {
+  resolveSyncTransactions,
+  type ExistingPortfolioItem,
+} from '@/services/portfolio-sync-transactions';
 
 const DEFAULT_ACCESSORY_PRICE_RATE = 0;
 export const SCANNER_IMPORT_NOTE = 'Import từ inventory scanner';
@@ -25,25 +24,6 @@ export const SCANNER_PORTFOLIO_NOTES = [
   SCANNER_MANUAL_NOTE,
   LEGACY_SCANNER_IMPORT_NOTE,
 ] as const;
-
-export interface ExistingPortfolioItem {
-  caseId: string;
-  quantity: number;
-  buyPrice: number;
-  buyDate: Date;
-  isTemporaryPrice?: boolean;
-  note?: string;
-  sourceAccounts?: PortfolioSourceAccount[];
-  tradeHoldUntil?: Date;
-  dopplerPhase?: string;
-  inspectLink?: string;
-  patternInfo?: any;
-  stickerPriceRate?: number;
-  stickerBuyPriceRate?: number;
-  stickerBuyPriceAdd?: number;
-  stickerScanTotalPrice?: number;
-  stickerScanPriceCapturedAt?: Date;
-}
 
 export function normalizeHexColor(value: unknown): string | undefined {
   if (typeof value !== 'string') {
@@ -192,287 +172,6 @@ export async function buildAccessoryPriceFields(
   };
 }
 
-interface AccountBreakdownPool {
-  steamId64: string;
-  name: string;
-  tradeable: number;
-  onMarket: number;
-  tradeProtected: number;
-  hold: number;
-  holdDetails: Array<{ quantity: number; holdDays: number; tradeHoldUntil?: string | Date }>;
-}
-
-export function resolveSyncTransactions(
-  caseId: string,
-  totalScannedQty: number,
-  currentPrice: number,
-  sourceAccounts: PortfolioSourceAccount[],
-  holdDays: number,
-  existingItems: ExistingPortfolioItem[],
-  buyDate: Date,
-  note: string,
-  tradeHoldUntilParam?: Date,
-  dopplerPhase?: string,
-  inspectLink?: string,
-  patternInfo?: any,
-  stickerFields?: Pick<
-    CreatePortfolioItemInput,
-    | 'stickerPriceRate'
-    | 'stickerBuyPriceRate'
-    | 'stickerScanTotalPrice'
-    | 'stickerScanPriceCapturedAt'
-  >
-): CreatePortfolioItemInput[] {
-  const scannedVariantKey = buildItemVariantKey({
-    caseId,
-    dopplerPhase,
-    inspectLink,
-    patternInfo,
-  });
-  const existingForCase = existingItems
-    .filter(
-      (item) =>
-        String(item.caseId) === caseId &&
-        buildItemVariantKey({
-          caseId: String(item.caseId),
-          dopplerPhase: item.dopplerPhase,
-          inspectLink: item.inspectLink,
-          patternInfo: item.patternInfo,
-        }) === scannedVariantKey
-    )
-    .sort((a, b) => new Date(a.buyDate).getTime() - new Date(b.buyDate).getTime());
-
-  const totalExistingQty = existingForCase.reduce(
-    (sum, item) => sum + (Number(item.quantity) || 0),
-    0
-  );
-  const tradeHoldUntil =
-    tradeHoldUntilParam ?? (holdDays > 0 ? calculateTradeHoldUntil(buyDate, holdDays) : undefined);
-
-  // Initialize pool of available account quantities to distribute accurately
-  const pool: AccountBreakdownPool[] = sourceAccounts.map((sa) => ({
-    steamId64: sa.steamId64,
-    name: sa.name,
-    tradeable: sa.breakdown?.tradeable ?? 0,
-    onMarket: sa.breakdown?.onMarket ?? 0,
-    tradeProtected: sa.breakdown?.tradeProtected ?? 0,
-    hold: sa.breakdown?.hold ?? 0,
-    holdDetails: sa.breakdown?.holdDetails ? [...sa.breakdown.holdDetails] : [],
-  }));
-
-  const allocateSourceAccounts = (targetQty: number): PortfolioSourceAccount[] => {
-    const allocated: PortfolioSourceAccount[] = [];
-    let remainingToAllocate = targetQty;
-
-    for (const entry of pool) {
-      if (remainingToAllocate <= 0) break;
-
-      const entryTotal = entry.tradeable + entry.onMarket + entry.tradeProtected + entry.hold;
-      if (entryTotal <= 0) continue;
-
-      const takeTotal = Math.min(entryTotal, remainingToAllocate);
-      let remainingToTakeFromEntry = takeTotal;
-
-      const breakdown = {
-        tradeable: 0,
-        onMarket: 0,
-        tradeProtected: 0,
-        hold: 0,
-        holdDetails: [] as Array<{ quantity: number; holdDays: number }>,
-      };
-
-      // Take from tradeable
-      if (entry.tradeable > 0 && remainingToTakeFromEntry > 0) {
-        const take = Math.min(entry.tradeable, remainingToTakeFromEntry);
-        breakdown.tradeable = take;
-        entry.tradeable -= take;
-        remainingToTakeFromEntry -= take;
-      }
-
-      // Take from onMarket
-      if (entry.onMarket > 0 && remainingToTakeFromEntry > 0) {
-        const take = Math.min(entry.onMarket, remainingToTakeFromEntry);
-        breakdown.onMarket = take;
-        entry.onMarket -= take;
-        remainingToTakeFromEntry -= take;
-      }
-
-      // Take from tradeProtected
-      if (entry.tradeProtected > 0 && remainingToTakeFromEntry > 0) {
-        const take = Math.min(entry.tradeProtected, remainingToTakeFromEntry);
-        breakdown.tradeProtected = take;
-        entry.tradeProtected -= take;
-        remainingToTakeFromEntry -= take;
-      }
-
-      // Take from hold
-      if (entry.hold > 0 && remainingToTakeFromEntry > 0) {
-        const take = Math.min(entry.hold, remainingToTakeFromEntry);
-        breakdown.hold = take;
-        entry.hold -= take;
-        remainingToTakeFromEntry -= take;
-
-        // Also take from holdDetails
-        let holdRemainingToTake = take;
-        const newHoldDetails = [];
-        for (const hd of entry.holdDetails) {
-          if (holdRemainingToTake <= 0) break;
-          if (hd.quantity > 0) {
-            const hdTake = Math.min(hd.quantity, holdRemainingToTake);
-            newHoldDetails.push({
-              quantity: hdTake,
-              holdDays: hd.holdDays,
-              tradeHoldUntil: hd.tradeHoldUntil,
-            });
-            hd.quantity -= hdTake;
-            holdRemainingToTake -= hdTake;
-          }
-        }
-        breakdown.holdDetails = newHoldDetails;
-      }
-
-      allocated.push({
-        steamId64: entry.steamId64,
-        name: entry.name,
-        breakdown,
-      });
-
-      remainingToAllocate -= takeTotal;
-    }
-
-    return allocated;
-  };
-
-  if (totalExistingQty === 0) {
-    return [
-      {
-        caseId,
-        quantity: totalScannedQty,
-        buyPrice: currentPrice,
-        buyDate,
-        isTemporaryPrice: true,
-        tradeHoldUntil,
-        sourceAccounts: allocateSourceAccounts(totalScannedQty),
-        note,
-        dopplerPhase,
-        inspectLink,
-        patternInfo,
-        ...stickerFields,
-      },
-    ];
-  }
-
-  if (totalScannedQty === totalExistingQty) {
-    return existingForCase.map((item) => ({
-      caseId,
-      quantity: Number(item.quantity),
-      buyPrice: Number(item.buyPrice),
-      buyDate: new Date(item.buyDate),
-      isTemporaryPrice: item.isTemporaryPrice,
-      tradeHoldUntil,
-      sourceAccounts: allocateSourceAccounts(Number(item.quantity)),
-      note: item.note || note,
-      dopplerPhase,
-      inspectLink,
-      patternInfo,
-      stickerPriceRate: item.stickerPriceRate ?? stickerFields?.stickerPriceRate,
-      stickerBuyPriceRate: item.stickerBuyPriceRate ?? stickerFields?.stickerBuyPriceRate,
-      stickerScanTotalPrice: item.stickerScanTotalPrice ?? stickerFields?.stickerScanTotalPrice,
-      stickerScanPriceCapturedAt:
-        item.stickerScanPriceCapturedAt ?? stickerFields?.stickerScanPriceCapturedAt,
-    }));
-  }
-
-  if (totalScannedQty > totalExistingQty) {
-    const resolved: CreatePortfolioItemInput[] = existingForCase.map((item) => ({
-      caseId,
-      quantity: Number(item.quantity),
-      buyPrice: Number(item.buyPrice),
-      buyDate: new Date(item.buyDate),
-      isTemporaryPrice: item.isTemporaryPrice,
-      tradeHoldUntil,
-      sourceAccounts: allocateSourceAccounts(Number(item.quantity)),
-      note: item.note || note,
-      dopplerPhase,
-      inspectLink,
-      patternInfo,
-      stickerPriceRate: item.stickerPriceRate ?? stickerFields?.stickerPriceRate,
-      stickerBuyPriceRate: item.stickerBuyPriceRate ?? stickerFields?.stickerBuyPriceRate,
-      stickerScanTotalPrice: item.stickerScanTotalPrice ?? stickerFields?.stickerScanTotalPrice,
-      stickerScanPriceCapturedAt:
-        item.stickerScanPriceCapturedAt ?? stickerFields?.stickerScanPriceCapturedAt,
-    }));
-
-    resolved.push({
-      caseId,
-      quantity: totalScannedQty - totalExistingQty,
-      buyPrice: currentPrice,
-      buyDate,
-      isTemporaryPrice: true,
-      tradeHoldUntil,
-      sourceAccounts: allocateSourceAccounts(totalScannedQty - totalExistingQty),
-      note,
-      dopplerPhase,
-      inspectLink,
-      patternInfo,
-      ...stickerFields,
-    });
-    return resolved;
-  }
-
-  // LIFO deduction
-  const resolved: CreatePortfolioItemInput[] = [];
-  let remainingToKeep = totalScannedQty;
-
-  for (const item of existingForCase) {
-    if (remainingToKeep <= 0) break;
-    const qty = Number(item.quantity);
-    if (qty <= remainingToKeep) {
-      resolved.push({
-        caseId,
-        quantity: qty,
-        buyPrice: Number(item.buyPrice),
-        buyDate: new Date(item.buyDate),
-        isTemporaryPrice: item.isTemporaryPrice,
-        tradeHoldUntil,
-        sourceAccounts: allocateSourceAccounts(qty),
-        note: item.note || note,
-        dopplerPhase,
-        inspectLink,
-        patternInfo,
-        stickerPriceRate: item.stickerPriceRate ?? stickerFields?.stickerPriceRate,
-        stickerBuyPriceRate: item.stickerBuyPriceRate ?? stickerFields?.stickerBuyPriceRate,
-        stickerScanTotalPrice: item.stickerScanTotalPrice ?? stickerFields?.stickerScanTotalPrice,
-        stickerScanPriceCapturedAt:
-          item.stickerScanPriceCapturedAt ?? stickerFields?.stickerScanPriceCapturedAt,
-      });
-      remainingToKeep -= qty;
-    } else {
-      resolved.push({
-        caseId,
-        quantity: remainingToKeep,
-        buyPrice: Number(item.buyPrice),
-        buyDate: new Date(item.buyDate),
-        isTemporaryPrice: item.isTemporaryPrice,
-        tradeHoldUntil,
-        sourceAccounts: allocateSourceAccounts(remainingToKeep),
-        note: item.note || note,
-        dopplerPhase,
-        inspectLink,
-        patternInfo,
-        stickerPriceRate: item.stickerPriceRate ?? stickerFields?.stickerPriceRate,
-        stickerBuyPriceRate: item.stickerBuyPriceRate ?? stickerFields?.stickerBuyPriceRate,
-        stickerScanTotalPrice: item.stickerScanTotalPrice ?? stickerFields?.stickerScanTotalPrice,
-        stickerScanPriceCapturedAt:
-          item.stickerScanPriceCapturedAt ?? stickerFields?.stickerScanPriceCapturedAt,
-      });
-      remainingToKeep = 0;
-    }
-  }
-
-  return resolved;
-}
-
 export type SyncScannedItem = {
   caseItem: {
     id: string;
@@ -493,7 +192,7 @@ export type SyncScannedItem = {
   tradeProtected?: boolean;
   dopplerPhase?: string;
   inspectLink?: string;
-  patternInfo?: any;
+  patternInfo?: PatternInfo;
   stickerPriceRate?: number;
   stickerBuyPriceRate?: number;
   stickerBuyPriceAdd?: number;
@@ -511,7 +210,7 @@ export type GroupedInput = {
   tradeHoldUntil?: string;
   dopplerPhase?: string;
   inspectLink?: string;
-  patternInfo?: any;
+  patternInfo?: PatternInfo;
   stickerPriceRate?: number;
   stickerBuyPriceRate?: number;
   stickerBuyPriceAdd?: number;
@@ -603,6 +302,8 @@ export type ExtraItem = {
   };
 };
 
+export { buildSyncChangeSummary, getSyncAccountChanges } from '@/services/portfolio-sync-changes';
+
 export type SyncStorageUnit = {
   id: string;
   name: string;
@@ -627,7 +328,7 @@ export type ScanResult = {
     };
     dopplerPhase?: string;
     inspectLink?: string;
-    patternInfo?: any;
+    patternInfo?: PatternInfo;
   }>;
   storageUnits?: Array<{
     assetId?: string;
@@ -704,144 +405,6 @@ export function processScanResult(
   }
 }
 
-export async function pollJobProgress(
-  origin: string,
-  jobId: string,
-  onProgress: (progress: {
-    stage: string;
-    message: string;
-    percent: number;
-    detail?: Record<string, number | string>;
-  }) => void
-): Promise<Record<string, unknown>> {
-  void origin;
-  const TIMEOUT_MS = 30 * 60 * 1000;
-  const IDLE_TIMEOUT_MS = 15 * 60 * 1000;
-  const startedAt = Date.now();
-  let lastProgressAt = startedAt;
-  let lastProgressSignature = '';
-
-  while (Date.now() - startedAt < TIMEOUT_MS && Date.now() - lastProgressAt < IDLE_TIMEOUT_MS) {
-    const progress = await readScanJobProgress(jobId);
-    if (!progress) {
-      throw new Error('cannotReadScanProgress');
-    }
-
-    onProgress({
-      stage: progress.stage ?? 'running',
-      message: progress.message ?? 'scanning',
-      percent: progress.percent ?? 0,
-      detail: normalizeJobDetail(progress.detail),
-    });
-
-    if (progress.status === 'done') {
-      return (progress.result ?? {}) as Record<string, unknown>;
-    }
-
-    if (progress.status === 'error') {
-      throw new Error(progress.error ?? progress.message ?? 'scanFailed');
-    }
-
-    const progressSignature = JSON.stringify({
-      percent: progress.percent,
-      message: progress.message,
-      detail: progress.detail,
-      updatedAt: progress.updatedAt,
-    });
-    if (progressSignature !== lastProgressSignature) {
-      lastProgressSignature = progressSignature;
-      lastProgressAt = Date.now();
-    }
-
-    await new Promise((resolve) => setTimeout(resolve, 800));
-  }
-
-  throw new Error('scanTimeout');
-}
-
-async function readScanJobProgress(jobId: string): Promise<ScanJob | null> {
-  const memoryJob = getInMemoryJob(jobId);
-  if (memoryJob) {
-    return memoryJob;
-  }
-
-  const db = await getDatabase();
-  const doc = await db.collection('scan_jobs').findOne({ id: jobId });
-  if (!doc) {
-    return null;
-  }
-
-  return {
-    id: typeof doc.id === 'string' ? doc.id : jobId,
-    ownerId: typeof doc.ownerId === 'string' ? doc.ownerId : '',
-    status:
-      doc.status === 'queued' ||
-      doc.status === 'running' ||
-      doc.status === 'done' ||
-      doc.status === 'error'
-        ? doc.status
-        : 'running',
-    percent: typeof doc.percent === 'number' ? doc.percent : 0,
-    message: typeof doc.message === 'string' ? doc.message : 'scanning',
-    stage: typeof doc.stage === 'string' ? doc.stage : undefined,
-    result: doc.result,
-    error: typeof doc.error === 'string' ? doc.error : undefined,
-    detail: doc.detail,
-    createdAt: normalizeJobDate(doc.createdAt),
-    updatedAt: normalizeJobDate(doc.updatedAt),
-  };
-}
-
-function normalizeJobDate(value: unknown): string {
-  if (value instanceof Date) {
-    return value.toISOString();
-  }
-  if (typeof value === 'string') {
-    return value;
-  }
-  return new Date().toISOString();
-}
-
-function normalizeJobDetail(value: unknown): Record<string, number | string> | undefined {
-  if (!isRecord(value)) {
-    return undefined;
-  }
-
-  const detail: Record<string, number | string> = {};
-  for (const [key, entry] of Object.entries(value)) {
-    if (typeof entry === 'number' || typeof entry === 'string') {
-      detail[key] = entry;
-    }
-  }
-
-  return Object.keys(detail).length > 0 ? detail : undefined;
-}
-
-export async function startInventoryScanJob(input: {
-  steamUrl: string;
-  steamCookie?: string;
-  forceRefresh?: boolean;
-  ownerId: string;
-}): Promise<string> {
-  const [{ createScanJob }, { runScanJob }] = await Promise.all([
-    import('@/services/scan-job-store'),
-    import('@/services/scan-service'),
-  ]);
-  const jobId = crypto.randomUUID();
-  await createScanJob(jobId, {
-    id: jobId,
-    ownerId: input.ownerId,
-    status: 'queued',
-    percent: 0,
-    message: 'waitingScan',
-    createdAt: new Date().toISOString(),
-    updatedAt: new Date().toISOString(),
-  });
-
-  void runScanJob(jobId, input);
-  return jobId;
-}
-
 export async function createImportedCase(
   db: Db,
   input: {
@@ -850,7 +413,7 @@ export async function createImportedCase(
     imageUrl?: string;
     rarity?: { name: string; color: string };
   }
-) {
+): Promise<CaseItem | null> {
   const now = new Date();
   const collection = db.collection('cases');
   await collection.updateOne(
@@ -873,14 +436,7 @@ export async function createImportedCase(
   const doc = await collection.findOne({
     marketHashName: input.marketHashName,
   });
-  return doc
-    ? {
-        id: doc._id.toString(),
-        name: doc.name,
-        marketHashName: doc.marketHashName,
-        imageUrl: doc.imageUrl,
-      }
-    : null;
+  return doc ? mapCaseDocument(doc) : null;
 }
 
 export async function updateImportedCaseMetadata(
