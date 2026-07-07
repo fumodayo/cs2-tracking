@@ -1,6 +1,6 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
-import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import { useTranslation } from "react-i18next";
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import { usePathname, useRouter, useSearchParams } from 'next/navigation';
+import { useTranslation } from 'react-i18next';
 import {
   TbPackage,
   TbPills,
@@ -13,14 +13,14 @@ import {
   TbCircleDot,
   TbPalette,
   TbDiamond,
-} from "react-icons/tb";
+} from 'react-icons/tb';
 import {
   type PortfolioSourceFilter,
   type PortfolioTableRow,
   getItemStatusBreakdown,
   getRowSubtype,
-} from "../portfolio-table-model";
-import { buildAccountOptions } from "../portfolio-table-utils";
+} from '../portfolio-table-model';
+import { buildAccountOptions } from '../portfolio-table-utils';
 
 interface UsePortfolioFiltersProps {
   rows: PortfolioTableRow[];
@@ -28,24 +28,24 @@ interface UsePortfolioFiltersProps {
 }
 
 const FILTER_PARAM_KEYS = {
-  search: "q",
-  source: "source",
-  itemType: "itemType",
-  account: "account",
-  status: "status",
-  priceSource: "priceSource",
+  search: 'q',
+  source: 'source',
+  itemType: 'itemType',
+  account: 'account',
+  status: 'status',
+  priceSource: 'priceSource',
 } as const;
 
-const VALID_SOURCE_FILTERS = new Set(["manual", "existing"]);
-const VALID_STATUS_FILTERS = new Set(["tradeable", "market", "protected", "hold"]);
-const VALID_PRICE_SOURCE_FILTERS = new Set(["buff", "steam"]);
+const VALID_SOURCE_FILTERS = new Set(['manual', 'existing']);
+const VALID_STATUS_FILTERS = new Set(['tradeable', 'market', 'protected', 'hold']);
+const VALID_PRICE_SOURCE_FILTERS = new Set(['buff', 'steam']);
 
-type ReadableSearchParams = Pick<URLSearchParams, "get" | "getAll">;
+type ReadableSearchParams = Pick<URLSearchParams, 'get' | 'getAll'>;
 
 function readParamList(params: ReadableSearchParams, key: string): string[] {
   const values = params
     .getAll(key)
-    .flatMap((value) => value.split(","))
+    .flatMap((value) => value.split(','))
     .map((value) => value.trim())
     .filter(Boolean);
 
@@ -55,7 +55,7 @@ function readParamList(params: ReadableSearchParams, key: string): string[] {
 function readFilteredParamList(
   params: ReadableSearchParams,
   key: string,
-  validValues: Set<string>,
+  validValues: Set<string>
 ): string[] {
   return readParamList(params, key).filter((value) => validValues.has(value));
 }
@@ -64,7 +64,7 @@ function readSourceFilters(params: ReadableSearchParams): PortfolioSourceFilter[
   return readFilteredParamList(
     params,
     FILTER_PARAM_KEYS.source,
-    VALID_SOURCE_FILTERS,
+    VALID_SOURCE_FILTERS
   ) as PortfolioSourceFilter[];
 }
 
@@ -80,29 +80,24 @@ function setParamList(params: URLSearchParams, key: string, values: string[]) {
   }
 }
 
-export function accountMatchesFilters(
-  row: PortfolioTableRow,
-  accountFilters: string[],
-): boolean {
+export function accountMatchesFilters(row: PortfolioTableRow, accountFilters: string[]): boolean {
   if (accountFilters.length === 0) return true;
 
-  return row.sourceAccounts.some((account) =>
-    accountFilters.includes(account.steamId64),
-  );
+  return row.sourceAccounts.some((account) => accountFilters.includes(account.steamId64));
 }
 
 export function sourceMatchesFilters(
   row: PortfolioTableRow,
-  sourceFilters: PortfolioSourceFilter[],
+  sourceFilters: PortfolioSourceFilter[]
 ): boolean {
   if (sourceFilters.length === 0) return true;
 
   return sourceFilters.some((sourceFilter) => {
-    if (sourceFilter === "manual") {
+    if (sourceFilter === 'manual') {
       return isManualSourceRow(row);
     }
 
-    if (sourceFilter === "existing") {
+    if (sourceFilter === 'existing') {
       return !isManualSourceRow(row);
     }
 
@@ -112,10 +107,10 @@ export function sourceMatchesFilters(
 
 export function getAccountFilteredQuantity(
   row: PortfolioTableRow,
-  accountFilters: string[],
+  accountFilters: string[]
 ): { quantity: number; storageUnitQuantity: number } {
   const matchingAccounts = row.sourceAccounts.filter((acc) =>
-    accountFilters.includes(acc.steamId64),
+    accountFilters.includes(acc.steamId64)
   );
 
   let selectedAccountBreakdownQuantity = 0;
@@ -142,9 +137,7 @@ export function getAccountFilteredQuantity(
   }
 
   const selectedInventoryQuantity =
-    matchingAccounts.length > 0
-      ? Math.max(0, row.quantity - (row.storageUnitQuantity ?? 0))
-      : 0;
+    matchingAccounts.length > 0 ? Math.max(0, row.quantity - (row.storageUnitQuantity ?? 0)) : 0;
 
   return {
     quantity: selectedInventoryQuantity + selectedStorageUnitQuantity,
@@ -153,15 +146,10 @@ export function getAccountFilteredQuantity(
 }
 
 function isManualSourceRow(row: PortfolioTableRow): boolean {
-  if (row.sourceType === "manual") return true;
+  if (row.sourceType === 'manual') return true;
 
   const note = row.note?.trim().toLowerCase();
-  if (
-    note === "manual" ||
-    note === "thủ công" ||
-    note === "thu cong" ||
-    note === "thá»§ cã´ng"
-  ) {
+  if (note === 'manual' || note === 'thủ công' || note === 'thu cong' || note === 'thá»§ cã´ng') {
     return true;
   }
 
@@ -169,34 +157,57 @@ function isManualSourceRow(row: PortfolioTableRow): boolean {
     const steamId64 = account.steamId64.trim().toLowerCase();
     const name = account.name.trim().toLowerCase();
     return (
-      steamId64 === "manual" ||
-      name === "manual" ||
-      name === "thủ công" ||
-      name === "thu cong" ||
-      name === "thá»§ cã´ng"
+      steamId64 === 'manual' ||
+      name === 'manual' ||
+      name === 'thủ công' ||
+      name === 'thu cong' ||
+      name === 'thá»§ cã´ng'
     );
   });
 }
 
 const WEAPON_CATEGORIES: Record<string, string[]> = {
-  rifles: ["AK-47", "AWP", "M4A4", "M4A1-S", "Galil AR", "FAMAS", "SSG 08", "SG 553", "AUG", "SCAR-20", "G3SG1"],
-  pistols: ["USP-S", "Glock-18", "Desert Eagle", "P250", "Five-SeveN", "Tec-9", "CZ75-Auto", "Dual Berettas", "P2000", "R8 Revolver"],
-  smgs: ["MAC-10", "MP9", "MP7", "MP5-SD", "UMP-45", "P90", "PP-Bizon"],
-  heavy: ["Nova", "XM1014", "MAG-7", "Sawed-Off", "M249", "Negev"],
-  knives_gloves: ["Knives", "Gloves"],
+  rifles: [
+    'AK-47',
+    'AWP',
+    'M4A4',
+    'M4A1-S',
+    'Galil AR',
+    'FAMAS',
+    'SSG 08',
+    'SG 553',
+    'AUG',
+    'SCAR-20',
+    'G3SG1',
+  ],
+  pistols: [
+    'USP-S',
+    'Glock-18',
+    'Desert Eagle',
+    'P250',
+    'Five-SeveN',
+    'Tec-9',
+    'CZ75-Auto',
+    'Dual Berettas',
+    'P2000',
+    'R8 Revolver',
+  ],
+  smgs: ['MAC-10', 'MP9', 'MP7', 'MP5-SD', 'UMP-45', 'P90', 'PP-Bizon'],
+  heavy: ['Nova', 'XM1014', 'MAG-7', 'Sawed-Off', 'M249', 'Negev'],
+  knives_gloves: ['Knives', 'Gloves'],
 };
 
 function getWeaponCategoryKey(subtype: string): string {
   const lowerSubtype = subtype.toLowerCase();
-  if (lowerSubtype === "knives" || lowerSubtype === "gloves") {
-    return "knives_gloves";
+  if (lowerSubtype === 'knives' || lowerSubtype === 'gloves') {
+    return 'knives_gloves';
   }
   for (const [key, weapons] of Object.entries(WEAPON_CATEGORIES)) {
     if (weapons.some((w) => w.toLowerCase() === lowerSubtype)) {
       return key;
     }
   }
-  return "others";
+  return 'others';
 }
 
 export function usePortfolioFilters({ rows, buffPricesCny }: UsePortfolioFiltersProps) {
@@ -205,85 +216,78 @@ export function usePortfolioFilters({ rows, buffPricesCny }: UsePortfolioFilters
   const pathname = usePathname();
   const searchParams = useSearchParams();
 
-  const [sourceFilters, setSourceFilters] = useState<PortfolioSourceFilter[]>(
-    () => readSourceFilters(searchParams),
+  const [sourceFilters, setSourceFilters] = useState<PortfolioSourceFilter[]>(() =>
+    readSourceFilters(searchParams)
   );
-  const [itemTypeFilters, setItemTypeFilters] = useState<string[]>(
-    () => readParamList(searchParams, FILTER_PARAM_KEYS.itemType),
+  const [itemTypeFilters, setItemTypeFilters] = useState<string[]>(() =>
+    readParamList(searchParams, FILTER_PARAM_KEYS.itemType)
   );
-  const [accountFilters, setAccountFilters] = useState<string[]>(
-    () => readParamList(searchParams, FILTER_PARAM_KEYS.account),
+  const [accountFilters, setAccountFilters] = useState<string[]>(() =>
+    readParamList(searchParams, FILTER_PARAM_KEYS.account)
   );
-  const [statusFilters, setStatusFilters] = useState<string[]>(
-    () => readFilteredParamList(searchParams, FILTER_PARAM_KEYS.status, VALID_STATUS_FILTERS),
+  const [statusFilters, setStatusFilters] = useState<string[]>(() =>
+    readFilteredParamList(searchParams, FILTER_PARAM_KEYS.status, VALID_STATUS_FILTERS)
   );
-  const [priceSourceFilters, setPriceSourceFilters] = useState<string[]>(
-    () =>
-      readFilteredParamList(
-        searchParams,
-        FILTER_PARAM_KEYS.priceSource,
-        VALID_PRICE_SOURCE_FILTERS,
-      ),
+  const [priceSourceFilters, setPriceSourceFilters] = useState<string[]>(() =>
+    readFilteredParamList(searchParams, FILTER_PARAM_KEYS.priceSource, VALID_PRICE_SOURCE_FILTERS)
   );
   const [globalFilter, setGlobalFilter] = useState(
-    () => searchParams.get(FILTER_PARAM_KEYS.search) ?? "",
+    () => searchParams.get(FILTER_PARAM_KEYS.search) ?? ''
   );
 
-  const handleSetItemTypeFilters = useCallback((values: string[]) => {
-    const wasSkinChecked = values.includes("skin");
-    const wasSkinPreviouslyChecked = itemTypeFilters.includes("skin");
-    const addedSkin = wasSkinChecked && !wasSkinPreviouslyChecked;
+  const handleSetItemTypeFilters = useCallback(
+    (values: string[]) => {
+      const wasSkinChecked = values.includes('skin');
+      const wasSkinPreviouslyChecked = itemTypeFilters.includes('skin');
+      const addedSkin = wasSkinChecked && !wasSkinPreviouslyChecked;
 
-    const hasSubtypes = values.some(v => v.startsWith("subtype:"));
-    const prevSubtypes = itemTypeFilters.filter(v => v.startsWith("subtype:"));
-    const currentSubtypes = values.filter(v => v.startsWith("subtype:"));
-    const addedSubtype = currentSubtypes.length > prevSubtypes.length;
+      const prevSubtypes = itemTypeFilters.filter((v) => v.startsWith('subtype:'));
+      const currentSubtypes = values.filter((v) => v.startsWith('subtype:'));
+      const addedSubtype = currentSubtypes.length > prevSubtypes.length;
 
-    let nextValues = values;
-    if (addedSkin) {
-      nextValues = values.filter(v => !v.startsWith("subtype:"));
-    } else if (addedSubtype && wasSkinChecked) {
-      nextValues = values.filter(v => v !== "skin");
-    }
+      let nextValues = values;
+      if (addedSkin) {
+        nextValues = values.filter((v) => !v.startsWith('subtype:'));
+      } else if (addedSubtype && wasSkinChecked) {
+        nextValues = values.filter((v) => v !== 'skin');
+      }
 
-    setItemTypeFilters(nextValues);
-  }, [itemTypeFilters]);
+      setItemTypeFilters(nextValues);
+    },
+    [itemTypeFilters]
+  );
 
   useEffect(() => {
-    const nextGlobalFilter = searchParams.get(FILTER_PARAM_KEYS.search) ?? "";
+    const nextGlobalFilter = searchParams.get(FILTER_PARAM_KEYS.search) ?? '';
     const nextSourceFilters = readSourceFilters(searchParams);
     const nextItemTypeFilters = readParamList(searchParams, FILTER_PARAM_KEYS.itemType);
     const nextAccountFilters = readParamList(searchParams, FILTER_PARAM_KEYS.account);
     const nextStatusFilters = readFilteredParamList(
       searchParams,
       FILTER_PARAM_KEYS.status,
-      VALID_STATUS_FILTERS,
+      VALID_STATUS_FILTERS
     );
     const nextPriceSourceFilters = readFilteredParamList(
       searchParams,
       FILTER_PARAM_KEYS.priceSource,
-      VALID_PRICE_SOURCE_FILTERS,
+      VALID_PRICE_SOURCE_FILTERS
     );
 
-    setGlobalFilter((current) =>
-      current === nextGlobalFilter ? current : nextGlobalFilter,
-    );
+    setGlobalFilter((current) => (current === nextGlobalFilter ? current : nextGlobalFilter));
     setSourceFilters((current) =>
-      areListsEqual(current, nextSourceFilters) ? current : nextSourceFilters,
+      areListsEqual(current, nextSourceFilters) ? current : nextSourceFilters
     );
     setItemTypeFilters((current) =>
-      areListsEqual(current, nextItemTypeFilters) ? current : nextItemTypeFilters,
+      areListsEqual(current, nextItemTypeFilters) ? current : nextItemTypeFilters
     );
     setAccountFilters((current) =>
-      areListsEqual(current, nextAccountFilters) ? current : nextAccountFilters,
+      areListsEqual(current, nextAccountFilters) ? current : nextAccountFilters
     );
     setStatusFilters((current) =>
-      areListsEqual(current, nextStatusFilters) ? current : nextStatusFilters,
+      areListsEqual(current, nextStatusFilters) ? current : nextStatusFilters
     );
     setPriceSourceFilters((current) =>
-      areListsEqual(current, nextPriceSourceFilters)
-        ? current
-        : nextPriceSourceFilters,
+      areListsEqual(current, nextPriceSourceFilters) ? current : nextPriceSourceFilters
     );
   }, [searchParams]);
 
@@ -329,7 +333,7 @@ export function usePortfolioFilters({ rows, buffPricesCny }: UsePortfolioFilters
   const subtypeOptions = useMemo(() => {
     const counts: Record<string, number> = {};
     for (const row of rows) {
-      if (row.itemType === "skin") {
+      if (row.itemType === 'skin') {
         const subtype = getRowSubtype(row);
         counts[subtype] = (counts[subtype] || 0) + row.quantity;
       }
@@ -343,26 +347,26 @@ export function usePortfolioFilters({ rows, buffPricesCny }: UsePortfolioFilters
 
   const itemTypeOptions = useMemo(() => {
     const base = [
-      { label: t("portfolio.itemTypeCase", "Case"), value: "case", icon: TbPackage },
-      { label: t("portfolio.itemTypeCapsule", "Capsule"), value: "capsule", icon: TbPills },
-      { label: t("portfolio.itemTypeSticker", "Sticker"), value: "sticker", icon: TbTag },
-      { label: t("portfolio.itemTypeSkinAll", "Skin (All)"), value: "skin", icon: TbSword },
+      { label: t('portfolio.itemTypeCase', 'Case'), value: 'case', icon: TbPackage },
+      { label: t('portfolio.itemTypeCapsule', 'Capsule'), value: 'capsule', icon: TbPills },
+      { label: t('portfolio.itemTypeSticker', 'Sticker'), value: 'sticker', icon: TbTag },
+      { label: t('portfolio.itemTypeSkinAll', 'Skin (All)'), value: 'skin', icon: TbSword },
     ];
     if (subtypeOptions.length > 0) {
       const categories: Record<
         string,
         { label: string; items: Array<{ name: string; count: number }>; totalCount: number }
       > = {
-        rifles: { label: t("portfolio.categoryRifles", "Rifles"), items: [], totalCount: 0 },
-        pistols: { label: t("portfolio.categoryPistols", "Pistols"), items: [], totalCount: 0 },
-        smgs: { label: t("portfolio.categorySMGs", "SMGs"), items: [], totalCount: 0 },
-        heavy: { label: t("portfolio.categoryHeavy", "Heavy"), items: [], totalCount: 0 },
+        rifles: { label: t('portfolio.categoryRifles', 'Rifles'), items: [], totalCount: 0 },
+        pistols: { label: t('portfolio.categoryPistols', 'Pistols'), items: [], totalCount: 0 },
+        smgs: { label: t('portfolio.categorySMGs', 'SMGs'), items: [], totalCount: 0 },
+        heavy: { label: t('portfolio.categoryHeavy', 'Heavy'), items: [], totalCount: 0 },
         knives_gloves: {
-          label: t("portfolio.categoryKnivesGloves", "Knives & Gloves"),
+          label: t('portfolio.categoryKnivesGloves', 'Knives & Gloves'),
           items: [],
           totalCount: 0,
         },
-        others: { label: t("portfolio.categoryOthers", "Others"), items: [], totalCount: 0 },
+        others: { label: t('portfolio.categoryOthers', 'Others'), items: [], totalCount: 0 },
       };
 
       for (const item of subtypeOptions) {
@@ -380,11 +384,11 @@ export function usePortfolioFilters({ rows, buffPricesCny }: UsePortfolioFilters
       }> = [...base];
 
       resultOptions.push({
-        label: t("portfolio.itemTypeSkinDetails", "── Chi tiết Skin ──"),
-        value: "separator",
+        label: t('portfolio.itemTypeSkinDetails', '── Chi tiết Skin ──'),
+        value: 'separator',
       });
 
-      const order = ["rifles", "pistols", "smgs", "heavy", "knives_gloves", "others"];
+      const order = ['rifles', 'pistols', 'smgs', 'heavy', 'knives_gloves', 'others'];
       for (const key of order) {
         const cat = categories[key];
         if (cat.items.length > 0) {
@@ -396,14 +400,14 @@ export function usePortfolioFilters({ rows, buffPricesCny }: UsePortfolioFilters
           });
           for (const item of cat.items) {
             let Icon = TbSword;
-            if (item.name === "Knives") Icon = TbSword;
-            else if (item.name === "Gloves") Icon = TbHandGrab;
-            else if (item.name === "Agent") Icon = TbUser;
-            else if (item.name === "Music Kit") Icon = TbMusic;
-            else if (item.name === "Pin") Icon = TbPin;
-            else if (item.name === "Patch") Icon = TbCircleDot;
-            else if (item.name === "Graffiti") Icon = TbPalette;
-            else if (item.name === "Charm") Icon = TbDiamond;
+            if (item.name === 'Knives') Icon = TbSword;
+            else if (item.name === 'Gloves') Icon = TbHandGrab;
+            else if (item.name === 'Agent') Icon = TbUser;
+            else if (item.name === 'Music Kit') Icon = TbMusic;
+            else if (item.name === 'Pin') Icon = TbPin;
+            else if (item.name === 'Patch') Icon = TbCircleDot;
+            else if (item.name === 'Graffiti') Icon = TbPalette;
+            else if (item.name === 'Charm') Icon = TbDiamond;
 
             resultOptions.push({
               label: `${item.name} (${item.count})`,
@@ -420,88 +424,94 @@ export function usePortfolioFilters({ rows, buffPricesCny }: UsePortfolioFilters
     return base;
   }, [subtypeOptions, t]);
 
-  const filteredData = useMemo(
-    () => {
-      const filtered = rows.filter((row) => {
-        if (!sourceMatchesFilters(row, sourceFilters)) return false;
-        if (itemTypeFilters.length > 0) {
-          const matches = itemTypeFilters.some((filterVal) => {
-            if (filterVal.startsWith("subtype:")) {
-              const subtype = filterVal.substring(8);
-              return getRowSubtype(row) === subtype;
-            }
-            if (filterVal.startsWith("group:")) {
-              const catKey = filterVal.substring(6);
-              return getWeaponCategoryKey(getRowSubtype(row)) === catKey;
-            }
-            return row.itemType === filterVal;
-          });
-          if (!matches) return false;
-        }
-        if (
-          accountFilters.length > 0 &&
-          !accountMatchesFilters(row, accountFilters)
-        ) {
-          return false;
-        }
-        if (statusFilters.length > 0) {
-          const itemForStatus = accountFilters.length > 0
+  const filteredData = useMemo(() => {
+    const filtered = rows.filter((row) => {
+      if (!sourceMatchesFilters(row, sourceFilters)) return false;
+      if (itemTypeFilters.length > 0) {
+        const matches = itemTypeFilters.some((filterVal) => {
+          if (filterVal.startsWith('subtype:')) {
+            const subtype = filterVal.substring(8);
+            return getRowSubtype(row) === subtype;
+          }
+          if (filterVal.startsWith('group:')) {
+            const catKey = filterVal.substring(6);
+            return getWeaponCategoryKey(getRowSubtype(row)) === catKey;
+          }
+          return row.itemType === filterVal;
+        });
+        if (!matches) return false;
+      }
+      if (accountFilters.length > 0 && !accountMatchesFilters(row, accountFilters)) {
+        return false;
+      }
+      if (statusFilters.length > 0) {
+        const itemForStatus =
+          accountFilters.length > 0
             ? {
                 ...row,
-                sourceAccounts: row.sourceAccounts.filter((account) => accountFilters.includes(account.steamId64))
+                sourceAccounts: row.sourceAccounts.filter((account) =>
+                  accountFilters.includes(account.steamId64)
+                ),
               }
             : row;
-          const breakdown = getItemStatusBreakdown(itemForStatus);
-          const statuses = new Set<string>();
-          if (breakdown.tradeable > 0) statuses.add("tradeable");
-          if (breakdown.onMarket > 0) statuses.add("market");
-          if (breakdown.tradeProtected > 0) statuses.add("protected");
-          if (breakdown.hold > 0) statuses.add("hold");
+        const breakdown = getItemStatusBreakdown(itemForStatus);
+        const statuses = new Set<string>();
+        if (breakdown.tradeable > 0) statuses.add('tradeable');
+        if (breakdown.onMarket > 0) statuses.add('market');
+        if (breakdown.tradeProtected > 0) statuses.add('protected');
+        if (breakdown.hold > 0) statuses.add('hold');
 
-          // If status is unknown (no breakdown data), don't exclude the item —
-          // we can't determine its real status so we let it pass all status filters.
-          if (statuses.size === 0) return true;
+        // If status is unknown (no breakdown data), don't exclude the item —
+        // we can't determine its real status so we let it pass all status filters.
+        if (statuses.size === 0) return true;
 
-          const matchesStatus = statusFilters.some((s) => statuses.has(s));
-          if (!matchesStatus) return false;
-        }
-        if (priceSourceFilters.length > 0) {
-          const hasBuffPrice = buffPricesCny[row.case.marketHashName] !== undefined && buffPricesCny[row.case.marketHashName] > 0;
-          const matchesBuff = priceSourceFilters.includes("buff") && hasBuffPrice;
-          const matchesSteam = priceSourceFilters.includes("steam") && !hasBuffPrice;
-          if (!matchesBuff && !matchesSteam) return false;
-        }
-        return true;
-      });
-
-      if (accountFilters.length === 0) {
-        return filtered;
+        const matchesStatus = statusFilters.some((s) => statuses.has(s));
+        if (!matchesStatus) return false;
       }
+      if (priceSourceFilters.length > 0) {
+        const hasBuffPrice =
+          buffPricesCny[row.case.marketHashName] !== undefined &&
+          buffPricesCny[row.case.marketHashName] > 0;
+        const matchesBuff = priceSourceFilters.includes('buff') && hasBuffPrice;
+        const matchesSteam = priceSourceFilters.includes('steam') && !hasBuffPrice;
+        if (!matchesBuff && !matchesSteam) return false;
+      }
+      return true;
+    });
 
-      return filtered.map((row) => {
-        const {
-          quantity: selectedQuantity,
-          storageUnitQuantity: selectedStorageUnitQuantity,
-        } = getAccountFilteredQuantity(row, accountFilters);
-        const buyPrice = row.buyPrice;
-        const investedValue = selectedQuantity * buyPrice;
-        const currentValue = row.currentPrice !== null ? selectedQuantity * row.currentPrice : null;
-        const profitAmount = currentValue !== null ? currentValue - investedValue : null;
-        const profitPercent = investedValue > 0 && profitAmount !== null ? (profitAmount / investedValue) * 100 : 0;
+    if (accountFilters.length === 0) {
+      return filtered;
+    }
 
-        return {
-          ...row,
-          quantity: selectedQuantity,
-          storageUnitQuantity: selectedStorageUnitQuantity,
-          investedValue,
-          currentValue,
-          profitAmount,
-          profitPercent,
-        };
-      });
-    },
-    [rows, sourceFilters, itemTypeFilters, accountFilters, statusFilters, priceSourceFilters, buffPricesCny]
-  );
+    return filtered.map((row) => {
+      const { quantity: selectedQuantity, storageUnitQuantity: selectedStorageUnitQuantity } =
+        getAccountFilteredQuantity(row, accountFilters);
+      const buyPrice = row.buyPrice;
+      const investedValue = selectedQuantity * buyPrice;
+      const currentValue = row.currentPrice !== null ? selectedQuantity * row.currentPrice : null;
+      const profitAmount = currentValue !== null ? currentValue - investedValue : null;
+      const profitPercent =
+        investedValue > 0 && profitAmount !== null ? (profitAmount / investedValue) * 100 : 0;
+
+      return {
+        ...row,
+        quantity: selectedQuantity,
+        storageUnitQuantity: selectedStorageUnitQuantity,
+        investedValue,
+        currentValue,
+        profitAmount,
+        profitPercent,
+      };
+    });
+  }, [
+    rows,
+    sourceFilters,
+    itemTypeFilters,
+    accountFilters,
+    statusFilters,
+    priceSourceFilters,
+    buffPricesCny,
+  ]);
 
   const isResetVisible =
     sourceFilters.length > 0 ||

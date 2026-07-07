@@ -1,14 +1,15 @@
-"use client";
+'use client';
 
-import { useState, useMemo } from "react";
-import { useTranslation } from "react-i18next";
-import { TbSearch, TbInfoCircle } from "react-icons/tb";
-import { Loader2, Trash2 } from "lucide-react";
-import { Button } from "@/components/ui/button";
-import { ConfirmDialog } from "@/components/ui/confirm-dialog";
-import { formatVND } from "@/utils/format";
-import { proxySteamUrl } from "@/utils/url";
-import type { PortfolioReportDto } from "@/types/report";
+import { useState, useMemo } from 'react';
+import { useTranslation } from 'react-i18next';
+import { TbSearch, TbInfoCircle } from 'react-icons/tb';
+import { Loader2, Trash2 } from 'lucide-react';
+import { Button } from '@/components/ui/button';
+import { ConfirmDialog } from '@/components/ui/confirm-dialog';
+import { formatVND } from '@/utils/format';
+import { proxySteamUrl } from '@/utils/url';
+import type { PortfolioReportDto } from '@/types/report';
+import { getStorageUnitItemKey } from './storage-unit-utils';
 export interface StorageUnitItem {
   caseId: string;
   marketHashName: string;
@@ -54,14 +55,12 @@ export function StorageUnitInspectPanel({
   deletingItemKey,
 }: StorageUnitInspectPanelProps) {
   const { t } = useTranslation();
-  const [searchQuery, setSearchQuery] = useState("");
+  const [searchQuery, setSearchQuery] = useState('');
   const [deleteTarget, setDeleteTarget] = useState<StorageUnitItem | null>(null);
 
   // Helper to get Steam Price in VND
   const getSteamPrice = (marketHashName: string): number => {
-    const matchedRow = report?.rows.find(
-      (r) => r.case.marketHashName === marketHashName,
-    );
+    const matchedRow = report?.rows.find((r) => r.case.marketHashName === marketHashName);
     return matchedRow?.currentPrice ?? 0;
   };
 
@@ -86,14 +85,11 @@ export function StorageUnitInspectPanel({
     let totalBuff = 0;
 
     for (const item of storageUnit.items) {
-      const matchedRow = report?.rows.find(
-        (r) => r.case.marketHashName === item.marketHashName,
-      );
+      const matchedRow = report?.rows.find((r) => r.case.marketHashName === item.marketHashName);
       const steam = matchedRow?.currentPrice ?? 0;
 
       const priceCny = buffPricesCny[item.marketHashName];
-      const buff =
-        priceCny && priceCny > 0 ? Math.round(priceCny * buffCnyToVndRate) : 0;
+      const buff = priceCny && priceCny > 0 ? Math.round(priceCny * buffCnyToVndRate) : 0;
 
       totalSteam += steam * item.quantity;
       totalBuff += (buff > 0 ? buff : steam) * item.quantity;
@@ -111,22 +107,21 @@ export function StorageUnitInspectPanel({
     const query = searchQuery.toLowerCase().trim();
     return storageUnit.items.filter(
       (item) =>
-        item.name.toLowerCase().includes(query) ||
-        item.marketHashName.toLowerCase().includes(query),
+        item.name.toLowerCase().includes(query) || item.marketHashName.toLowerCase().includes(query)
     );
   }, [storageUnit.items, searchQuery]);
 
   return (
     <div className="flex h-full flex-col space-y-5">
       {/* Summary HUD Header */}
-      <div className="grid shrink-0 grid-cols-2 gap-3 rounded-sm border border-border bg-surface/10 p-4">
+      <div className="border-border bg-surface/10 grid shrink-0 grid-cols-2 gap-3 rounded-sm border p-4">
         <div>
-          <span className="block font-mono text-[10px] tracking-wider text-muted-foreground uppercase">
-            {t("portfolio.capacity", "Capacity")}
+          <span className="text-muted-foreground block font-mono text-[10px] tracking-wider uppercase">
+            {t('portfolio.capacity', 'Capacity')}
           </span>
-          <span className="mt-0.5 block text-sm font-semibold text-foreground">
-            {storageUnit.currentCount}{" "}
-            <span className="text-[10px] font-normal text-muted-foreground">
+          <span className="text-foreground mt-0.5 block text-sm font-semibold">
+            {storageUnit.currentCount}{' '}
+            <span className="text-muted-foreground text-[10px] font-normal">
               / {storageUnit.maxCapacity}
             </span>
           </span>
@@ -142,14 +137,14 @@ export function StorageUnitInspectPanel({
         </div>
 
         <div>
-          <span className="block font-mono text-[10px] tracking-wider text-muted-foreground uppercase">
-            {t("portfolio.totalValue", "Total Value")}
+          <span className="text-muted-foreground block font-mono text-[10px] tracking-wider uppercase">
+            {t('portfolio.totalValue', 'Total Value')}
           </span>
           <span className="mt-0.5 block text-sm font-bold text-emerald-400">
             {formatVND(totals.buff)}
           </span>
-          <span className="mt-0.5 block font-mono text-[9px] text-muted-foreground">
-            {t("portfolio.byBuffSteam", "Based on Buff163 / Steam Market prices")}
+          <span className="text-muted-foreground mt-0.5 block font-mono text-[9px]">
+            {t('portfolio.byBuffSteam', 'Based on Buff163 / Steam Market prices')}
           </span>
         </div>
       </div>
@@ -157,13 +152,13 @@ export function StorageUnitInspectPanel({
       {/* Controls: Search Input */}
       <div className="flex shrink-0 flex-col items-stretch justify-between gap-3 sm:flex-row sm:items-center">
         <div className="relative flex-1">
-          <TbSearch className="absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted-foreground" />
+          <TbSearch className="text-muted-foreground absolute top-1/2 left-3 size-4 -translate-y-1/2" />
           <input
             type="text"
-            placeholder={t("portfolio.searchCaseItem", "Search item...")}
+            placeholder={t('portfolio.searchCaseItem', 'Search item...')}
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            className="w-full rounded-sm border border-border bg-surface py-2 pr-4 pl-9 font-sans text-xs text-foreground transition-all placeholder:text-muted-foreground focus:border-amber-500/50 focus:ring-1 focus:ring-amber-500/20 focus:outline-none"
+            className="border-border bg-surface text-foreground placeholder:text-muted-foreground w-full rounded-sm border py-2 pr-4 pl-9 font-sans text-xs transition-all focus:border-amber-500/50 focus:ring-1 focus:ring-amber-500/20 focus:outline-none"
           />
         </div>
       </div>
@@ -181,21 +176,19 @@ export function StorageUnitInspectPanel({
             return (
               <div
                 key={`${item.caseId}-${item.marketHashName}-${index}`}
-                role={onSelectItem ? "button" : undefined}
+                role={onSelectItem ? 'button' : undefined}
                 tabIndex={onSelectItem ? 0 : undefined}
                 onClick={() => onSelectItem?.(item)}
                 onKeyDown={(event) => {
                   if (!onSelectItem) return;
-                  if (event.key === "Enter" || event.key === " ") {
+                  if (event.key === 'Enter' || event.key === ' ') {
                     event.preventDefault();
                     onSelectItem(item);
                   }
                 }}
-                className="group relative flex cursor-pointer items-center justify-between rounded-sm border border-border bg-stone-900/30 p-2.5 transition-all duration-150 hover:border-amber-500/25 hover:bg-stone-900/60 focus:border-amber-500/40 focus:outline-none"
+                className="group border-border relative flex cursor-pointer items-center justify-between rounded-sm border bg-stone-900/30 p-2.5 transition-all duration-150 hover:border-amber-500/25 hover:bg-stone-900/60 focus:border-amber-500/40 focus:outline-none"
                 style={{
-                  borderLeft: itemRarityColor
-                    ? `3px solid ${itemRarityColor}`
-                    : undefined,
+                  borderLeft: itemRarityColor ? `3px solid ${itemRarityColor}` : undefined,
                 }}
               >
                 {/* Left side: Image & Name */}
@@ -218,12 +211,12 @@ export function StorageUnitInspectPanel({
 
                   <div className="min-w-0">
                     <span
-                      className="block truncate text-xs font-semibold text-foreground transition-colors group-hover:text-amber-400"
+                      className="text-foreground block truncate text-xs font-semibold transition-colors group-hover:text-amber-400"
                       title={item.name}
                     >
                       {item.name}
                     </span>
-                    <span className="mt-0.5 block truncate font-mono text-[9px] text-muted-foreground">
+                    <span className="text-muted-foreground mt-0.5 block truncate font-mono text-[9px]">
                       {item.marketHashName}
                     </span>
                   </div>
@@ -232,15 +225,15 @@ export function StorageUnitInspectPanel({
                 {/* Right side: Prices & Value */}
                 <div className="flex shrink-0 flex-col items-end text-right">
                   <span className="font-mono text-xs font-bold text-slate-100">
-                    {totalPrice > 0 ? formatVND(totalPrice) : "—"}
+                    {totalPrice > 0 ? formatVND(totalPrice) : '—'}
                   </span>
                   {unitPrice > 0 ? (
-                    <span className="mt-0.5 font-mono text-[9px] text-muted-foreground">
-                      {formatVND(unitPrice)} / {t("portfolio.perUnit", "unit")}
+                    <span className="text-muted-foreground mt-0.5 font-mono text-[9px]">
+                      {formatVND(unitPrice)} / {t('portfolio.perUnit', 'unit')}
                     </span>
                   ) : (
                     <span className="mt-0.5 flex items-center gap-1 font-mono text-[9px] text-stone-600">
-                      {t("portfolio.noPrice", "No price")} <TbInfoCircle className="size-2.5" />
+                      {t('portfolio.noPrice', 'No price')} <TbInfoCircle className="size-2.5" />
                     </span>
                   )}
                 </div>
@@ -250,8 +243,8 @@ export function StorageUnitInspectPanel({
                     variant="ghost"
                     size="icon"
                     disabled={isDeleting}
-                    title={t("portfolio.removeFromStorageUnit", "Remove from Storage Unit")}
-                    aria-label={t("portfolio.removeFromStorageUnit", "Remove from Storage Unit")}
+                    title={t('portfolio.removeFromStorageUnit', 'Remove from Storage Unit')}
+                    aria-label={t('portfolio.removeFromStorageUnit', 'Remove from Storage Unit')}
                     onClick={(event) => {
                       event.stopPropagation();
                       setDeleteTarget(item);
@@ -271,8 +264,8 @@ export function StorageUnitInspectPanel({
         ) : (
           <div className="flex flex-col items-center justify-center rounded-sm border border-dashed border-stone-800 py-12 text-center">
             <span className="mb-2 text-2xl">🔍</span>
-            <p className="text-xs font-medium text-muted-foreground">
-              {t("portfolio.noItemsFound", "No items found.")}
+            <p className="text-muted-foreground text-xs font-medium">
+              {t('portfolio.noItemsFound', 'No items found.')}
             </p>
           </div>
         )}
@@ -280,17 +273,17 @@ export function StorageUnitInspectPanel({
       <ConfirmDialog
         open={deleteTarget !== null}
         onClose={() => setDeleteTarget(null)}
-        title={t("portfolio.confirmRemoveStorageUnitItemTitle", "Remove item from Storage Unit")}
+        title={t('portfolio.confirmRemoveStorageUnitItemTitle', 'Remove item from Storage Unit')}
         description={t(
-          "portfolio.confirmRemoveStorageUnitItemDesc",
-          "Remove all {{count}} unit(s) of \"{{name}}\" from this Storage Unit?",
+          'portfolio.confirmRemoveStorageUnitItemDesc',
+          'Remove all {{count}} unit(s) of "{{name}}" from this Storage Unit?',
           {
             count: deleteTarget?.quantity ?? 0,
-            name: deleteTarget?.name ?? "",
-          },
+            name: deleteTarget?.name ?? '',
+          }
         )}
-        confirmText={t("portfolio.removeFromStorageUnit", "Remove from Storage Unit")}
-        cancelText={t("common.cancel", "Cancel")}
+        confirmText={t('portfolio.removeFromStorageUnit', 'Remove from Storage Unit')}
+        cancelText={t('common.cancel', 'Cancel')}
         variant="danger"
         onConfirm={async () => {
           if (!deleteTarget || !onDeleteItem) return;
@@ -300,10 +293,4 @@ export function StorageUnitInspectPanel({
       />
     </div>
   );
-}
-
-export function getStorageUnitItemKey(
-  item: Pick<StorageUnitItem, "caseId" | "marketHashName">,
-) {
-  return item.caseId || item.marketHashName;
 }

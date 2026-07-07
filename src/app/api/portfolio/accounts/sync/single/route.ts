@@ -17,15 +17,13 @@ import {
   pollJobProgress,
   startInventoryScanJob,
   buildSyncGroupKey,
+  buildSyncChangeSummary,
   createImportedCase,
   updateImportedCaseMetadata,
   type ExistingPortfolioItem,
   type SyncScannedItem,
   type GroupedInput,
   type SyncProgressEvent,
-  type AccountChangeDetail,
-  type MissingItem,
-  type ExtraItem,
   type SyncStorageUnit,
   type ScanResult,
 } from '@/services/portfolio-sync';
@@ -60,10 +58,7 @@ export async function POST(request: NextRequest) {
     })) as unknown as PortfolioAccountDb | null;
 
     if (!targetAccount) {
-      return NextResponse.json(
-        { message: 'accountNotFound' },
-        { status: 404 }
-      );
+      return NextResponse.json({ message: 'accountNotFound' }, { status: 404 });
     }
 
     const lastSyncedAt = targetAccount.lastSyncedAt;
@@ -130,7 +125,7 @@ export async function POST(request: NextRequest) {
               ? decrypt(targetAccount.steamCookie)
               : undefined;
             const jobId = await startInventoryScanJob({
-              steamUrl: targetAccount.steamUrl ?? "",
+              steamUrl: targetAccount.steamUrl ?? '',
               steamCookie: rawCookie?.trim() || undefined,
               forceRefresh: true,
               ownerId,
@@ -172,7 +167,8 @@ export async function POST(request: NextRequest) {
           } catch (scanError) {
             console.error(`Error scanning account ${accountName}:`, scanError);
             skippedAccounts.push(accountName);
-            targetScanErrorMessage = scanError instanceof Error ? scanError.message : 'Unknown error';
+            targetScanErrorMessage =
+              scanError instanceof Error ? scanError.message : 'Unknown error';
 
             send({
               type: 'account_error',
@@ -199,7 +195,7 @@ export async function POST(request: NextRequest) {
           // 2. Load cached scan results for all other accounts
           send({
             type: 'import_start',
-            message: "syncFetchingCacheOtherAccounts",
+            message: 'syncFetchingCacheOtherAccounts',
             percent: 82,
           });
 
@@ -208,14 +204,15 @@ export async function POST(request: NextRequest) {
             if (currentSteamId === targetSteamId64) continue;
 
             try {
-              const cached = (await getCachedScan({
+              const cached = ((await getCachedScan({
                 steamId64: currentSteamId,
                 ownerId,
                 hasCookie: true,
-              }) ?? await getCachedScan({
-                steamId64: currentSteamId,
-                hasCookie: false,
-              })) as unknown as ScanResult | null;
+              })) ??
+                (await getCachedScan({
+                  steamId64: currentSteamId,
+                  hasCookie: false,
+                }))) as unknown as ScanResult | null;
 
               if (cached) {
                 processScanResult(cached, account, allScannedItems, allScannedStorageUnits);
@@ -298,10 +295,7 @@ export async function POST(request: NextRequest) {
             const price = getImportableScanPrice(item.price);
             const sourceAccounts = item.sourceAccounts || [];
 
-            if (
-              !Number.isFinite(quantity) ||
-              quantity <= 0
-            ) {
+            if (!Number.isFinite(quantity) || quantity <= 0) {
               skippedItems.push(marketHashName || 'unknown');
               continue;
             }
@@ -373,13 +367,8 @@ export async function POST(request: NextRequest) {
               continue;
             }
 
-            const stickerFields = await buildAccessoryPriceFields(
-              item.patternInfo,
-              priceService,
-            );
-            const priceWithSticker = Math.round(
-              price + (stickerFields.stickerBuyPriceAdd ?? 0),
-            );
+            const stickerFields = await buildAccessoryPriceFields(item.patternInfo, priceService);
+            const priceWithSticker = Math.round(price + (stickerFields.stickerBuyPriceAdd ?? 0));
             const groupKey = buildSyncGroupKey({
               caseId: resolvedCaseItem.id,
               dopplerPhase: item.dopplerPhase,
@@ -403,8 +392,8 @@ export async function POST(request: NextRequest) {
                 ...existing,
                 quantity: nextQuantity,
                 buyPrice: Math.round(
-                  (existing.buyPrice * existing.quantity +
-                    priceWithSticker * quantity) / nextQuantity
+                  (existing.buyPrice * existing.quantity + priceWithSticker * quantity) /
+                    nextQuantity
                 ),
                 sourceAccounts: mergeSourceAccounts(existing.sourceAccounts, sourceAccounts),
                 holdDays: Math.max(existing.holdDays, item.holdDays ?? 0),
@@ -454,7 +443,7 @@ export async function POST(request: NextRequest) {
                   stickerBuyPriceRate: input.stickerBuyPriceRate,
                   stickerScanTotalPrice: input.stickerScanTotalPrice,
                   stickerScanPriceCapturedAt: input.stickerScanPriceCapturedAt,
-                },
+                }
               );
             });
 
@@ -512,244 +501,12 @@ export async function POST(request: NextRequest) {
             }));
           }
 
-          // Detect missing and extra items (changes in quantity)
-          const missingItems: MissingItem[] = [];
-          const extraItems: ExtraItem[] = [];
-
-          const getAccountChanges = (groupKey: string) => {
-            const prevMap = new Map<
-              string,
-              { steamId64: string; name: string; quantity: number }
-            >();
-            const newMap = new Map<string, { steamId64: string; name: string; quantity: number }>();
-
-            const prevItems = existingPortfolioItems.filter((item) => {
-              const k = buildSyncGroupKey({
-                caseId: String(item.caseId),
-                dopplerPhase: item.dopplerPhase,
-                inspectLink: item.inspectLink,
-                patternInfo: item.patternInfo,
-              });
-              return k === groupKey;
-            });
-            for (const item of prevItems) {
-              if (item.sourceAccounts) {
-                for (const sa of item.sourceAccounts) {
-                  const qty = sa.breakdown
-                    ? (sa.breakdown.tradeable ?? 0) +
-                      (sa.breakdown.onMarket ?? 0) +
-                      (sa.breakdown.tradeProtected ?? 0) +
-                      (sa.breakdown.hold ?? 0)
-                    : 0;
-                  const existing = prevMap.get(sa.steamId64);
-                  if (existing) {
-                    existing.quantity += qty;
-                  } else {
-                    prevMap.set(sa.steamId64, {
-                      steamId64: sa.steamId64,
-                      name: sa.name,
-                      quantity: qty,
-                    });
-                  }
-                }
-              }
-            }
-
-            const input = groupedInputs.get(groupKey);
-            if (input?.sourceAccounts) {
-              for (const sa of input.sourceAccounts) {
-                const qty = sa.breakdown
-                  ? (sa.breakdown.tradeable ?? 0) +
-                    (sa.breakdown.onMarket ?? 0) +
-                    (sa.breakdown.tradeProtected ?? 0) +
-                    (sa.breakdown.hold ?? 0)
-                  : 0;
-                const existing = newMap.get(sa.steamId64);
-                if (existing) {
-                  existing.quantity += qty;
-                } else {
-                  newMap.set(sa.steamId64, {
-                    steamId64: sa.steamId64,
-                    name: sa.name,
-                    quantity: qty,
-                  });
-                }
-              }
-            }
-
-            const changes: AccountChangeDetail[] = [];
-
-            for (const [steamId64, prev] of prevMap) {
-              const current = newMap.get(steamId64);
-              const currentQty = current?.quantity ?? 0;
-              const diff = currentQty - prev.quantity;
-              if (diff !== 0) {
-                changes.push({
-                  steamId64,
-                  name: prev.name,
-                  change: diff,
-                  previousQuantity: prev.quantity,
-                  currentQuantity: currentQty,
-                });
-              }
-            }
-
-            for (const [steamId64, current] of newMap) {
-              if (!prevMap.has(steamId64)) {
-                changes.push({
-                  steamId64,
-                  name: current.name,
-                  change: current.quantity,
-                  previousQuantity: 0,
-                  currentQuantity: current.quantity,
-                });
-              }
-            }
-
-            return changes;
-          };
-
-          // Build a map of groupKey -> previous quantity for the target account only
-          const previousTargetQuantities = new Map<string, number>();
-          for (const doc of existingPortfolioItems) {
-            const caseId = String(doc.caseId);
-            const groupKey = buildSyncGroupKey({
-              caseId,
-              dopplerPhase: doc.dopplerPhase,
-              inspectLink: doc.inspectLink,
-              patternInfo: doc.patternInfo,
-            });
-
-            if (doc.sourceAccounts) {
-              for (const sa of doc.sourceAccounts) {
-                if (String(sa.steamId64) === targetSteamId64) {
-                  const qty = sa.breakdown
-                    ? (sa.breakdown.tradeable ?? 0) +
-                      (sa.breakdown.onMarket ?? 0) +
-                      (sa.breakdown.tradeProtected ?? 0) +
-                      (sa.breakdown.hold ?? 0)
-                    : 0;
-                  const existingQty = previousTargetQuantities.get(groupKey) ?? 0;
-                  previousTargetQuantities.set(groupKey, existingQty + qty);
-                }
-              }
-            }
-          }
-
-          const getNewTargetQuantity = (groupKey: string): number => {
-            const input = groupedInputs.get(groupKey);
-            if (!input || !input.sourceAccounts) return 0;
-            let qty = 0;
-            for (const sa of input.sourceAccounts) {
-              if (String(sa.steamId64) === targetSteamId64) {
-                qty += sa.breakdown
-                  ? (sa.breakdown.tradeable ?? 0) +
-                    (sa.breakdown.onMarket ?? 0) +
-                    (sa.breakdown.tradeProtected ?? 0) +
-                    (sa.breakdown.hold ?? 0)
-                  : 0;
-              }
-            }
-            return qty;
-          };
-
-          // 1. Compare items that were in previous portfolio for this target account
-          for (const [groupKey, prevTargetQty] of previousTargetQuantities) {
-            const newTargetQty = getNewTargetQuantity(groupKey);
-            const [caseId] = groupKey.split(":");
-
-            if (newTargetQty < prevTargetQty) {
-              const caseDoc = await caseRepository.findById(caseId);
-              const targetChanges = getAccountChanges(groupKey).filter(
-                (change) => String(change.steamId64) === targetSteamId64,
-              );
-              missingItems.push({
-                caseId,
-                marketHashName: caseDoc?.marketHashName ?? 'unknown',
-                caseName: caseDoc?.name ?? 'Unknown Item',
-                imageUrl: caseDoc?.imageUrl ?? null,
-                previousQuantity: prevTargetQty,
-                currentQuantity: newTargetQty,
-                missingQuantity: prevTargetQty - newTargetQty,
-                accounts: targetChanges,
-              });
-            } else if (newTargetQty > prevTargetQty) {
-              const caseDoc = await caseRepository.findById(caseId);
-              const targetChanges = getAccountChanges(groupKey).filter(
-                (change) => String(change.steamId64) === targetSteamId64,
-              );
-              const input = groupedInputs.get(groupKey);
-              const breakdown = {
-                tradeable: 0,
-                onMarket: 0,
-                tradeProtected: 0,
-                hold: 0,
-              };
-              if (input?.sourceAccounts) {
-                for (const sa of input.sourceAccounts) {
-                  if (sa.breakdown) {
-                    breakdown.tradeable += sa.breakdown.tradeable ?? 0;
-                    breakdown.onMarket += sa.breakdown.onMarket ?? 0;
-                    breakdown.tradeProtected += sa.breakdown.tradeProtected ?? 0;
-                    breakdown.hold += sa.breakdown.hold ?? 0;
-                  }
-                }
-              }
-              extraItems.push({
-                caseId,
-                marketHashName: caseDoc?.marketHashName ?? 'unknown',
-                caseName: caseDoc?.name ?? 'Unknown Item',
-                imageUrl: caseDoc?.imageUrl ?? null,
-                previousQuantity: prevTargetQty,
-                currentQuantity: newTargetQty,
-                extraQuantity: newTargetQty - prevTargetQty,
-                accounts: targetChanges,
-                breakdown,
-              });
-            }
-          }
-
-          // 2. Identify brand new items for this target account
-          for (const [groupKey] of groupedInputs) {
-            if (!previousTargetQuantities.has(groupKey)) {
-              const newTargetQty = getNewTargetQuantity(groupKey);
-              if (newTargetQty > 0) {
-                const [caseId] = groupKey.split(":");
-                const caseDoc = await caseRepository.findById(caseId);
-                const targetChanges = getAccountChanges(groupKey).filter(
-                  (change) => String(change.steamId64) === targetSteamId64,
-                );
-                const input = groupedInputs.get(groupKey);
-                const breakdown = {
-                  tradeable: 0,
-                  onMarket: 0,
-                  tradeProtected: 0,
-                  hold: 0,
-                };
-                if (input?.sourceAccounts) {
-                  for (const sa of input.sourceAccounts) {
-                    if (sa.breakdown) {
-                      breakdown.tradeable += sa.breakdown.tradeable ?? 0;
-                      breakdown.onMarket += sa.breakdown.onMarket ?? 0;
-                      breakdown.tradeProtected += sa.breakdown.tradeProtected ?? 0;
-                      breakdown.hold += sa.breakdown.hold ?? 0;
-                    }
-                  }
-                }
-                extraItems.push({
-                  caseId,
-                  marketHashName: caseDoc?.marketHashName ?? 'unknown',
-                  caseName: caseDoc?.name ?? 'Unknown Item',
-                  imageUrl: caseDoc?.imageUrl ?? null,
-                  previousQuantity: 0,
-                  currentQuantity: newTargetQty,
-                  extraQuantity: newTargetQty,
-                  accounts: targetChanges,
-                  breakdown,
-                });
-              }
-            }
-          }
+          const { missingItems, extraItems } = await buildSyncChangeSummary({
+            existingPortfolioItems,
+            groupedInputs,
+            caseRepository,
+            targetSteamId64,
+          });
 
           const scannedAccountsCount = skippedAccounts.length > 0 ? 0 : 1;
 
@@ -770,7 +527,6 @@ export async function POST(request: NextRequest) {
               { _id: targetAccount._id, ...getOwnerFilter(ownerId) },
               { $set: { lastSyncedAt: new Date() } }
             );
-
 
           send({
             type: 'complete',

@@ -13,6 +13,7 @@ import { useTranslation } from 'react-i18next';
 import { changeLanguage } from '@/i18n/config';
 import { Button } from '@/components/ui/button';
 import { CS2CapModal } from './cs2cap-modal';
+import { useIsMobile } from '@/hooks/use-is-mobile';
 
 const springTransition = {
   type: 'spring',
@@ -72,14 +73,7 @@ export function AuthStatus() {
 
   // Interactive language state
   const [lang, setLang] = useState<'vi' | 'en'>(i18n.language as 'vi' | 'en');
-  const [isMobile, setIsMobile] = useState(false);
-
-  useEffect(() => {
-    const checkMobile = () => setIsMobile(window.innerWidth < 768);
-    checkMobile();
-    window.addEventListener('resize', checkMobile);
-    return () => window.removeEventListener('resize', checkMobile);
-  }, []);
+  const isMobile = useIsMobile();
 
   // Load language from localStorage
   useEffect(() => {

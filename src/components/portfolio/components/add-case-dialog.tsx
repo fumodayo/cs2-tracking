@@ -1,38 +1,38 @@
-"use client";
+'use client';
 
-import { useQuery } from "@tanstack/react-query";
-import { useTranslation } from "react-i18next";
-import { useMemo, useState, useEffect, useCallback } from "react";
+import { useQuery } from '@tanstack/react-query';
+import { useTranslation } from 'react-i18next';
+import { useMemo, useState, useEffect, useCallback } from 'react';
 import {
   STEAM_ACCOUNTS_QUERY_KEY,
   STORAGE_UNITS_QUERY_KEY,
   fetchSteamAccounts,
   fetchAccountStorageUnits,
-} from "@/lib/api-client/steam-accounts-api";
-import { type CaseItemSearchData } from "../case-search-select";
-import { useForm, useWatch } from "react-hook-form";
-import { Button } from "@/components/ui/button";
+} from '@/lib/api-client/steam-accounts-api';
+import { type CaseItemSearchData } from '../case-search-select';
+import { useForm, useWatch } from 'react-hook-form';
+import { Button } from '@/components/ui/button';
 import {
   Dialog,
   DialogContent,
   DialogDescription,
   DialogHeader,
   DialogTitle,
-} from "@/components/ui/dialog";
+} from '@/components/ui/dialog';
 import {
   formatInputDate,
   formatIntegerViInput as formatIntegerVi,
   formatDecimalViInput as formatDecimalVi,
   parseViFloat,
-} from "@/utils/format";
-import { calculateTradeHoldUntil } from "@/utils/date";
+} from '@/utils/format';
+import { calculateTradeHoldUntil } from '@/utils/date';
 
-import { FormValues } from "./add-case-dialog/types";
-import { CaseSelectionSection } from "./add-case-dialog/case-selection-section";
-import { PricingFormulaSection } from "./add-case-dialog/pricing-formula-section";
-import { QuantityDateSection } from "./add-case-dialog/quantity-date-section";
-import { LocationSelectionSection } from "./add-case-dialog/location-selection-section";
-import { StatusSection } from "./add-case-dialog/status-section";
+import { FormValues } from './add-case-dialog/types';
+import { CaseSelectionSection } from './add-case-dialog/case-selection-section';
+import { PricingFormulaSection } from './add-case-dialog/pricing-formula-section';
+import { QuantityDateSection } from './add-case-dialog/quantity-date-section';
+import { LocationSelectionSection } from './add-case-dialog/location-selection-section';
+import { StatusSection } from './add-case-dialog/status-section';
 
 type AddCaseDialogProps = {
   open: boolean;
@@ -68,39 +68,32 @@ export function AddCaseDialog({
   defaultBuffRate = 3600,
 }: AddCaseDialogProps) {
   const { t } = useTranslation();
-  const [selectedCase, setSelectedCase] = useState<CaseItemSearchData | null>(
-    null,
-  );
+  const [selectedCase, setSelectedCase] = useState<CaseItemSearchData | null>(null);
   const [isResetting, setIsResetting] = useState(false);
 
   const form = useForm<FormValues>({
     defaultValues: {
-      quantity: "1",
-      buyPrice: "",
+      quantity: '1',
+      buyPrice: '',
       buyDate: formatInputDate(new Date()),
-      buffPrice: "",
+      buffPrice: '',
       buffRate: formatIntegerVi(defaultBuffRate),
-      accountId: "",
-      storageUnitId: "",
-      itemState: "tradeable",
-      holdDays: "",
+      accountId: '',
+      storageUnitId: '',
+      itemState: 'tradeable',
+      holdDays: '',
     },
   });
 
-  const {
-    control,
-    setValue,
-    handleSubmit: formSubmit,
-    reset,
-  } = form;
+  const { control, setValue, handleSubmit: formSubmit, reset } = form;
 
-  const accountId = useWatch({ control, name: "accountId" });
-  const itemState = useWatch({ control, name: "itemState" });
-  const buffPrice = useWatch({ control, name: "buffPrice" });
-  const buffRate = useWatch({ control, name: "buffRate" });
-  const buyPrice = useWatch({ control, name: "buyPrice" });
-  const quantity = useWatch({ control, name: "quantity" });
-  const buyDate = useWatch({ control, name: "buyDate" });
+  const accountId = useWatch({ control, name: 'accountId' });
+  const itemState = useWatch({ control, name: 'itemState' });
+  const buffPrice = useWatch({ control, name: 'buffPrice' });
+  const buffRate = useWatch({ control, name: 'buffRate' });
+  const buyPrice = useWatch({ control, name: 'buyPrice' });
+  const quantity = useWatch({ control, name: 'quantity' });
+  const buyDate = useWatch({ control, name: 'buyDate' });
 
   // Fetch linked accounts
   const accountsQuery = useQuery({
@@ -113,12 +106,10 @@ export function AddCaseDialog({
   const accounts = useMemo(() => accountsQuery.data ?? [], [accountsQuery.data]);
 
   const selectedAccount = useMemo(() => {
-    return accounts.find(
-      (acc) => acc.id === accountId || acc.steamId64 === accountId,
-    );
+    return accounts.find((acc) => acc.id === accountId || acc.steamId64 === accountId);
   }, [accounts, accountId]);
 
-  const selectedSteamId = selectedAccount?.steamId64 ?? "";
+  const selectedSteamId = selectedAccount?.steamId64 ?? '';
 
   // Fetch storage units for selected account
   const storageUnitsQuery = useQuery({
@@ -133,17 +124,17 @@ export function AddCaseDialog({
   const canSubmit = useMemo(
     () =>
       selectedCase &&
-      Number(quantity.replace(/\D/g, "")) > 0 &&
+      Number(quantity.replace(/\D/g, '')) > 0 &&
       parseViFloat(buyPrice) > 0 &&
       buyDate,
-    [buyDate, buyPrice, quantity, selectedCase],
+    [buyDate, buyPrice, quantity, selectedCase]
   );
 
   // Load draft or reset state when dialog opens
   useEffect(() => {
     if (open) {
       try {
-        const savedDraft = localStorage.getItem("add_case_dialog_draft");
+        const savedDraft = localStorage.getItem('add_case_dialog_draft');
         if (savedDraft) {
           const draft = JSON.parse(savedDraft);
           if (draft.selectedCase) {
@@ -157,21 +148,21 @@ export function AddCaseDialog({
           }
         }
       } catch (e) {
-        console.error("Failed to load draft from localStorage", e);
+        console.error('Failed to load draft from localStorage', e);
       }
 
       // Default reset if no draft found
       setSelectedCase(null);
       reset({
-        quantity: "1",
-        buyPrice: "",
+        quantity: '1',
+        buyPrice: '',
         buyDate: formatInputDate(new Date()),
-        buffPrice: "",
+        buffPrice: '',
         buffRate: formatIntegerVi(defaultBuffRate),
-        accountId: "",
-        storageUnitId: "",
-        itemState: "tradeable",
-        holdDays: "",
+        accountId: '',
+        storageUnitId: '',
+        itemState: 'tradeable',
+        holdDays: '',
       });
     }
   }, [open, defaultBuffRate, reset]);
@@ -184,27 +175,27 @@ export function AddCaseDialog({
       // Check if values are default/empty to clean up the draft
       const isDefault =
         !selectedCase &&
-        watchedValues.quantity === "1" &&
+        watchedValues.quantity === '1' &&
         !watchedValues.buyPrice &&
         !watchedValues.buffPrice &&
         watchedValues.buffRate === formatIntegerVi(defaultBuffRate) &&
         !watchedValues.accountId &&
         !watchedValues.storageUnitId &&
-        watchedValues.itemState === "tradeable" &&
+        watchedValues.itemState === 'tradeable' &&
         !watchedValues.holdDays;
 
       try {
         if (isDefault) {
-          localStorage.removeItem("add_case_dialog_draft");
+          localStorage.removeItem('add_case_dialog_draft');
         } else {
           const draft = {
             selectedCase,
             formValues: watchedValues,
           };
-          localStorage.setItem("add_case_dialog_draft", JSON.stringify(draft));
+          localStorage.setItem('add_case_dialog_draft', JSON.stringify(draft));
         }
       } catch (e) {
-        console.error("Failed to update draft in localStorage", e);
+        console.error('Failed to update draft in localStorage', e);
       }
     }
   }, [open, selectedCase, watchedValues, defaultBuffRate]);
@@ -215,12 +206,12 @@ export function AddCaseDialog({
       const priceNum = parseViFloat(price);
       const rateNum = parseViFloat(rate);
       if (!isNaN(priceNum) && !isNaN(rateNum)) {
-        setValue("buyPrice", formatIntegerVi(Math.round(priceNum * rateNum)));
+        setValue('buyPrice', formatIntegerVi(Math.round(priceNum * rateNum)));
       } else if (!price && !rate) {
-        setValue("buyPrice", "");
+        setValue('buyPrice', '');
       }
     },
-    [setValue],
+    [setValue]
   );
 
   // Recalculate buffPrice when buyPrice or buffRate changes
@@ -229,47 +220,47 @@ export function AddCaseDialog({
       const buyPriceNum = parseViFloat(buyPriceVal);
       const rateNum = parseViFloat(rate);
       if (!isNaN(buyPriceNum) && !isNaN(rateNum) && rateNum > 0) {
-        setValue("buffPrice", formatDecimalVi(buyPriceNum / rateNum));
+        setValue('buffPrice', formatDecimalVi(buyPriceNum / rateNum));
       } else if (!buyPriceVal) {
-        setValue("buffPrice", "");
+        setValue('buffPrice', '');
       }
     },
-    [setValue],
+    [setValue]
   );
 
   const handleBuffPriceChange = useCallback(
     (val: string) => {
       const formatted = formatDecimalVi(val);
-      setValue("buffPrice", formatted);
+      setValue('buffPrice', formatted);
       recalcBuyPrice(formatted, buffRate);
     },
-    [setValue, recalcBuyPrice, buffRate],
+    [setValue, recalcBuyPrice, buffRate]
   );
 
   const handleBuffRateChange = useCallback(
     (val: string) => {
       const formatted = formatIntegerVi(val);
-      setValue("buffRate", formatted);
+      setValue('buffRate', formatted);
       recalcBuyPrice(buffPrice, formatted);
     },
-    [setValue, recalcBuyPrice, buffPrice],
+    [setValue, recalcBuyPrice, buffPrice]
   );
 
   const handleBuyPriceChange = useCallback(
     (val: string) => {
       const formatted = formatIntegerVi(val);
-      setValue("buyPrice", formatted);
+      setValue('buyPrice', formatted);
       recalcBuffPrice(formatted, buffRate);
     },
-    [setValue, recalcBuffPrice, buffRate],
+    [setValue, recalcBuffPrice, buffRate]
   );
 
   const handleAccountChange = useCallback(
     (val: string) => {
-      setValue("accountId", val === "__manual__" ? "" : val);
-      setValue("storageUnitId", "");
+      setValue('accountId', val === '__manual__' ? '' : val);
+      setValue('storageUnitId', '');
     },
-    [setValue],
+    [setValue]
   );
 
   async function onFormSubmit(data: FormValues) {
@@ -277,19 +268,18 @@ export function AddCaseDialog({
 
     const accountInfo = selectedAccount
       ? { steamId64: selectedAccount.steamId64, name: selectedAccount.name }
-      : { steamId64: "manual", name: t("common.manual", "Manual") };
+      : { steamId64: 'manual', name: t('common.manual', 'Manual') };
 
-    const parsedQuantity = Number(data.quantity.replace(/\D/g, "")) || 1;
+    const parsedQuantity = Number(data.quantity.replace(/\D/g, '')) || 1;
     const parsedBuyPrice = parseViFloat(data.buyPrice) || 0;
 
     const breakdown = {
-      tradeable: data.itemState === "tradeable" ? parsedQuantity : 0,
+      tradeable: data.itemState === 'tradeable' ? parsedQuantity : 0,
       onMarket: 0,
-      tradeProtected:
-        data.itemState === "protected" ? parsedQuantity : 0,
-      hold: data.itemState === "hold" ? parsedQuantity : 0,
+      tradeProtected: data.itemState === 'protected' ? parsedQuantity : 0,
+      hold: data.itemState === 'hold' ? parsedQuantity : 0,
       holdDetails:
-        data.itemState === "hold"
+        data.itemState === 'hold'
           ? [
               {
                 quantity: parsedQuantity,
@@ -307,7 +297,7 @@ export function AddCaseDialog({
     ];
 
     let tradeHoldUntil = null;
-    if (data.itemState === "hold" && data.holdDays) {
+    if (data.itemState === 'hold' && data.holdDays) {
       const days = Number(data.holdDays) || 0;
       if (days > 0) {
         const baseDate = data.buyDate ? new Date(data.buyDate) : new Date();
@@ -327,7 +317,7 @@ export function AddCaseDialog({
     });
 
     try {
-      localStorage.removeItem("add_case_dialog_draft");
+      localStorage.removeItem('add_case_dialog_draft');
     } catch {
       // ignore
     }
@@ -337,21 +327,21 @@ export function AddCaseDialog({
 
   const handleCancel = () => {
     try {
-      localStorage.removeItem("add_case_dialog_draft");
+      localStorage.removeItem('add_case_dialog_draft');
     } catch {
       // ignore
     }
     setSelectedCase(null);
     reset({
-      quantity: "1",
-      buyPrice: "",
+      quantity: '1',
+      buyPrice: '',
       buyDate: formatInputDate(new Date()),
-      buffPrice: "",
+      buffPrice: '',
       buffRate: String(defaultBuffRate),
-      accountId: "",
-      storageUnitId: "",
-      itemState: "tradeable",
-      holdDays: "",
+      accountId: '',
+      storageUnitId: '',
+      itemState: 'tradeable',
+      holdDays: '',
     });
     onClose();
   };
@@ -361,16 +351,16 @@ export function AddCaseDialog({
       <DialogContent className="max-h-[95vh] max-w-xl overflow-y-auto rounded-[6px] p-6 shadow-xl">
         <form onSubmit={formSubmit(onFormSubmit)} className="space-y-5">
           <DialogHeader>
-            <DialogTitle className="text-xl font-bold text-foreground">
-              {t("portfolio.addItem", "Add item")}
+            <DialogTitle className="text-foreground text-xl font-bold">
+              {t('portfolio.addItem', 'Add item')}
             </DialogTitle>
-            <DialogDescription className="text-xs text-muted-foreground">
-              {t("portfolio.addItemDesc", "Search item, enter purchase price and quantity.")}
+            <DialogDescription className="text-muted-foreground text-xs">
+              {t('portfolio.addItemDesc', 'Search item, enter purchase price and quantity.')}
             </DialogDescription>
           </DialogHeader>
 
           <div
-            className={`space-y-5 transition-all duration-350 ${isResetting ? "animate-reset-flash" : ""}`}
+            className={`space-y-5 transition-all duration-350 ${isResetting ? 'animate-reset-flash' : ''}`}
           >
             <CaseSelectionSection
               selectedCase={selectedCase}
@@ -388,7 +378,6 @@ export function AddCaseDialog({
               handleBuffPriceChange={handleBuffPriceChange}
               handleBuffRateChange={handleBuffRateChange}
               handleBuyPriceChange={handleBuyPriceChange}
-              formatIntegerVi={formatIntegerVi}
             />
 
             <QuantityDateSection control={control} />
@@ -405,34 +394,34 @@ export function AddCaseDialog({
           </div>
 
           {/* Footer Action Buttons */}
-          <div className="mt-6 flex justify-end gap-2 border-t border-border pt-4">
+          <div className="border-border mt-6 flex justify-end gap-2 border-t pt-4">
             <Button
               variant="ghost"
               type="button"
               onClick={() => {
                 setIsResetting(true);
                 try {
-                  localStorage.removeItem("add_case_dialog_draft");
+                  localStorage.removeItem('add_case_dialog_draft');
                 } catch {
                   // ignore
                 }
                 setSelectedCase(null);
                 reset({
-                  quantity: "1",
-                  buyPrice: "",
+                  quantity: '1',
+                  buyPrice: '',
                   buyDate: formatInputDate(new Date()),
-                  buffPrice: "",
+                  buffPrice: '',
                   buffRate: String(defaultBuffRate),
-                  accountId: "",
-                  storageUnitId: "",
-                  itemState: "tradeable",
-                  holdDays: "",
+                  accountId: '',
+                  storageUnitId: '',
+                  itemState: 'tradeable',
+                  holdDays: '',
                 });
                 setTimeout(() => setIsResetting(false), 400);
               }}
-              className="h-9 text-xs text-muted-foreground hover:text-foreground mr-auto"
+              className="text-muted-foreground hover:text-foreground mr-auto h-9 text-xs"
             >
-              {t("portfolio.clearDraft", "Clear draft")}
+              {t('portfolio.clearDraft', 'Clear draft')}
             </Button>
             <Button
               variant="outline"
@@ -440,7 +429,7 @@ export function AddCaseDialog({
               onClick={handleCancel}
               className="h-9 px-4 text-xs"
             >
-              {t("common.cancel", "Cancel")}
+              {t('common.cancel', 'Cancel')}
             </Button>
             <Button
               type="submit"
@@ -448,7 +437,7 @@ export function AddCaseDialog({
               disabled={!canSubmit || saving}
               className="h-9 px-4 text-xs"
             >
-              {saving ? t("common.saving", "Saving...") : t("portfolio.saveCase", "Save case")}
+              {saving ? t('common.saving', 'Saving...') : t('portfolio.saveCase', 'Save case')}
             </Button>
           </div>
         </form>

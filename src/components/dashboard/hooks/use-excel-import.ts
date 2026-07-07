@@ -1,22 +1,18 @@
-import { useState, useMemo, useRef, useCallback } from "react";
-import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { useTranslation } from "react-i18next";
-import { useLocalStorage } from "@/hooks/use-local-storage";
-import { useImportStore, importStore, toast } from "@/stores";
-import { getErrorMessage } from "@/utils/error";
+import { useState, useMemo, useRef, useCallback } from 'react';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { useTranslation } from 'react-i18next';
+import { useLocalStorage } from '@/hooks/use-local-storage';
+import { useImportStore, importStore, toast } from '@/stores';
+import { getErrorMessage } from '@/utils/error';
 import {
   readExcelHeaders,
   parseMatrixWithMapping,
   autoSuggestMapping,
-} from "@/components/portfolio";
-import type {
-  PortfolioImportRow,
-  ColumnMapping,
-  MappingTemplate,
-} from "@/components/portfolio";
-import { PORTFOLIO_QUERY_KEY, importPortfolioRows } from "@/lib/api-client/portfolio-api";
-import type { RecentImport } from "../recent-imports-popover";
-import { translateAccountError } from "@/components/inventory-scanner/utils";
+} from '@/components/portfolio';
+import type { PortfolioImportRow, ColumnMapping, MappingTemplate } from '@/components/portfolio';
+import { PORTFOLIO_QUERY_KEY, importPortfolioRows } from '@/lib/api-client/portfolio-api';
+import type { RecentImport } from '../recent-imports-popover';
+import { translateAccountError } from '@/components/inventory-scanner/utils';
 
 interface UseExcelImportProps {
   addRecentImport: (item: RecentImport) => void;
@@ -30,8 +26,8 @@ export function useExcelImport({ addRecentImport, setError }: UseExcelImportProp
   const importStatus = useImportStore();
 
   const [excelImportRows, setExcelImportRows] = useState<PortfolioImportRow[] | null>(null);
-  const [excelFileName, setExcelFileName] = useState<string>("");
-  
+  const [excelFileName, setExcelFileName] = useState<string>('');
+
   const [mappingDialogData, setMappingDialogData] = useState<{
     headers: string[];
     headerRowIndex: number;
@@ -45,7 +41,7 @@ export function useExcelImport({ addRecentImport, setError }: UseExcelImportProp
   }, [mappingDialogData]);
 
   const [savedTemplates, setSavedTemplates] = useLocalStorage<MappingTemplate[]>(
-    "cs2t_excelMappingTemplates",
+    'cs2t_excelMappingTemplates',
     []
   );
 
@@ -54,7 +50,7 @@ export function useExcelImport({ addRecentImport, setError }: UseExcelImportProp
       importPortfolioRows(rows, {
         onProgress: (event) => {
           importStore.setState({
-            phase: "uploading",
+            phase: 'uploading',
             fileName: importStore.getState().fileName,
             rowsCount: event.total,
             importedCount: event.index + 1,
@@ -66,108 +62,107 @@ export function useExcelImport({ addRecentImport, setError }: UseExcelImportProp
       queryClient.setQueryData(PORTFOLIO_QUERY_KEY, report);
       const current = importStore.getState();
       importStore.setState({
-        phase: "done",
-        fileName: current.phase === "uploading" ? current.fileName : "Excel",
+        phase: 'done',
+        fileName: current.phase === 'uploading' ? current.fileName : 'Excel',
         rowsCount: rows.length,
         importedCount: report.importResult?.importedCount ?? rows.length,
         importedIds: report.importResult?.importedIds ?? [],
       });
-      if (
-        report.importResult?.importedIds &&
-        report.importResult.importedIds.length > 0
-      ) {
+      if (report.importResult?.importedIds && report.importResult.importedIds.length > 0) {
         addRecentImport({
           id: Date.now().toString(),
-          fileName:
-            current.phase === "uploading"
-              ? current.fileName || "Excel"
-              : "Excel",
+          fileName: current.phase === 'uploading' ? current.fileName || 'Excel' : 'Excel',
           date: new Date().toISOString(),
           importedCount: report.importResult.importedCount,
           importedIds: report.importResult.importedIds,
         });
       }
       setTimeout(() => {
-        if (importStore.getState().phase === "done") {
-          importStore.setState({ phase: "idle" });
+        if (importStore.getState().phase === 'done') {
+          importStore.setState({ phase: 'idle' });
         }
       }, 8000);
       toast.success(
-        t("dashboard.importSuccess", {
+        t('dashboard.importSuccess', {
           count: report.importResult?.importedCount ?? rows.length,
-        }),
+        })
       );
       setError(null);
     },
     onError: (err) => {
       const msg = translateAccountError(getErrorMessage(err), t);
-      toast.error(t("dashboard.importError"), {
+      toast.error(t('dashboard.importError'), {
         description: msg,
       });
       setError(msg);
     },
   });
 
-  const handleExcelSource = useCallback(async (source: File | string, fileName: string) => {
-    try {
-      setError(null);
-      importStore.setState({ phase: "reading", fileName });
-      const { headers, headerRowIndex, matrix } = await readExcelHeaders(source);
-      importStore.setState({ phase: "idle" });
+  const handleExcelSource = useCallback(
+    async (source: File | string, fileName: string) => {
+      try {
+        setError(null);
+        importStore.setState({ phase: 'reading', fileName });
+        const { headers, headerRowIndex, matrix } = await readExcelHeaders(source);
+        importStore.setState({ phase: 'idle' });
 
-      if (headers.length === 0) {
-        throw new Error(t("excelMapping.emptyFile", "No columns found in the file."));
+        if (headers.length === 0) {
+          throw new Error(t('excelMapping.emptyFile', 'No columns found in the file.'));
+        }
+
+        setMappingDialogData({ headers, headerRowIndex, matrix, fileName });
+      } catch (err) {
+        const msg = translateAccountError(getErrorMessage(err), t);
+        importStore.setState({ phase: 'error', message: msg });
+        setError(msg);
+      }
+    },
+    [t, setError]
+  );
+
+  const handleMappingConfirm = useCallback(
+    (mapping: ColumnMapping, saveAsTemplate: boolean, templateLabel: string) => {
+      if (!mappingDialogData) return;
+
+      if (saveAsTemplate && templateLabel.trim()) {
+        const fingerprint = JSON.stringify([...mappingDialogData.headers].sort());
+        const newTemplate: MappingTemplate = {
+          id: crypto.randomUUID(),
+          label: templateLabel.trim(),
+          headerFingerprint: fingerprint,
+          mapping,
+          createdAt: new Date().toISOString(),
+        };
+        setSavedTemplates((prev) => [...prev, newTemplate]);
       }
 
-      setMappingDialogData({ headers, headerRowIndex, matrix, fileName });
-    } catch (err) {
-      const msg = translateAccountError(getErrorMessage(err), t);
-      importStore.setState({ phase: "error", message: msg });
-      setError(msg);
-    }
-  }, [t, setError]);
+      try {
+        setError(null);
+        const rows = parseMatrixWithMapping(
+          mappingDialogData.matrix,
+          mapping,
+          mappingDialogData.headerRowIndex
+        );
+        setExcelImportRows(rows);
+        setExcelFileName(mappingDialogData.fileName);
+        setMappingDialogData(null);
+      } catch (err) {
+        setError(translateAccountError(getErrorMessage(err), t));
+      }
+    },
+    [mappingDialogData, setSavedTemplates, setError, t]
+  );
 
-  const handleMappingConfirm = useCallback((
-    mapping: ColumnMapping,
-    saveAsTemplate: boolean,
-    templateLabel: string
-  ) => {
-    if (!mappingDialogData) return;
-
-    if (saveAsTemplate && templateLabel.trim()) {
-      const fingerprint = JSON.stringify([...mappingDialogData.headers].sort());
-      const newTemplate: MappingTemplate = {
-        id: crypto.randomUUID(),
-        label: templateLabel.trim(),
-        headerFingerprint: fingerprint,
-        mapping,
-        createdAt: new Date().toISOString(),
-      };
-      setSavedTemplates((prev) => [...prev, newTemplate]);
-    }
-
-    try {
-      setError(null);
-      const rows = parseMatrixWithMapping(
-        mappingDialogData.matrix,
-        mapping,
-        mappingDialogData.headerRowIndex
-      );
-      setExcelImportRows(rows);
-      setExcelFileName(mappingDialogData.fileName);
-      setMappingDialogData(null);
-    } catch (err) {
-      setError(translateAccountError(getErrorMessage(err), t));
-    }
-  }, [mappingDialogData, setSavedTemplates, setError]);
-
-  const handleDeleteTemplate = useCallback((id: string) => {
-    setSavedTemplates((prev) => prev.filter((tpl) => tpl.id !== id));
-  }, [setSavedTemplates]);
+  const handleDeleteTemplate = useCallback(
+    (id: string) => {
+      setSavedTemplates((prev) => prev.filter((tpl) => tpl.id !== id));
+    },
+    [setSavedTemplates]
+  );
 
   async function handleImportFile(event: React.ChangeEvent<HTMLInputElement>) {
     const file = event.target.files?.[0];
-    event.target.value = "";
+    event.target.value = '';
     if (!file) {
       return;
     }
@@ -178,7 +173,7 @@ export function useExcelImport({ addRecentImport, setError }: UseExcelImportProp
     setExcelImportRows(null);
     if (confirmedRows.length === 0) return;
     importStore.setState({
-      phase: "uploading",
+      phase: 'uploading',
       fileName: excelFileName,
       rowsCount: confirmedRows.length,
     });
@@ -186,8 +181,8 @@ export function useExcelImport({ addRecentImport, setError }: UseExcelImportProp
   };
 
   const importBusy =
-    importStatus.phase === "reading" ||
-    importStatus.phase === "uploading" ||
+    importStatus.phase === 'reading' ||
+    importStatus.phase === 'uploading' ||
     importMutation.isPending;
 
   return {

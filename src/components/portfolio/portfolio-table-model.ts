@@ -8,12 +8,34 @@ import type {
 import type { PatternInfo } from '@/domain/pattern-info';
 import { estimateOverpay } from '@/services/pattern/overpay-calculator';
 import { buildItemVariantKey } from '@/utils/item-identity';
+import { getRemainingHoldDays } from '@/utils/date';
 
 export type PortfolioTableMode = 'transactions' | 'case-summary';
 export type PortfolioSourceFilter = 'all' | 'manual' | 'existing';
-export type PortfolioItemTypeFilter = 'all' | 'case' | 'capsule' | 'sticker' | 'skin' | 'graffiti' | 'agent' | 'music_kit' | 'patch' | 'pin' | 'charm';
+export type PortfolioItemTypeFilter =
+  | 'all'
+  | 'case'
+  | 'capsule'
+  | 'sticker'
+  | 'skin'
+  | 'graffiti'
+  | 'agent'
+  | 'music_kit'
+  | 'patch'
+  | 'pin'
+  | 'charm';
 export type PortfolioRowSourceType = 'manual' | 'existing';
-export type PortfolioRowItemType = 'case' | 'capsule' | 'sticker' | 'skin' | 'graffiti' | 'agent' | 'music_kit' | 'patch' | 'pin' | 'charm';
+export type PortfolioRowItemType =
+  | 'case'
+  | 'capsule'
+  | 'sticker'
+  | 'skin'
+  | 'graffiti'
+  | 'agent'
+  | 'music_kit'
+  | 'patch'
+  | 'pin'
+  | 'charm';
 
 export type PortfolioSourceAccount = {
   steamId64: string;
@@ -231,9 +253,6 @@ function mapCaseSummaryRow(
   const totalQuantity = inventoryQuantity + storageUnitQuantity;
   const investedValue = rows.reduce((sum, row) => sum + row.investedValue, 0);
 
-  const marketHashName = firstRow.case.marketHashName;
-  const buffPriceCny = buffPricesCny ? buffPricesCny[marketHashName] : undefined;
-
   let totalCurrentValue = 0;
   let hasNullPrice = false;
   let representativePrice = firstRow.currentPrice;
@@ -408,14 +427,7 @@ export function getItemStatusBreakdown(item: {
   }
 
   if (!hasBreakdown) {
-    const holdDays = (() => {
-      if (!item.tradeHoldUntil) return 0;
-      const parsedHoldUntil = new Date(item.tradeHoldUntil);
-      if (isNaN(parsedHoldUntil.getTime())) return 0;
-      const diffMs = parsedHoldUntil.getTime() - new Date().getTime();
-      const diffDays = Math.ceil(diffMs / (1000 * 60 * 60 * 24));
-      return Math.max(0, diffDays);
-    })();
+    const holdDays = getRemainingHoldDays(item.tradeHoldUntil);
 
     if (holdDays > 0) {
       consolidated.hold = item.quantity;

@@ -1,6 +1,7 @@
 import { ObjectId, type Document, type WithId } from 'mongodb';
 import type { CaseItem } from '@/domain/case-item';
 import type { PortfolioItem } from '@/domain/portfolio-item';
+import type { PatternInfo } from '@/domain/pattern-info';
 import type { PriceSnapshot } from '@/domain/price';
 
 export function toObjectId(id: string): ObjectId {
@@ -81,7 +82,7 @@ export function mapPortfolioDocument(doc: WithId<Document>): PortfolioItem {
     storageUnitId: doc.storageUnitId ? String(doc.storageUnitId) : undefined,
     dopplerPhase: doc.dopplerPhase ? String(doc.dopplerPhase) : undefined,
     inspectLink: doc.inspectLink ? String(doc.inspectLink) : undefined,
-    patternInfo: doc.patternInfo ? (doc.patternInfo as any) : undefined,
+    patternInfo: doc.patternInfo ? (doc.patternInfo as PatternInfo) : undefined,
     stickerPriceRate: doc.stickerPriceRate !== undefined ? Number(doc.stickerPriceRate) : undefined,
     stickerBuyPriceRate:
       doc.stickerBuyPriceRate !== undefined ? Number(doc.stickerBuyPriceRate) : undefined,

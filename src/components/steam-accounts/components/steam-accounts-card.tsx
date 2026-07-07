@@ -23,11 +23,8 @@ import { FadeIn } from '@/components/ui/animation';
 import { CookieGuideModal } from '@/components/shared/cookie-guide-modal';
 import { proxySteamUrl } from '@/utils/url';
 import { MissingItemsDialog, StorageUnitInspectPanel } from '@/components/portfolio';
-import {
-  getStorageUnitItemKey,
-  type StorageUnit,
-  type StorageUnitItem,
-} from '@/components/portfolio/storage-unit-panel';
+import type { StorageUnit, StorageUnitItem } from '@/components/portfolio/storage-unit-panel';
+import { getStorageUnitItemKey } from '@/components/portfolio/storage-unit-utils';
 import { ItemHoverCard } from '@/components/portfolio/item-hover-card';
 import { mapTransactionRow } from '@/components/portfolio/portfolio-table-model';
 import { STORAGE_UNITS_QUERY_KEY } from '@/lib/api-client/steam-accounts-api';

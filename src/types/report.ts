@@ -1,4 +1,5 @@
-import type { PriceRange } from "@/domain/price";
+import type { PriceRange } from '@/domain/price';
+import type { PatternInfo } from '@/domain/pattern-info';
 
 export type CaseDto = {
   id: string;
@@ -25,7 +26,7 @@ export type PortfolioReportRowDto = {
     caseId: string;
     quantity: number;
     buyPrice: number;
-    buyCurrency: "VND";
+    buyCurrency: 'VND';
     buyDate: string;
     note?: string;
     sourceAccounts?: Array<{
@@ -44,7 +45,7 @@ export type PortfolioReportRowDto = {
     }>;
     dopplerPhase?: string;
     inspectLink?: string;
-    patternInfo?: any;
+    patternInfo?: PatternInfo;
     stickerPriceRate?: number;
     stickerPriceAdd?: number;
     stickerBuyPriceRate?: number;

@@ -8,6 +8,7 @@ import { useTheme } from '@/components/theme-provider';
 import { useTranslation } from 'react-i18next';
 import { changeLanguage } from '@/i18n/config';
 import { cn } from '@/utils/cn';
+import { useIsMobile } from '@/hooks/use-is-mobile';
 
 import { Button } from '@/components/ui/button';
 const springTransition = {
@@ -76,14 +77,7 @@ export function ThemeSelector() {
   const { theme, setTheme } = useTheme();
   const [isOpen, setIsOpen] = useState(false);
   const { t } = useTranslation();
-  const [isMobile, setIsMobile] = useState(false);
-
-  useEffect(() => {
-    const checkMobile = () => setIsMobile(window.innerWidth < 768);
-    checkMobile();
-    window.addEventListener('resize', checkMobile);
-    return () => window.removeEventListener('resize', checkMobile);
-  }, []);
+  const isMobile = useIsMobile();
 
   const toggleTheme = () => {
     setTheme(theme === 'dark' ? 'light' : 'dark');
@@ -189,14 +183,7 @@ export function LanguageSelector() {
   const { i18n, t } = useTranslation();
   const [isOpen, setIsOpen] = useState(false);
   const [lang, setLang] = useState<'vi' | 'en'>('vi');
-  const [isMobile, setIsMobile] = useState(false);
-
-  useEffect(() => {
-    const checkMobile = () => setIsMobile(window.innerWidth < 768);
-    checkMobile();
-    window.addEventListener('resize', checkMobile);
-    return () => window.removeEventListener('resize', checkMobile);
-  }, []);
+  const isMobile = useIsMobile();
 
   useEffect(() => {
     setLang(i18n.language as 'vi' | 'en');

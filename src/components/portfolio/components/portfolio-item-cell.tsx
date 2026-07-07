@@ -31,10 +31,10 @@ import {
   BlueGemBadge,
   MarbleFadeBadge,
 } from '@/components/shared/pattern-badge';
+import { useIsMobile } from '@/hooks/use-is-mobile';
 
 export function ItemCell({
   item,
-  mode,
   relatedRows,
   isSelected = false,
   onToggleSelect,
@@ -92,14 +92,7 @@ export function ItemCell({
 
   const [hoverCardOpen, setHoverCardOpen] = useState(false);
   const [isSelectOpen, setIsSelectOpen] = useState(false);
-  const [isMobile, setIsMobile] = useState(false);
-
-  React.useEffect(() => {
-    const checkMobile = () => setIsMobile(window.innerWidth < 768);
-    checkMobile();
-    window.addEventListener('resize', checkMobile);
-    return () => window.removeEventListener('resize', checkMobile);
-  }, []);
+  const isMobile = useIsMobile();
 
   const triggerContent = (
     <div className="relative flex w-fit items-center gap-3 outline-none max-md:max-w-[220px]">

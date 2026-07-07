@@ -1,15 +1,25 @@
-import { NextRequest, NextResponse } from "next/server";
-import { getDatabase } from "@/infrastructure/db/mongo-client";
-import { getCurrentUser, isAdminUser } from "@/services/auth-service";
-import { logger } from "@/utils/logger";
+import { NextResponse } from 'next/server';
+import { getDatabase } from '@/infrastructure/db/mongo-client';
+import { getCurrentUser, isAdminUser } from '@/services/auth-service';
+import { logger } from '@/utils/logger';
 
-export const dynamic = "force-dynamic";
+export const dynamic = 'force-dynamic';
 
-export async function GET(request: NextRequest) {
+type HealthDetails = {
+  mongodb: {
+    status: string;
+    latencyMs: number | null;
+  };
+  env: Record<string, string | undefined>;
+  uptime: number;
+  memoryUsage: ReturnType<typeof process.memoryUsage>;
+};
+
+export async function GET() {
   try {
-    let dbStatus = "unknown";
+    let dbStatus = 'unknown';
     let mongoLatencyMs: number | null = null;
-    let detailInfo: Record<string, any> | null = null;
+    let detailInfo: HealthDetails | null = null;
 
     // Check authorization for detailed output
     const currentUser = await getCurrentUser();
@@ -21,15 +31,15 @@ export async function GET(request: NextRequest) {
       if (isAdmin) {
         // Run a real query if admin requested detailed diagnostics
         await db.command({ ping: 1 });
-        dbStatus = "healthy";
+        dbStatus = 'healthy';
       } else {
         // Just verify connection exists without running query
-        dbStatus = db ? "connected" : "disconnected";
+        dbStatus = db ? 'connected' : 'disconnected';
       }
       mongoLatencyMs = Date.now() - dbStartTime;
     } catch (dbError) {
-      dbStatus = "unhealthy";
-      logger.error("Healthcheck MongoDB Connection/Ping Error", dbError, "HealthcheckRoute");
+      dbStatus = 'unhealthy';
+      logger.error('Healthcheck MongoDB Connection/Ping Error', dbError, 'HealthcheckRoute');
     }
 
     if (isAdmin) {
@@ -39,11 +49,11 @@ export async function GET(request: NextRequest) {
           latencyMs: mongoLatencyMs,
         },
         env: {
-          MONGODB_URI: process.env.MONGODB_URI ? "configured" : "missing",
-          CS2CAP_API_KEY: process.env.CS2CAP_API_KEY ? "configured" : "missing",
-          GOOGLE_CLIENT_ID: process.env.GOOGLE_CLIENT_ID ? "configured" : "missing",
-          GOOGLE_CLIENT_SECRET: process.env.GOOGLE_CLIENT_SECRET ? "configured" : "missing",
-          AUTH_SECRET: process.env.AUTH_SECRET ? "configured" : "missing",
+          MONGODB_URI: process.env.MONGODB_URI ? 'configured' : 'missing',
+          CS2CAP_API_KEY: process.env.CS2CAP_API_KEY ? 'configured' : 'missing',
+          GOOGLE_CLIENT_ID: process.env.GOOGLE_CLIENT_ID ? 'configured' : 'missing',
+          GOOGLE_CLIENT_SECRET: process.env.GOOGLE_CLIENT_SECRET ? 'configured' : 'missing',
+          AUTH_SECRET: process.env.AUTH_SECRET ? 'configured' : 'missing',
           NODE_ENV: process.env.NODE_ENV,
         },
         uptime: process.uptime(),
@@ -51,8 +61,9 @@ export async function GET(request: NextRequest) {
       };
     }
 
-    const overallStatus = dbStatus === "healthy" || dbStatus === "connected" ? "healthy" : "unhealthy";
-    const httpStatus = overallStatus === "healthy" ? 200 : 500;
+    const overallStatus =
+      dbStatus === 'healthy' || dbStatus === 'connected' ? 'healthy' : 'unhealthy';
+    const httpStatus = overallStatus === 'healthy' ? 200 : 500;
 
     return NextResponse.json(
       {
@@ -62,11 +73,9 @@ export async function GET(request: NextRequest) {
       },
       { status: httpStatus }
     );
-  } catch (error: any) {
-    logger.error("Healthcheck Global Error", error, "HealthcheckRoute");
-    return NextResponse.json(
-      { status: "unhealthy", message: error.message },
-      { status: 500 }
-    );
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'unknownError';
+    logger.error('Healthcheck Global Error', error, 'HealthcheckRoute');
+    return NextResponse.json({ status: 'unhealthy', message }, { status: 500 });
   }
 }

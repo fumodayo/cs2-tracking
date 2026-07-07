@@ -77,6 +77,19 @@ export function getHoldDaysRemaining(holdUntil: string | Date): number {
 }
 
 /**
+ * Calculate remaining hold days with partial days rounded up for UI status.
+ * Returns 0 when the value is empty, invalid, or already expired.
+ */
+export function getRemainingHoldDays(value: string | Date | null | undefined): number {
+  if (!value) return 0;
+  const target = typeof value === 'string' ? new Date(value) : value;
+  if (isNaN(target.getTime())) return 0;
+  const diffMs = target.getTime() - new Date().getTime();
+  const diffDays = Math.ceil(diffMs / (1000 * 60 * 60 * 24));
+  return Math.max(0, diffDays);
+}
+
+/**
  * Create a Date that is `days` days from now.
  */
 export function addDaysFromNow(days: number): Date {

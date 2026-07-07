@@ -1,4 +1,3 @@
-import { useState, useEffect } from 'react';
 import { Column } from '@tanstack/react-table';
 import { ArrowDown, ArrowUp, ArrowUpDown, EyeOff } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
@@ -11,6 +10,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
+import { useIsMobile } from '@/hooks/use-is-mobile';
 
 interface DataTableColumnHeaderProps<TData, TValue> extends React.HTMLAttributes<HTMLDivElement> {
   column: Column<TData, TValue>;
@@ -27,16 +27,7 @@ export function DataTableColumnHeader<TData, TValue>({
   isMobile: isMobileProp,
 }: DataTableColumnHeaderProps<TData, TValue>) {
   const { t } = useTranslation();
-  const [isMobileState, setIsMobileState] = useState(false);
-
-  useEffect(() => {
-    if (isMobileProp !== undefined) return;
-    const checkMobile = () => setIsMobileState(window.innerWidth < 768);
-    checkMobile();
-    window.addEventListener('resize', checkMobile);
-    return () => window.removeEventListener('resize', checkMobile);
-  }, [isMobileProp]);
-
+  const isMobileState = useIsMobile();
   const isMobile = isMobileProp ?? isMobileState;
 
   if (!column.getCanSort()) {

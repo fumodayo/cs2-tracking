@@ -1,16 +1,15 @@
-"use client";
+'use client';
 
-import { Control, Controller } from "react-hook-form";
-import { useTranslation } from "react-i18next";
-import { Input } from "@/components/ui/input";
-import { FormValues } from "./types";
+import { Control, Controller } from 'react-hook-form';
+import { useTranslation } from 'react-i18next';
+import { Input } from '@/components/ui/input';
+import { FormValues } from './types';
 
 interface PricingFormulaSectionProps {
   control: Control<FormValues>;
   handleBuffPriceChange: (val: string) => void;
   handleBuffRateChange: (val: string) => void;
   handleBuyPriceChange: (val: string) => void;
-  formatIntegerVi: (val: string) => string;
 }
 
 export function PricingFormulaSection({
@@ -18,7 +17,6 @@ export function PricingFormulaSection({
   handleBuffPriceChange,
   handleBuffRateChange,
   handleBuyPriceChange,
-  formatIntegerVi,
 }: PricingFormulaSectionProps) {
   const { t } = useTranslation();
 
@@ -27,8 +25,11 @@ export function PricingFormulaSection({
       <div className="flex flex-col items-stretch gap-2 sm:flex-row sm:items-end">
         {/* Buff Price Input */}
         <div className="min-w-0 flex-1">
-          <label htmlFor="pricing-buff-price" className="mb-1 block text-[10px] font-semibold text-muted-foreground">
-            {t("portfolio.buffPriceCny", "Giá Buff (CNY)")}
+          <label
+            htmlFor="pricing-buff-price"
+            className="text-muted-foreground mb-1 block text-[10px] font-semibold"
+          >
+            {t('portfolio.buffPriceCny', 'Giá Buff (CNY)')}
           </label>
           <Controller
             control={control}
@@ -46,17 +47,20 @@ export function PricingFormulaSection({
         </div>
 
         {/* Multiplication Sign */}
-        <div className="hidden items-center justify-center px-1 pb-2.5 text-sm font-black text-muted-foreground/60 select-none sm:flex">
+        <div className="text-muted-foreground/60 hidden items-center justify-center px-1 pb-2.5 text-sm font-black select-none sm:flex">
           ×
         </div>
-        <div className="text-center text-xs font-black text-muted-foreground/60 select-none sm:hidden">
-          {t("portfolio.multipliedByRate", "nhân với")}
+        <div className="text-muted-foreground/60 text-center text-xs font-black select-none sm:hidden">
+          {t('portfolio.multipliedByRate', 'nhân với')}
         </div>
 
         {/* Exchange Rate Input */}
         <div className="min-w-0 flex-1">
-          <label htmlFor="pricing-buff-rate" className="mb-1 block text-[10px] font-semibold text-muted-foreground">
-            {t("portfolio.buffRate", "Tỷ giá")}
+          <label
+            htmlFor="pricing-buff-rate"
+            className="text-muted-foreground mb-1 block text-[10px] font-semibold"
+          >
+            {t('portfolio.buffRate', 'Tỷ giá')}
           </label>
           <Controller
             control={control}
@@ -74,17 +78,20 @@ export function PricingFormulaSection({
         </div>
 
         {/* Equals Sign */}
-        <div className="hidden items-center justify-center px-1 pb-2.5 text-sm font-black text-muted-foreground/60 select-none sm:flex">
+        <div className="text-muted-foreground/60 hidden items-center justify-center px-1 pb-2.5 text-sm font-black select-none sm:flex">
           =
         </div>
-        <div className="text-center text-xs font-black text-muted-foreground/60 select-none sm:hidden">
-          {t("portfolio.equalsVnd", "bằng (VND)")}
+        <div className="text-muted-foreground/60 text-center text-xs font-black select-none sm:hidden">
+          {t('portfolio.equalsVnd', 'bằng (VND)')}
         </div>
 
         {/* Final Buy Price Input */}
         <div className="min-w-0 flex-[1.2]">
-          <label htmlFor="pricing-buy-price" className="mb-1 block text-[10px] font-bold text-accent">
-            {t("portfolio.buyPricePerCaseVnd", "Giá mua (VND)")}
+          <label
+            htmlFor="pricing-buy-price"
+            className="text-accent mb-1 block text-[10px] font-bold"
+          >
+            {t('portfolio.buyPricePerCaseVnd', 'Giá mua (VND)')}
           </label>
           <Controller
             control={control}
@@ -96,7 +103,7 @@ export function PricingFormulaSection({
                 onChange={(e) => handleBuyPriceChange(e.target.value)}
                 inputMode="numeric"
                 placeholder="VD: 12.500"
-                className="h-10 text-sm font-bold text-accent focus:border-accent/80 focus:ring-1 focus:ring-accent/30"
+                className="text-accent focus:border-accent/80 focus:ring-accent/30 h-10 text-sm font-bold focus:ring-1"
               />
             )}
           />

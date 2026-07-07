@@ -12,6 +12,7 @@ import { useTranslation } from 'react-i18next';
 import type { PortfolioReportDto } from '@/types/report';
 import { useCurrency } from '@/components/currency-provider';
 import { useLocalStorage } from '@/hooks/use-local-storage';
+import { useIsMobile } from '@/hooks/use-is-mobile';
 
 import {
   buildPortfolioTableRows,
@@ -110,14 +111,7 @@ export function PortfolioTable({
     [onSellDialogOpenChange]
   );
   const [lastSelectedId, setLastSelectedId] = useState<string | null>(null);
-  const [isMobile, setIsMobile] = useState(false);
-
-  useEffect(() => {
-    const checkMobile = () => setIsMobile(window.innerWidth < 768);
-    checkMobile();
-    window.addEventListener('resize', checkMobile);
-    return () => window.removeEventListener('resize', checkMobile);
-  }, []);
+  const isMobile = useIsMobile();
 
   const fetchBuffPrice = useCallback(
     async (marketHashName: string) => {

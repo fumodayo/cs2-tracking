@@ -14,7 +14,6 @@ import {
   Zap,
   Lock,
   Trash2,
-  TrendingUp,
   Eye,
   EyeOff,
 } from 'lucide-react';
@@ -35,23 +34,7 @@ import {
   saveLocalApiKey,
   removeLocalApiKey,
 } from '@/components/inventory-scanner/utils';
-
-import { formatDateVi } from '@/utils/date';
-
-interface TierInfo {
-  code: string;
-  display_name: string;
-  quota_requests_per_month: number;
-  rate_requests_per_minute: number;
-}
-
-interface UsageInfo {
-  requests_this_month: number;
-  requests_limit: number;
-  requests_remaining: number;
-  percentage_used: number;
-  reset_date: string;
-}
+import { CS2CapUsageStats, type TierInfo, type UsageInfo } from './cs2cap-modal-sections';
 
 interface AccountData {
   user_id: string;
@@ -107,39 +90,42 @@ export function CS2CapModal({ open, onOpenChange, mode = 'auto' }: CS2CapModalPr
   const isMember = mode === 'member' || (mode === 'auto' && !!user);
 
   // Fetch for Guest Mode
-  const fetchGuestAccountData = useCallback(async (key: string, showLoading = true) => {
-    if (showLoading) setLoading(true);
-    setError(null);
-    try {
-      const res = await fetch('/api/user/cs2cap/validate', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ apiKey: key }),
-      });
-      const json = await res.json();
-      if (!res.ok) {
-        throw new Error(
-          json.message
-            ? t(
-                `cs2cap.errors.${json.message}`,
-                t('cs2cap.failedToGetAccountInfo', 'Failed to get account info from CS2Cap.')
-              )
-            : t('cs2cap.failedToGetAccountInfo', 'Failed to get account info from CS2Cap.')
-        );
+  const fetchGuestAccountData = useCallback(
+    async (key: string, showLoading = true) => {
+      if (showLoading) setLoading(true);
+      setError(null);
+      try {
+        const res = await fetch('/api/user/cs2cap/validate', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ apiKey: key }),
+        });
+        const json = await res.json();
+        if (!res.ok) {
+          throw new Error(
+            json.message
+              ? t(
+                  `cs2cap.errors.${json.message}`,
+                  t('cs2cap.failedToGetAccountInfo', 'Failed to get account info from CS2Cap.')
+                )
+              : t('cs2cap.failedToGetAccountInfo', 'Failed to get account info from CS2Cap.')
+          );
+        }
+        setGuestAccount(json.account);
+      } catch (err: unknown) {
+        const msg =
+          err instanceof Error
+            ? err.message
+            : t('cs2cap.connectionOrKeyError', 'Connection error or API Key is inactive.');
+        setError(msg ? t(`cs2cap.errors.${msg}`, msg) : msg);
+      } finally {
+        if (showLoading) setLoading(false);
       }
-      setGuestAccount(json.account);
-    } catch (err: unknown) {
-      const msg =
-        err instanceof Error
-          ? err.message
-          : t('cs2cap.connectionOrKeyError', 'Connection error or API Key is inactive.');
-      setError(msg ? t(`cs2cap.errors.${msg}`, msg) : msg);
-    } finally {
-      if (showLoading) setLoading(false);
-    }
-  }, []);
+    },
+    [t]
+  );
 
   // Fetch for Logged-in Mode
   const fetchInfo = useCallback(
@@ -408,17 +394,6 @@ export function CS2CapModal({ open, onOpenChange, mode = 'auto' }: CS2CapModalPr
   const defaultUsage = !isMember && !guestKeyPrefix ? defaultAccount?.usage : null;
   const defaultTier = !isMember && !guestKeyPrefix ? defaultAccount?.tier_info : null;
 
-  // Format Date Helper
-  const formatDate = (dateStr?: string) => {
-    if (!dateStr) return '';
-    return formatDateVi(dateStr);
-  };
-
-  // Format Number Helper
-  const formatNumber = (num: number) => {
-    return num.toLocaleString(i18n.language === 'vi' ? 'vi-VN' : 'en-US');
-  };
-
   // Get Tier Display Name Helper
   const getTierDisplayName = (displayName?: string) => {
     if (!displayName) return i18n.language === 'vi' ? 'MIỄN PHÍ' : 'FREE';
@@ -563,74 +538,11 @@ export function CS2CapModal({ open, onOpenChange, mode = 'auto' }: CS2CapModalPr
               )}
 
               {/* 2. Usage Stats — personal key (member or guest with local key) */}
-              {usage && (
-                <div className="space-y-3 rounded-xl border border-stone-800/80 bg-stone-950/20 p-4 shadow-sm">
-                  <div className="flex items-center justify-between text-xs font-semibold">
-                    <span className="flex items-center gap-1.5 text-stone-400">
-                      <TrendingUp className="text-accent size-4" />
-                      {t('cs2cap.reqUsed', 'Used')}: {formatNumber(usage.requests_this_month)} /{' '}
-                      {formatNumber(usage.requests_limit)} {t('cs2cap.reqSuffix', 'req')}
-                    </span>
-                    <span className="border-accent/20 bg-accent/10 text-accent rounded-full border px-2 py-0.5 font-black">
-                      {usage.percentage_used.toFixed(1)}%
-                    </span>
-                  </div>
-
-                  <div className="border-stone-850/50 relative h-2.5 w-full overflow-hidden rounded-full border bg-stone-950">
-                    <div
-                      className="h-full rounded-full bg-gradient-to-r from-blue-500 to-cyan-500 shadow-[0_0_12px_rgba(59,130,246,0.3)] transition-all duration-500 ease-out"
-                      style={{
-                        width: `${Math.min(usage.percentage_used, 100)}%`,
-                      }}
-                    />
-                  </div>
-
-                  <div className="flex items-center justify-between pt-0.5 text-[11px] text-stone-500">
-                    <span className="font-medium">
-                      {t('cs2cap.reqRemaining', 'Remaining')}:{' '}
-                      {formatNumber(usage.requests_remaining)}
-                    </span>
-                    <span className="font-medium">
-                      {t('cs2cap.resetDate', 'Reset date')}: {formatDate(usage.reset_date)}
-                    </span>
-                  </div>
-                </div>
-              )}
+              {usage && <CS2CapUsageStats usage={usage} />}
 
               {/* 2b. Usage Stats — default system key (guest, no local key) */}
               {!isMember && !guestKeyPrefix && defaultUsage && (
-                <div className="space-y-3 rounded-xl border border-stone-800/80 bg-stone-950/20 p-4 shadow-sm">
-                  <div className="flex items-center justify-between text-xs font-semibold">
-                    <span className="flex items-center gap-1.5 text-stone-400">
-                      <TrendingUp className="text-accent size-4" />
-                      {t('cs2cap.reqUsed', 'Used')}:{' '}
-                      {formatNumber(defaultUsage.requests_this_month)} /{' '}
-                      {formatNumber(defaultUsage.requests_limit)} {t('cs2cap.reqSuffix', 'req')}
-                    </span>
-                    <span className="border-accent/20 bg-accent/10 text-accent rounded-full border px-2 py-0.5 font-black">
-                      {defaultUsage.percentage_used.toFixed(1)}%
-                    </span>
-                  </div>
-
-                  <div className="border-stone-850/50 relative h-2.5 w-full overflow-hidden rounded-full border bg-stone-950">
-                    <div
-                      className="h-full rounded-full bg-gradient-to-r from-blue-500 to-cyan-500 shadow-[0_0_12px_rgba(59,130,246,0.3)] transition-all duration-500 ease-out"
-                      style={{
-                        width: `${Math.min(defaultUsage.percentage_used, 100)}%`,
-                      }}
-                    />
-                  </div>
-
-                  <div className="flex items-center justify-between pt-0.5 text-[11px] text-stone-500">
-                    <span className="font-medium">
-                      {t('cs2cap.reqRemaining', 'Remaining')}:{' '}
-                      {formatNumber(defaultUsage.requests_remaining)}
-                    </span>
-                    <span className="font-medium">
-                      {t('cs2cap.resetDate', 'Reset date')}: {formatDate(defaultUsage.reset_date)}
-                    </span>
-                  </div>
-                </div>
+                <CS2CapUsageStats usage={defaultUsage} />
               )}
 
               {/* 3. API Key List and Input Form */}

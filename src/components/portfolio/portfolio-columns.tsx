@@ -1,5 +1,6 @@
 /* eslint-disable react-refresh/only-export-components */
 import { type ColumnDef, type HeaderContext } from '@tanstack/react-table';
+import type { TFunction } from 'i18next';
 import { FaSteam, FaCoins } from 'react-icons/fa';
 import { TbLock } from 'react-icons/tb';
 import type { PortfolioReportRowDto } from '@/types/report';
@@ -59,7 +60,7 @@ export function RateInput({
 // Forward declaration — ItemCell is in portfolio-item-cell.tsx
 // This import is here for circular-dependency avoidance; caller passes ItemCell as a render prop.
 export type BuildColumnsParams = {
-  t: any;
+  t: TFunction;
   mode: PortfolioTableMode;
   deletingId: string | null;
   onDelete: (id: string) => void;
