@@ -2,9 +2,6 @@ import { getDatabase } from '@/infrastructure/db/mongo-client';
 import { createServices } from '@/infrastructure/container';
 import { getSteamCaseImageUrl } from '@/infrastructure/cases/steam-case-image-provider';
 import { resolveSteamId, fetchSteamWalletBalance } from '@/infrastructure/steam';
-import { parseSteamCookies } from '@/utils/steam-cookies';
-import { USER_AGENTS } from '@/utils/api-client';
-import { fetchWithTimeout } from '@/utils/fetch-with-timeout';
 import type { StorageUnitInfo } from '@/domain/storage-unit';
 
 import { updateScanJob } from '@/services/scan-job-store';
@@ -17,32 +14,35 @@ import {
   saveScanToCache,
   getNextExpiry,
 } from '@/services/scan-cache';
-import { extractSteamIdFromCookie, analyzeItemStatus } from '@/services/scan-steam-fetcher';
+import { analyzeItemStatus } from '@/services/scan-steam-fetcher';
+import {
+  buildSteamCookieHeader,
+  buildSteamInventoryHeaders,
+  parseSteamScanCookie,
+  validateSteamCookieSession,
+} from '@/services/scan-steam-auth';
+import { fetchSteamInventorySnapshot } from '@/services/scan-steam-inventory';
 import { decodeInspectLink } from '@/services/pattern/inspect-link-decoder';
 import { analyzePattern } from '@/services/pattern/pattern-analyzer';
 import { buildInspectLink } from '@/services/pattern/inspect-link-builder';
 import { mapWithConcurrency } from '@/services/parser/utils';
+import {
+  STEAM_IMAGE_CDN,
+  enrichPatternInfoWithSteamStickerDescriptions,
+  getMarketHashNameLookupKey,
+  parseAccessoryDescriptions,
+} from '@/services/scan-accessories';
+import {
+  getDopplerPhaseFromDescription,
+  getRarityFromDescription,
+  isStorageUnitDescription,
+  shouldIncludeSteamDescription,
+} from '@/services/scan-item-metadata';
 import type { CaseItem } from '@/domain/case-item';
 import type { PatternInfo } from '@/domain/pattern-info';
 import { inferInventoryItemType, type Cs2InventoryItemType } from '@/utils/cs2-item-type';
 
-const STEAM_IMAGE_CDN = 'https://community.cloudflare.steamstatic.com/economy/image';
 const INVENTORY_PRICE_CONCURRENCY = 4;
-const STEAM_COOKIE_VALIDATE_TIMEOUT_MS = 12_000;
-const STEAM_INVENTORY_FETCH_TIMEOUT_MS = 25_000;
-const STEAM_MARKET_LISTINGS_TIMEOUT_MS = 20_000;
-
-type SteamDescription = {
-  type: string;
-  value: string;
-  color?: string;
-};
-
-type ParsedStickerDescription = {
-  name: string;
-  marketHashName: string;
-  imageUrl?: string;
-};
 
 type InventoryPriceInfo = {
   caseItem: CaseItem | null;
@@ -89,30 +89,16 @@ export async function runScanJob(
     if (!forceRefresh) {
       const cached = await getCachedScan(cacheScope);
       if (cached) {
-        const cachedItems = normalizeScanItemTypes(cached.items);
         updateScanJob(jobId, {
           status: 'done',
           percent: 100,
           message: 'scanCompleteFromCache',
-          result: {
-            steamId64: cached.steamId64,
-            profile: cached.profile ?? profile,
-            items: cachedItems,
-            totalPrice: cached.totalPrice,
-            totalQuantity: cached.totalQuantity,
-            totalInventoryCount: cached.totalInventoryCount,
-            cached: true,
-            scannedAt: cached.scannedAt,
-            expiresAt: cached.expiresAt,
-            marketScanWarning: cached.marketScanWarning,
-            storageUnits: requestHasCookie ? (cached.storageUnits ?? []) : [],
-            ...(requestHasCookie
-              ? {
-                  walletBalance: cached.walletBalance,
-                  walletBalanceVnd: cached.walletBalanceVnd,
-                }
-              : {}),
-          },
+          result: buildCachedScanJobResult({
+            cached,
+            profile,
+            includePrivateFields: requestHasCookie,
+            normalizeItems: true,
+          }),
         });
         return;
       }
@@ -120,82 +106,15 @@ export async function runScanJob(
 
     // Step 2.5: Validate Cookie if provided
     let hasCookie = false;
-    let cookieValue = '';
-    let parentalCookie = '';
-    let sessionidCookie = '';
+    let cookieHeader: string | undefined;
     if (steamCookie && steamCookie.trim()) {
       updateScanJob(jobId, {
         percent: 20,
         message: 'checkingCookieConfig',
       });
-      const parsed = parseSteamCookies(steamCookie);
-      cookieValue = parsed.steamLoginSecure;
-      parentalCookie = parsed.steamparental || '';
-      sessionidCookie = parsed.sessionid || '';
-
-      const cookieSteamId = extractSteamIdFromCookie(cookieValue);
-      if (!cookieSteamId) {
-        throw new Error('cookieInvalidFormat');
-      }
-      if (cookieSteamId !== steamId64) {
-        throw new Error(
-          `cookieSteamIdMismatch:cookieSteamId=${cookieSteamId},steamId64=${steamId64}`
-        );
-      }
-
-      // Pre-flight check: make sure the cookie is actually alive
-      let fullCookieHeader = `steamLoginSecure=${cookieValue}`;
-      if (parentalCookie) {
-        fullCookieHeader += `; steamparental=${parentalCookie}`;
-      }
-      if (sessionidCookie) {
-        fullCookieHeader += `; sessionid=${sessionidCookie}`;
-      }
-
-      let validateRes: Response | null = null;
-      try {
-        validateRes = await fetchWithTimeout(
-          'https://steamcommunity.com/my/inventory',
-          {
-            headers: {
-              'User-Agent': USER_AGENTS.steamBrowser,
-              Cookie: fullCookieHeader,
-            },
-            redirect: 'manual',
-          },
-          STEAM_COOKIE_VALIDATE_TIMEOUT_MS
-        );
-      } catch (err) {
-        console.warn(
-          '[InventoryScanner] Cookie preflight timed out/failed. Proceeding to actual fetch...',
-          err
-        );
-      }
-
-      if (validateRes) {
-        if (validateRes.status === 302) {
-          const location = validateRes.headers.get('location') || '';
-          if (location.includes('/login/')) {
-            if (ownerId) {
-              const db = await getDatabase();
-              await db.collection('portfolio_accounts').updateOne(
-                { steamId64, ownerId },
-                {
-                  $set: {
-                    steamCookie: '',
-                    cookieError: 'cookieExpired',
-                  },
-                }
-              );
-            }
-            throw new Error('cookieExpired');
-          }
-        } else if (validateRes.status === 403) {
-          console.warn(
-            `[InventoryScanner] /my/inventory returned 403 (Family View). Proceeding to actual fetch...`
-          );
-        }
-      }
+      const cookieParts = parseSteamScanCookie(steamCookie, steamId64);
+      cookieHeader = buildSteamCookieHeader(cookieParts);
+      await validateSteamCookieSession({ cookieHeader, steamId64, ownerId });
 
       hasCookie = true;
     }
@@ -205,285 +124,20 @@ export async function runScanJob(
       message: 'startingSteamScan',
     });
 
-    const steamHeaders: Record<string, string> = {
-      'User-Agent': USER_AGENTS.steamBrowser,
-      Referer: `https://steamcommunity.com/profiles/${steamId64}/inventory/`,
-      Accept: 'application/json',
-      'Accept-Language': 'en-US,en;q=0.9',
-    };
-
-    if (hasCookie) {
-      let fullCookieHeader = `steamLoginSecure=${cookieValue}`;
-      if (parentalCookie) {
-        fullCookieHeader += `; steamparental=${parentalCookie}`;
-      }
-      if (sessionidCookie) {
-        fullCookieHeader += `; sessionid=${sessionidCookie}`;
-      }
-      steamHeaders['Cookie'] = fullCookieHeader;
-    }
-
-    const allAssets: Array<{
-      classid: string;
-      instanceid: string;
-      amount: string;
-      assetid: string;
-      onMarket?: boolean;
-    }> = [];
-    const allDescriptions: Array<{
-      classid: string;
-      instanceid: string;
-      name?: string;
-      market_hash_name: string;
-      marketable: number;
-      type: string;
-      icon_url?: string;
-      tags?: Array<{
-        category?: string;
-        internal_name?: string;
-        localized_tag_name?: string;
-        color?: string;
-      }>;
-      owner_descriptions?: Array<{
-        type: string;
-        value: string;
-        color?: string;
-      }>;
-      descriptions?: Array<{
-        type: string;
-        value: string;
-        color?: string;
-      }>;
-      actions?: Array<{
-        name?: string;
-        link?: string;
-      }>;
-    }> = [];
-    const allAssetProperties: Array<{
-      appid?: number;
-      contextid?: string;
-      assetid: string;
-      asset_properties?: Array<{
-        propertyid: number;
-        int_value?: string;
-        float_value?: string;
-        string_value?: string;
-        name?: string;
-      }>;
-    }> = [];
-    let totalInventoryCount = 0;
-    const contexts = [2];
-    if (hasCookie) {
-      contexts.push(16);
-    }
-
-    for (const contextId of contexts) {
-      let startAssetId: string | undefined;
-      let contextTotalAdded = false;
-
-      for (let page = 0; page < 20; page++) {
-        updateScanJob(jobId, {
-          percent: 30 + Math.min(page * 2, 20) + (contextId === 16 ? 10 : 0),
-          message: 'loadingInventory',
-          detail: { group: contextId, page: page + 1 },
-        });
-
-        let inventoryUrl = `https://steamcommunity.com/inventory/${steamId64}/730/${contextId}?l=english&count=2000`;
-        if (startAssetId) {
-          inventoryUrl += `&start_assetid=${startAssetId}`;
-        }
-
-        let response: Response;
-        try {
-          response = await fetchWithTimeout(
-            inventoryUrl,
-            { headers: steamHeaders },
-            STEAM_INVENTORY_FETCH_TIMEOUT_MS
-          );
-        } catch (err) {
-          if (contextId === 16) {
-            console.error('Context 16 timed out/failed. Skipping trade-protected items.', err);
-            break;
-          }
-          if (allAssets.length > 0) {
-            console.error(
-              'Inventory page timed out/failed after partial results. Continuing.',
-              err
-            );
-            break;
-          }
-          throw err;
-        }
-
-        if (response.status === 403) {
-          if (contextId === 16) {
-            console.error('Context 16 returned 403 Forbidden. Skipping trade-protected items.');
-            break;
-          }
-          if (hasCookie) {
-            const fallbackHeaders = { ...steamHeaders };
-            delete fallbackHeaders['Cookie'];
-            const fallbackRes = await fetchWithTimeout(
-              inventoryUrl,
-              { headers: fallbackHeaders },
-              STEAM_INVENTORY_FETCH_TIMEOUT_MS
-            );
-
-            if (ownerId) {
-              const db = await getDatabase();
-              const cookieError = fallbackRes.ok
-                ? 'familyViewCookieRequired'
-                : 'privateInventoryCookieRequired';
-              await db.collection('portfolio_accounts').updateOne(
-                { steamId64, ownerId },
-                {
-                  $set: fallbackRes.ok ? { cookieError } : { steamCookie: '', cookieError },
-                }
-              );
-            }
-
-            if (fallbackRes.ok) {
-              throw new Error('familyViewInvalidParentalCookie');
-            } else {
-              throw new Error('privateInventoryCookieRequired');
-            }
-          } else {
-            throw new Error('privateInventoryNoCookie');
-          }
-        }
-
-        if (!response.ok) {
-          if (contextId === 16) {
-            console.error(`Context 16 returned status ${response.status}. Skipping.`);
-            break;
-          }
-          if (allAssets.length > 0) break;
-          throw new Error(`steamHttpError:status=${response.status}`);
-        }
-
-        const data = await response.json();
-
-        if (data.success === false || data.success === 0) {
-          if (contextId === 16) {
-            console.error(`Context 16 returned success = false. Skipping.`);
-            break;
-          }
-          if (allAssets.length > 0) break;
-          throw new Error(data.Error || 'privateInventoryOrNotFound');
-        }
-
-        if (data.assets) allAssets.push(...data.assets);
-        if (data.descriptions) allDescriptions.push(...data.descriptions);
-        if (data.asset_properties) allAssetProperties.push(...data.asset_properties);
-
-        if (data.total_inventory_count && !contextTotalAdded) {
-          totalInventoryCount += data.total_inventory_count;
-          contextTotalAdded = true;
-        }
-
-        if (!data.more_items || !data.last_assetid) break;
-        startAssetId = data.last_assetid;
-      }
-    }
-
-    // Step 4.5: Scan items currently listed for sale on Steam Market
-    const descriptionKeys = new Set(
-      allDescriptions.map((desc) => `${desc.classid}_${desc.instanceid}`)
-    );
-    let marketScanWarning = !hasCookie;
-    if (hasCookie) {
-      try {
-        let start = 0;
-        const count = 100;
-        let hasMoreListings = true;
-        let success = true;
-        let marketScanCount = allAssets.filter((a) => a.onMarket).length;
-
-        while (hasMoreListings) {
-          updateScanJob(jobId, {
-            percent: 52,
-            message: 'scanningMarketListings',
-            detail: { count: marketScanCount },
-          });
-
-          const marketUrl = `https://steamcommunity.com/market/mylistings?norender=1&start=${start}&count=${count}`;
-          const marketRes = await fetchWithTimeout(
-            marketUrl,
-            { headers: steamHeaders },
-            STEAM_MARKET_LISTINGS_TIMEOUT_MS
-          );
-          if (!marketRes.ok) {
-            console.error(`Steam Market listings error: HTTP ${marketRes.status}`);
-            success = false;
-            break;
-          }
-
-          const marketData = await marketRes.json();
-          if (!marketData || marketData.success === false) {
-            console.error('Steam Market listings success = false');
-            success = false;
-            break;
-          }
-
-          const listings = marketData.listings || [];
-          const assets = marketData.assets || {};
-          const cs2Assets = assets['730']?.['2'] || {};
-
-          for (const listing of listings) {
-            const asset = listing.asset;
-            if (asset && asset.appid === 730) {
-              const assetId = asset.id;
-              const assetDetail = cs2Assets[assetId];
-
-              if (assetDetail) {
-                allAssets.push({
-                  classid: assetDetail.classid,
-                  instanceid: assetDetail.instanceid,
-                  amount: asset.amount || '1',
-                  assetid: assetId,
-                  onMarket: true,
-                });
-                marketScanCount += 1;
-
-                const key = `${assetDetail.classid}_${assetDetail.instanceid}`;
-                if (!descriptionKeys.has(key)) {
-                  allDescriptions.push({
-                    classid: assetDetail.classid,
-                    instanceid: assetDetail.instanceid,
-                    name: assetDetail.name,
-                    market_hash_name: assetDetail.market_hash_name || assetDetail.name,
-                    marketable: 1,
-                    type: assetDetail.type || '',
-                    icon_url: assetDetail.icon_url,
-                    tags: assetDetail.tags,
-                  });
-                  descriptionKeys.add(key);
-                }
-              }
-            }
-          }
-
-          if (listings.length < count || start + listings.length >= marketData.total_count) {
-            hasMoreListings = false;
-          } else {
-            start += listings.length;
-          }
-        }
-
-        if (success) {
-          marketScanWarning = false;
-        } else {
-          marketScanWarning = true;
-        }
-      } catch (err) {
-        console.error('Failed to fetch market listings:', err);
-        marketScanWarning = true;
-      }
-    }
-
-    if (allAssets.length === 0) {
-      throw new Error('emptyOrPrivateInventory');
-    }
+    const steamHeaders = buildSteamInventoryHeaders(steamId64, cookieHeader);
+    const {
+      assets: allAssets,
+      descriptions: allDescriptions,
+      assetProperties: allAssetProperties,
+      totalInventoryCount,
+      marketScanWarning,
+    } = await fetchSteamInventorySnapshot({
+      jobId,
+      steamId64,
+      ownerId,
+      hasCookie,
+      steamHeaders,
+    });
 
     updateScanJob(jobId, {
       percent: 55,
@@ -597,31 +251,7 @@ export async function runScanJob(
       const desc = descMap.get(descKey);
       if (!desc) continue;
 
-      const isStorageUnit = (() => {
-        if (desc.market_hash_name === 'Storage Unit') return true;
-        if (desc.type?.toLowerCase().includes('storage container')) return true;
-        if (desc.market_hash_name?.toLowerCase().includes('storage container')) return true;
-
-        const isTool =
-          desc.type?.toLowerCase().includes('tool') ||
-          desc.tags?.some(
-            (t) => t.category === 'Type' && t.internal_name?.toLowerCase().includes('tool')
-          );
-
-        const hasStorageText =
-          desc.descriptions?.some(
-            (d) =>
-              d.value?.toLowerCase().includes('storage unit') &&
-              d.value?.toLowerCase().includes('1,000')
-          ) ||
-          desc.owner_descriptions?.some(
-            (d) =>
-              d.value?.toLowerCase().includes('storage unit') &&
-              d.value?.toLowerCase().includes('1,000')
-          );
-
-        return Boolean(isTool && hasStorageText);
-      })();
+      const isStorageUnit = isStorageUnitDescription(desc);
 
       if (isStorageUnit) {
         const relatedAssets = assetsByDescKey.get(descKey) ?? [];
@@ -639,16 +269,7 @@ export async function runScanJob(
       const isTradeLocked = holdDays > 0;
       const isSpecialState = isTradeLocked || tradeProtected || info.onMarket;
 
-      const nameLower = desc.market_hash_name?.toLowerCase() || '';
-      const typeLower = desc.type?.toLowerCase() || '';
-      const isKey =
-        nameLower.includes('key') &&
-        (nameLower.includes('case') ||
-          nameLower.includes('capsule') ||
-          nameLower.includes('sticker') ||
-          typeLower.includes('key'));
-
-      if (!desc.marketable && !isSpecialState && !isKey) continue;
+      if (!shouldIncludeSteamDescription(desc, isSpecialState)) continue;
 
       const itemType = inferInventoryItemType({
         name: desc.name,
@@ -657,40 +278,8 @@ export async function runScanJob(
         tags: desc.tags,
       });
 
-      let rarity: { name: string; color: string } | undefined;
-      if (desc.tags) {
-        const rarityTag = desc.tags.find((t) => t.category === 'Rarity');
-        if (rarityTag && rarityTag.localized_tag_name) {
-          rarity = {
-            name: rarityTag.localized_tag_name,
-            color: rarityTag.color ? `#${rarityTag.color}` : '#b0c3d9',
-          };
-        }
-      }
-
-      let dopplerPhase: string | undefined;
-      if (desc.tags) {
-        for (const tag of desc.tags) {
-          const tagName = tag.localized_tag_name || '';
-          const tagInternal = tag.internal_name || '';
-          if (tagName.includes('Phase 1') || tagInternal.includes('phase1'))
-            dopplerPhase = 'Phase 1';
-          else if (tagName.includes('Phase 2') || tagInternal.includes('phase2'))
-            dopplerPhase = 'Phase 2';
-          else if (tagName.includes('Phase 3') || tagInternal.includes('phase3'))
-            dopplerPhase = 'Phase 3';
-          else if (tagName.includes('Phase 4') || tagInternal.includes('phase4'))
-            dopplerPhase = 'Phase 4';
-          else if (tagName.includes('Ruby') || tagInternal.includes('ruby')) dopplerPhase = 'Ruby';
-          else if (tagName.includes('Sapphire') || tagInternal.includes('sapphire'))
-            dopplerPhase = 'Sapphire';
-          else if (tagName.includes('Emerald') || tagInternal.includes('emerald'))
-            dopplerPhase = 'Emerald';
-          else if (tagName.includes('Black Pearl') || tagInternal.includes('blackpearl'))
-            dopplerPhase = 'Black Pearl';
-          if (dopplerPhase) break;
-        }
-      }
+      const rarity = getRarityFromDescription(desc);
+      const dopplerPhase = getDopplerPhaseFromDescription(desc);
 
       const relatedAssets = assetsByDescStatusKey.get(key) ?? [];
       const firstAsset = relatedAssets[0];
@@ -962,16 +551,9 @@ export async function runScanJob(
 
     let walletRaw: string | null = null;
     let walletVnd: number | null = null;
-    if (hasCookie) {
+    if (hasCookie && cookieHeader) {
       try {
-        let fullCookieHeader = `steamLoginSecure=${cookieValue}`;
-        if (parentalCookie) {
-          fullCookieHeader += `; steamparental=${parentalCookie}`;
-        }
-        if (sessionidCookie) {
-          fullCookieHeader += `; sessionid=${sessionidCookie}`;
-        }
-        const walletResult = await fetchSteamWalletBalance(fullCookieHeader);
+        const walletResult = await fetchSteamWalletBalance(cookieHeader);
         if (walletResult) {
           walletRaw = walletResult.raw;
           walletVnd = walletResult.vnd;
@@ -1083,25 +665,10 @@ export async function runScanJob(
             status: 'done',
             percent: 100,
             message: 'fallbackToCache',
-            result: {
-              steamId64: expiredCache.steamId64,
-              profile: expiredCache.profile,
-              items: expiredCache.items,
-              totalPrice: expiredCache.totalPrice,
-              totalQuantity: expiredCache.totalQuantity,
-              totalInventoryCount: expiredCache.totalInventoryCount,
-              cached: true,
-              scannedAt: expiredCache.scannedAt,
-              expiresAt: expiredCache.expiresAt,
-              marketScanWarning: expiredCache.marketScanWarning,
-              storageUnits: requestHasCookie ? (expiredCache.storageUnits ?? []) : [],
-              ...(requestHasCookie
-                ? {
-                    walletBalance: expiredCache.walletBalance,
-                    walletBalanceVnd: expiredCache.walletBalanceVnd,
-                  }
-                : {}),
-            },
+            result: buildCachedScanJobResult({
+              cached: expiredCache,
+              includePrivateFields: requestHasCookie,
+            }),
           });
           return;
         }
@@ -1119,6 +686,40 @@ export async function runScanJob(
   }
 }
 
+function buildCachedScanJobResult({
+  cached,
+  includePrivateFields,
+  profile,
+  normalizeItems = false,
+}: {
+  cached: CachedScanResult;
+  includePrivateFields: boolean;
+  profile?: SteamProfile;
+  normalizeItems?: boolean;
+}) {
+  const items = normalizeItems ? normalizeScanItemTypes(cached.items) : cached.items;
+
+  return {
+    steamId64: cached.steamId64,
+    profile: cached.profile ?? profile,
+    items,
+    totalPrice: cached.totalPrice,
+    totalQuantity: cached.totalQuantity,
+    totalInventoryCount: cached.totalInventoryCount,
+    cached: true,
+    scannedAt: cached.scannedAt,
+    expiresAt: cached.expiresAt,
+    marketScanWarning: cached.marketScanWarning,
+    storageUnits: includePrivateFields ? (cached.storageUnits ?? []) : [],
+    ...(includePrivateFields
+      ? {
+          walletBalance: cached.walletBalance,
+          walletBalanceVnd: cached.walletBalanceVnd,
+        }
+      : {}),
+  };
+}
+
 function normalizeScanItemTypes(items: ScanItem[]): ScanItem[] {
   return items.map((item) => {
     const inferredType = inferInventoryItemType({
@@ -1128,198 +729,4 @@ function normalizeScanItemTypes(items: ScanItem[]): ScanItem[] {
 
     return item.type === inferredType ? item : { ...item, type: inferredType };
   });
-}
-
-function parseAccessoryDescriptions(descriptions: SteamDescription[]): {
-  stickers: ParsedStickerDescription[];
-  charms: ParsedStickerDescription[];
-} {
-  const stickers: ParsedStickerDescription[] = [];
-  const charms: ParsedStickerDescription[] = [];
-
-  for (const description of descriptions) {
-    const html = description.value;
-    const lowerHtml = html.toLowerCase();
-    if (
-      !lowerHtml.includes('sticker:') &&
-      !lowerHtml.includes('charm:') &&
-      !lowerHtml.includes('keychain:')
-    ) {
-      continue;
-    }
-
-    const parsedFromImages = parseAccessoryImages(html);
-    stickers.push(...parsedFromImages.stickers);
-    charms.push(...parsedFromImages.charms);
-
-    if (parsedFromImages.stickers.length === 0) {
-      stickers.push(...parseAccessoryText(html, 'sticker'));
-    }
-    if (parsedFromImages.charms.length === 0) {
-      charms.push(...parseAccessoryText(html, 'charm'));
-      charms.push(...parseAccessoryText(html, 'keychain'));
-    }
-  }
-
-  return { stickers, charms };
-}
-
-function parseAccessoryImages(html: string): {
-  stickers: ParsedStickerDescription[];
-  charms: ParsedStickerDescription[];
-} {
-  const stickers: ParsedStickerDescription[] = [];
-  const charms: ParsedStickerDescription[] = [];
-  const imageTags = html.match(/<img\b[^>]*>/gi) ?? [];
-
-  for (const imageTag of imageTags) {
-    const attrs = parseHtmlAttributes(imageTag);
-    const title = decodeHtmlEntities(attrs.title ?? '');
-    const src = attrs.src ? normalizeSteamImageUrl(attrs.src) : undefined;
-    const accessory = parseAccessoryTitle(title, src);
-    if (!accessory) continue;
-
-    if (isCharmLabel(accessory.label)) {
-      charms.push(accessory.description);
-    } else {
-      stickers.push(accessory.description);
-    }
-  }
-
-  return { stickers, charms };
-}
-
-function parseAccessoryText(
-  html: string,
-  label: 'sticker' | 'charm' | 'keychain'
-): ParsedStickerDescription[] {
-  const text = decodeHtmlEntities(stripHtml(html));
-  const match = text.match(new RegExp(`${label}:\\s*(.+)`, 'i'));
-  if (!match?.[1]) return [];
-
-  return match[1]
-    .split(/\s*,\s*/)
-    .map((name) => name.trim())
-    .filter(Boolean)
-    .map((name) => buildAccessoryDescription(label, name));
-}
-
-function parseAccessoryTitle(
-  title: string,
-  imageUrl?: string
-): { label: string; description: ParsedStickerDescription } | null {
-  const match = title.match(/^\s*(sticker|charm|keychain):\s*(.+)$/i);
-  if (!match?.[2]) return null;
-  const label = match[1].toLowerCase();
-  return {
-    label,
-    description: buildAccessoryDescription(label, match[2].trim(), imageUrl),
-  };
-}
-
-function buildAccessoryDescription(
-  label: string,
-  name: string,
-  imageUrl?: string
-): ParsedStickerDescription {
-  const prefix = isCharmLabel(label) ? 'Charm' : 'Sticker';
-  return {
-    name,
-    marketHashName: name.toLowerCase().startsWith(`${prefix.toLowerCase()} |`)
-      ? name
-      : `${prefix} | ${name}`,
-    imageUrl,
-  };
-}
-
-function parseHtmlAttributes(tag: string): Record<string, string> {
-  const attrs: Record<string, string> = {};
-  for (const match of tag.matchAll(/\s([a-zA-Z_:][-a-zA-Z0-9_:.]*)=(["'])(.*?)\2/g)) {
-    attrs[match[1].toLowerCase()] = decodeHtmlEntities(match[3]);
-  }
-  return attrs;
-}
-
-function isCharmLabel(label: string): boolean {
-  return label.toLowerCase() === 'charm' || label.toLowerCase() === 'keychain';
-}
-
-function enrichPatternInfoWithSteamStickerDescriptions(
-  patternInfo: PatternInfo | undefined,
-  stickerDescriptions: ParsedStickerDescription[],
-  charmDescriptions: ParsedStickerDescription[]
-): PatternInfo | undefined {
-  if (!patternInfo || (stickerDescriptions.length === 0 && charmDescriptions.length === 0)) {
-    return patternInfo;
-  }
-  const existing = patternInfo.stickers ?? [];
-  const maxLength = Math.max(existing.length, stickerDescriptions.length);
-  const stickers = Array.from({ length: maxLength }, (_, index) => {
-    const current = existing[index];
-    const parsed = stickerDescriptions[index];
-    return {
-      ...current,
-      name: parsed?.name ?? current?.name ?? `Sticker ${index + 1}`,
-      marketHashName: parsed?.marketHashName ?? current?.marketHashName,
-      imageUrl: parsed?.imageUrl ?? current?.imageUrl,
-      slot: current?.slot ?? index,
-      wear: current?.wear ?? 0,
-    };
-  });
-  const existingCharms = patternInfo.charms ?? [];
-  const maxCharmLength = Math.max(existingCharms.length, charmDescriptions.length);
-  const charms = Array.from({ length: maxCharmLength }, (_, index) => {
-    const current = existingCharms[index];
-    const parsed = charmDescriptions[index];
-    return {
-      ...current,
-      name: parsed?.name ?? current?.name ?? `Charm ${index + 1}`,
-      marketHashName: parsed?.marketHashName ?? current?.marketHashName,
-      imageUrl: parsed?.imageUrl ?? current?.imageUrl,
-      slot: current?.slot ?? index,
-    };
-  });
-  return {
-    ...patternInfo,
-    stickers: stickers.length > 0 ? stickers : patternInfo.stickers,
-    charms: charms.length > 0 ? charms : patternInfo.charms,
-  };
-}
-
-function stripHtml(value: string): string {
-  return value
-    .replace(/<br\s*\/?>/gi, ', ')
-    .replace(/<[^>]+>/g, ' ')
-    .replace(/\s+/g, ' ')
-    .trim();
-}
-
-function decodeHtmlEntities(value: string): string {
-  return value
-    .replace(/&amp;/g, '&')
-    .replace(/&quot;/g, '"')
-    .replace(/&#39;/g, "'")
-    .replace(/&lt;/g, '<')
-    .replace(/&gt;/g, '>');
-}
-
-function getMarketHashNameLookupKey(value: string): string {
-  const trimmed = value.trim();
-  try {
-    return decodeURIComponent(trimmed).trim().toLowerCase();
-  } catch {
-    return trimmed.toLowerCase();
-  }
-}
-
-function normalizeSteamImageUrl(url: string): string {
-  const normalized = decodeHtmlEntities(url.trim());
-  if (normalized.startsWith('//')) return `https:${normalized}`;
-  if (normalized.startsWith('/economy/image/')) {
-    return `https://community.cloudflare.steamstatic.com${normalized}`;
-  }
-  if (normalized.startsWith('http://')) {
-    return normalized.replace(/^http:\/\//i, 'https://');
-  }
-  return normalized;
 }
