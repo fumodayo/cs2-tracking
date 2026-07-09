@@ -1,12 +1,12 @@
-"use client";
+'use client';
 
-import React, { useState, useEffect } from "react";
-import { useTranslation } from "react-i18next";
-import { Search, Loader2 } from "lucide-react";
-import { CaseThumbnail } from "./case-thumbnail";
-import { formatCurrency } from "@/utils/format";
+import React, { useState, useEffect } from 'react';
+import { useTranslation } from 'react-i18next';
+import { Search, Loader2 } from 'lucide-react';
+import { CaseThumbnail } from './case-thumbnail';
+import { formatCurrency } from '@/utils/format';
 
-import { Button } from "@/components/ui/button";
+import { Button } from '@/components/ui/button';
 export interface CaseItemSearchData {
   id: string;
   name: string;
@@ -36,19 +36,19 @@ export const CaseSearchSelect: React.FC<CaseSearchSelectProps> = ({
   label,
 }) => {
   const { t } = useTranslation();
-  const [query, setQuery] = useState("");
+  const [query, setQuery] = useState('');
   const [results, setResults] = useState<CaseSearchResult[]>([]);
   const [loading, setLoading] = useState(false);
 
-  // Clear query and results when selectedCase is set
+  // Xóa query và kết quả khi selectedCase được đặt
   useEffect(() => {
     if (selectedCase) {
-      setQuery("");
+      setQuery('');
       setResults([]);
     }
   }, [selectedCase]);
 
-  // Search cases with debounce and race condition prevention
+  // Tìm case có debounce và tránh race condition
   useEffect(() => {
     const trimmed = query.trim();
     if (!trimmed) {
@@ -61,10 +61,8 @@ export const CaseSearchSelect: React.FC<CaseSearchSelectProps> = ({
     const delayDebounceFn = setTimeout(async () => {
       setLoading(true);
       try {
-        const res = await fetch(
-          `/api/inventory/search-case?q=${encodeURIComponent(trimmed)}`,
-        );
-        if (!res.ok) throw new Error("Search failed");
+        const res = await fetch(`/api/inventory/search-case?q=${encodeURIComponent(trimmed)}`);
+        if (!res.ok) throw new Error('Search failed');
         const data = await res.json();
         if (active) {
           setResults(data.results || []);
@@ -112,12 +110,12 @@ export const CaseSearchSelect: React.FC<CaseSearchSelectProps> = ({
           type="button"
           onClick={() => {
             onClear();
-            setQuery("");
+            setQuery('');
             setResults([]);
           }}
           className="hover:bg-stone-850 shrink-0 cursor-pointer rounded border border-stone-800 bg-stone-900 px-3 py-1.5 text-xs font-semibold text-stone-300 transition-colors hover:border-stone-700"
         >
-          {t("common.change", "Change")}
+          {t('common.change', 'Change')}
         </Button>
       </div>
     );
@@ -125,11 +123,8 @@ export const CaseSearchSelect: React.FC<CaseSearchSelectProps> = ({
 
   return (
     <div>
-      <label
-        className="mb-1.5 block text-xs font-semibold text-stone-300"
-        htmlFor="case-search"
-      >
-        {label || t("inventoryScanner.searchItem", "Search item")}
+      <label className="mb-1.5 block text-xs font-semibold text-stone-300" htmlFor="case-search">
+        {label || t('inventoryScanner.searchItem', 'Search item')}
       </label>
       <div className="flex items-center gap-2 rounded-md border border-stone-800 bg-stone-950/70 px-3 py-0.5">
         <Search className="size-4 text-stone-500" />
@@ -137,14 +132,16 @@ export const CaseSearchSelect: React.FC<CaseSearchSelectProps> = ({
           id="case-search"
           value={query}
           onChange={(e) => handleInputChange(e.target.value)}
-          placeholder={placeholder || t("inventoryScanner.exampleCasePlaceholder", "e.g., Kilowatt Case...")}
+          placeholder={
+            placeholder || t('inventoryScanner.exampleCasePlaceholder', 'e.g., Kilowatt Case...')
+          }
           className="h-10 w-full bg-transparent text-sm text-stone-200 outline-none placeholder:text-stone-600"
         />
         {loading && <Loader2 className="size-4 animate-spin text-stone-500" />}
       </div>
 
       {query.trim().length > 0 && results.length > 0 && (
-        <div className="relative z-10 mt-2 max-h-48 divide-y divide-stone-900/40 overflow-auto rounded-md border border-stone-800 bg-stone-950 shadow-2xl [&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar-track]:bg-stone-950 [&::-webkit-scrollbar-thumb]:bg-stone-850 hover:[&::-webkit-scrollbar-thumb]:bg-stone-800 [&::-webkit-scrollbar-thumb]:rounded-full">
+        <div className="[&::-webkit-scrollbar-thumb]:bg-stone-850 relative z-10 mt-2 max-h-48 divide-y divide-stone-900/40 overflow-auto rounded-md border border-stone-800 bg-stone-950 shadow-2xl [&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar-thumb]:rounded-full hover:[&::-webkit-scrollbar-thumb]:bg-stone-800 [&::-webkit-scrollbar-track]:bg-stone-950">
           {results.map((r) => (
             <button
               type="button"
@@ -152,7 +149,7 @@ export const CaseSearchSelect: React.FC<CaseSearchSelectProps> = ({
               onClick={() => {
                 onSelect(r.caseItem, r.price);
               }}
-              className="flex w-full cursor-pointer items-center justify-between gap-3 px-3.5 py-2.5 text-left text-sm text-stone-300 transition-all hover:bg-stone-900/60 hover:text-stone-100 focus:bg-stone-900/60 outline-none first:rounded-t-md last:rounded-b-md"
+              className="flex w-full cursor-pointer items-center justify-between gap-3 px-3.5 py-2.5 text-left text-sm text-stone-300 transition-all outline-none first:rounded-t-md last:rounded-b-md hover:bg-stone-900/60 hover:text-stone-100 focus:bg-stone-900/60"
             >
               <span className="flex min-w-0 items-center gap-3">
                 <CaseThumbnail
@@ -170,7 +167,7 @@ export const CaseSearchSelect: React.FC<CaseSearchSelectProps> = ({
                 </span>
               </span>
               <span className="shrink-0 text-xs font-semibold text-stone-400">
-                {r.price > 0 ? formatCurrency(r.price) : t("portfolio.noPrice", "No price yet")}
+                {r.price > 0 ? formatCurrency(r.price) : t('portfolio.noPrice', 'No price yet')}
               </span>
             </button>
           ))}
@@ -179,7 +176,7 @@ export const CaseSearchSelect: React.FC<CaseSearchSelectProps> = ({
 
       {query.trim() && results.length === 0 && !loading && (
         <div className="mt-2 rounded-md border border-stone-800 bg-stone-950 px-4 py-6 text-center text-sm text-stone-500 shadow-xl">
-          {t("inventoryScanner.noResultsFound", "No results found")}
+          {t('inventoryScanner.noResultsFound', 'No results found')}
         </div>
       )}
     </div>

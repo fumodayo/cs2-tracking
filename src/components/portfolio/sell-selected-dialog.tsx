@@ -1,16 +1,7 @@
 'use client';
 
 import { useState, useMemo, useEffect, useCallback } from 'react';
-import { useTranslation } from 'react-i18next';
-import { Loader2, ShoppingBag } from 'lucide-react';
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogDescription,
-} from '@/components/ui/dialog';
-import { ConfirmDialog } from '@/components/ui/confirm-dialog';
+import { Dialog, DialogContent } from '@/components/ui/dialog';
 import type { PortfolioTableRow } from './portfolio-table-model';
 import type { PortfolioReportRowDto } from '@/types/report';
 import { useCurrency } from '@/components/currency-provider';
@@ -18,8 +9,20 @@ import { SellSelectedSearch } from './components/sell-selected-search';
 
 import { SellSelectedList } from './components/sell-selected-dialog/sell-selected-list';
 import { SellSelectedFooter } from './components/sell-selected-dialog/sell-selected-footer';
+import {
+  SellSelectedConfirmDialogs,
+  type SellSelectedConfirmSingleState,
+} from './components/sell-selected-dialog/sell-selected-confirm-dialogs';
+import { SellSelectedDialogHeader } from './components/sell-selected-dialog/sell-selected-dialog-header';
+import { SellSelectedLoadingOverlay } from './components/sell-selected-dialog/sell-selected-loading-overlay';
 import { useAccessoryPrices } from '@/hooks/use-accessory-prices';
-import { splitSellSelectedItem } from './sell-selected-dialog-utils';
+import {
+  calculateSellSelectedMetrics,
+  getDefaultSellSelectedBuffCnyPrice,
+  hasSellSelectedBuffFilterMatch,
+  hasSellSelectedBuffPricing,
+  splitSellSelectedItem,
+} from './sell-selected-dialog-utils';
 
 type SellSelectedDialogProps = {
   open: boolean;
@@ -57,39 +60,33 @@ export function SellSelectedDialog({
   const splitSelectedItems = useMemo(() => {
     return selectedItems.flatMap((item) => splitSellSelectedItem(item, originalRows));
   }, [selectedItems, originalRows]);
-  const { t } = useTranslation();
   const { formatCurrency } = useCurrency();
-  // Quantities to sell, keyed by item ID
+  // Số lượng cần bán, key theo item ID
   const [sellQuantities, setSellQuantities] = useState<Record<string, number>>({});
 
-  // Manually added items via search
+  // Vật phẩm thêm tay qua tìm kiếm
   const [manuallyAddedItems, setManuallyAddedItems] = useState<PortfolioTableRow[]>([]);
 
-  // Per-item rate overrides (retail & wholesale), keyed by item ID
+  // Override rate theo từng vật phẩm (lẻ và sỉ), key theo item ID
   const [itemRetailRates, setItemRetailRates] = useState<Record<string, string>>({});
   const [itemWholesaleRates, setItemWholesaleRates] = useState<Record<string, string>>({});
-  // Per-item sticker rate overrides, keyed by item ID
+  // Override rate sticker theo từng vật phẩm, key theo item ID
   const [itemStickerRates, setItemStickerRates] = useState<Record<string, string>>({});
 
-  // For BUFF items: Buff CNY price and CNY rate input values per item ID
+  // Với vật phẩm BUFF: giá Buff CNY và tỷ giá CNY nhập theo từng item ID
   const [buffCnyPrices, setBuffCnyPrices] = useState<Record<string, string>>({});
   const [buffRates, setBuffRates] = useState<Record<string, string>>({});
 
-  // Local list exclusions (trash items)
+  // Danh sách loại trừ local (vật phẩm bỏ khỏi list)
   const [excludedIds, setExcludedIds] = useState<Set<string>>(new Set());
 
-  // Track individual item actions in progress
+  // Theo dõi thao tác từng vật phẩm đang chạy
   const [loadingIds, setLoadingIds] = useState<Set<string>>(new Set());
-  // Track bulk action in progress
+  // Theo dõi thao tác hàng loạt đang chạy
   const [bulkLoading, setBulkLoading] = useState(false);
 
-  // Confirmation states
-  const [confirmSingle, setConfirmSingle] = useState<{
-    open: boolean;
-    itemId: string;
-    quantity: number;
-    itemName: string;
-  } | null>(null);
+  // Trạng thái xác nhận
+  const [confirmSingle, setConfirmSingle] = useState<SellSelectedConfirmSingleState | null>(null);
 
   const [confirmBulk, setConfirmBulk] = useState(false);
   const [isBulkSellListExpanded, setIsBulkSellListExpanded] = useState(false);
@@ -100,13 +97,13 @@ export function SellSelectedDialog({
     }
   }, [confirmBulk]);
 
-  // Pricing category filter state
+  // Trạng thái lọc nhóm định giá
   const [priceFilter, setPriceFilter] = useState<'all' | 'buff' | 'steam'>('all');
 
-  // Track order in which items are added or re-activated
+  // Theo dõi thứ tự vật phẩm được thêm hoặc active lại
   const [addedOrder, setAddedOrder] = useState<string[]>([]);
 
-  // Clear exclusions and initialize ordered items when dialog state changes
+  // Xóa loại trừ và khởi tạo thứ tự vật phẩm khi trạng thái dialog đổi
   useEffect(() => {
     if (open) {
       setExcludedIds(new Set());
@@ -132,12 +129,12 @@ export function SellSelectedDialog({
     splitSelectedItems.forEach((item) => itemMap.set(item.id, item));
     manuallyAddedItems.forEach((item) => itemMap.set(item.id, item));
 
-    // Order items by when they were added/re-activated
+    // Sắp xếp vật phẩm theo thời điểm được thêm/active lại
     const ordered = addedOrder
       .map((id) => itemMap.get(id))
       .filter((item): item is PortfolioTableRow => !!item);
 
-    // Fallback for items that are not yet in addedOrder
+    // Fallback cho vật phẩm chưa có trong addedOrder
     const seen = new Set(ordered.map((item) => item.id));
     const remaining = [...manuallyAddedItems, ...splitSelectedItems].filter(
       (item) => !seen.has(item.id)
@@ -146,7 +143,7 @@ export function SellSelectedDialog({
     return [...ordered, ...remaining];
   }, [splitSelectedItems, manuallyAddedItems, addedOrder]);
 
-  // Exclude single item from active selection list
+  // Loại một vật phẩm khỏi danh sách chọn active
   const excludeItem = useCallback(
     (id: string) => {
       setExcludedIds((prev) => {
@@ -177,16 +174,7 @@ export function SellSelectedDialog({
     if (priceFilter === 'all') return filtered;
 
     return filtered.filter((item) => {
-      const hasBuffPrice =
-        (item.itemType === 'skin' &&
-          item.currentPrice !== null &&
-          item.steamPrice !== null &&
-          item.steamPrice !== undefined &&
-          item.currentPrice !== item.steamPrice) ||
-        (!!buffPricesCny &&
-          buffPricesCny[item.case.marketHashName] !== undefined &&
-          buffPricesCny[item.case.marketHashName] > 0);
-
+      const hasBuffPrice = hasSellSelectedBuffFilterMatch(item, buffPricesCny);
       return priceFilter === 'buff' ? hasBuffPrice : !hasBuffPrice;
     });
   }, [combinedItems, excludedIds, priceFilter, buffPricesCny]);
@@ -220,17 +208,18 @@ export function SellSelectedDialog({
     (item: PortfolioTableRow) => {
       const splitItems = splitSellSelectedItem(item);
 
+      // Kết quả tìm kiếm có thể thêm lại dòng active, khôi phục dòng đã loại, hoặc thêm dòng mới.
       splitItems.forEach((split) => {
-        // If it's already in activeItems (not excluded)
+        // Nếu vật phẩm đã có trong activeItems và chưa bị loại
         const existingActive = activeItems.find((x) => x.id === split.id);
         if (existingActive) {
-          // Bring to top of the order list
+          // Đưa lên đầu danh sách thứ tự
           setAddedOrder((prev) => {
             const next = prev.filter((id) => id !== split.id);
             return [split.id, ...next];
           });
 
-          // Increment quantity by 1, up to the maximum inventory quantity
+          // Tăng số lượng thêm 1, tối đa bằng số lượng trong kho
           const currentQty =
             sellQuantities[split.id] !== undefined
               ? sellQuantities[split.id]
@@ -243,7 +232,7 @@ export function SellSelectedDialog({
           return;
         }
 
-        // If it was excluded before, remove from excludedIds, reset its quantity, and bring to top
+        // Nếu trước đó đã bị loại, xóa khỏi excludedIds, reset số lượng và đưa lên đầu
         if (excludedIds.has(split.id)) {
           setExcludedIds((prev) => {
             const next = new Set(prev);
@@ -254,7 +243,7 @@ export function SellSelectedDialog({
             const next = prev.filter((id) => id !== split.id);
             return [split.id, ...next];
           });
-          // Increment its sell quantity if it was already initialized, or initialize it
+          // Tăng số lượng bán nếu đã khởi tạo, nếu chưa thì khởi tạo
           setSellQuantities((prev) => ({
             ...prev,
             [split.id]: Math.min(split.quantity, (prev[split.id] || 0) + 1),
@@ -262,12 +251,12 @@ export function SellSelectedDialog({
           return;
         }
 
-        // Add to manuallyAddedItems
+        // Thêm vào manuallyAddedItems
         setManuallyAddedItems((prev) => [...prev, split]);
-        // Prepend to addedOrder
+        // Thêm vào đầu addedOrder
         setAddedOrder((prev) => [split.id, ...prev]);
 
-        // Initialize state for the new item
+        // Khởi tạo state cho vật phẩm mới
         setSellQuantities((prev) => ({
           ...prev,
           [split.id]: 1, // Start at 1 for manually added items
@@ -288,17 +277,14 @@ export function SellSelectedDialog({
           [split.id]: '0',
         }));
 
-        const hasBuff =
-          split.itemType === 'skin' &&
-          split.currentPrice !== null &&
-          split.steamPrice !== null &&
-          split.steamPrice !== undefined &&
-          split.currentPrice !== split.steamPrice;
+        const hasBuff = hasSellSelectedBuffPricing(split);
 
         if (hasBuff) {
-          const defaultCny =
-            buffPricesCny?.[split.case.marketHashName] ??
-            (split.currentPrice ? split.currentPrice / (buffCnyToVndRate ?? 3600) : 0);
+          const defaultCny = getDefaultSellSelectedBuffCnyPrice({
+            item: split,
+            buffPricesCny,
+            buffCnyToVndRate,
+          });
           setBuffCnyPrices((prev) => ({
             ...prev,
             [split.id]: String(Number(defaultCny.toFixed(2))),
@@ -321,7 +307,7 @@ export function SellSelectedDialog({
     ]
   );
 
-  // Initialize sell quantities when list opens
+  // Khởi tạo số lượng bán khi danh sách mở
   useEffect(() => {
     const initialQuantities: Record<string, number> = {};
     splitSelectedItems.forEach((item) => {
@@ -330,7 +316,7 @@ export function SellSelectedDialog({
     setSellQuantities(initialQuantities);
   }, [splitSelectedItems]);
 
-  // Initialize item rates when list opens
+  // Khởi tạo rate vật phẩm khi danh sách mở
   useEffect(() => {
     const initialRetailRates: Record<string, string> = {};
     const initialWholesaleRates: Record<string, string> = {};
@@ -339,22 +325,18 @@ export function SellSelectedDialog({
     const initialRatesCny: Record<string, string> = {};
 
     splitSelectedItems.forEach((item) => {
-      const hasBuff =
-        item.itemType === 'skin' &&
-        item.currentPrice !== null &&
-        item.steamPrice !== null &&
-        item.steamPrice !== undefined &&
-        item.currentPrice !== item.steamPrice;
+      const hasBuff = hasSellSelectedBuffPricing(item);
 
       initialRetailRates[item.id] = String(retailRate);
       initialWholesaleRates[item.id] = String(wholesaleRate);
       initialStickerRates[item.id] = '0';
 
       if (hasBuff) {
-        // Find default CNY price
-        const defaultCny =
-          buffPricesCny?.[item.case.marketHashName] ??
-          (item.currentPrice ? item.currentPrice / (buffCnyToVndRate ?? 3600) : 0);
+        const defaultCny = getDefaultSellSelectedBuffCnyPrice({
+          item,
+          buffPricesCny,
+          buffCnyToVndRate,
+        });
         initialCnyPrices[item.id] = String(Number(defaultCny.toFixed(2)));
         initialRatesCny[item.id] = String(buffCnyToVndRate ?? 3600);
       }
@@ -402,7 +384,7 @@ export function SellSelectedDialog({
     }));
   }, []);
 
-  // Helper to distribute a sale of grouped items across database items
+  // Helper phân bổ lượt bán của vật phẩm đã gom nhóm qua các item trong database
   const sellItems = async (itemIds: string[], totalQtyToSell: number) => {
     let remainingSellQty = totalQtyToSell;
 
@@ -423,7 +405,7 @@ export function SellSelectedDialog({
     }
   };
 
-  // Perform sale for a single item
+  // Thực hiện bán một vật phẩm
   const executeSingleSell = async (itemId: string, sellQty: number) => {
     const item = combinedItems.find((x) => x.id === itemId);
     if (!item) return;
@@ -445,7 +427,7 @@ export function SellSelectedDialog({
         next.delete(itemId);
         return next;
       });
-      // If we sold the last item, close the dialog
+      // Nếu đã bán vật phẩm cuối cùng thì đóng dialog
       if (activeItems.length <= 1) {
         onClose();
         onClearSelection();
@@ -453,7 +435,7 @@ export function SellSelectedDialog({
     }
   };
 
-  // Perform sale for all items
+  // Thực hiện bán toàn bộ vật phẩm
   const executeBulkSell = async () => {
     setBulkLoading(true);
     try {
@@ -470,88 +452,38 @@ export function SellSelectedDialog({
     }
   };
 
-  // Real-time metrics calculations based on customized sell quantities and per-item rates
-  const metrics = useMemo(() => {
-    let totalInvested = 0;
-    let totalCurrentValue = 0;
-
-    activeItems.forEach((item) => {
-      const qty = sellQuantities[item.id] !== undefined ? sellQuantities[item.id] : item.quantity;
-
-      const hasBuff =
-        item.itemType === 'skin' &&
-        item.currentPrice !== null &&
-        item.steamPrice !== null &&
-        item.steamPrice !== undefined &&
-        item.currentPrice !== item.steamPrice;
-
-      const unitBuy = item.buyPrice;
-      let unitCurrent = item.currentPrice ?? item.buyPrice;
-
-      if (hasBuff) {
-        const cnyPriceVal = Number(
-          buffCnyPrices[item.id] !== undefined
-            ? buffCnyPrices[item.id]
-            : (buffPricesCny?.[item.case.marketHashName] ??
-                (item.currentPrice ? item.currentPrice / (buffCnyToVndRate ?? 3600) : 0))
-        );
-        const cnyRateVal = Number(
-          buffRates[item.id] !== undefined ? buffRates[item.id] : (buffCnyToVndRate ?? 3600)
-        );
-        unitCurrent = Math.round(cnyPriceVal * cnyRateVal);
-      }
-
-      let unitSellDynamic = unitCurrent;
-
-      if (!hasBuff) {
-        const itemRetailRateVal = Number(
-          itemRetailRates[item.id] !== undefined ? itemRetailRates[item.id] : retailRate
-        );
-        const itemWholesaleRateVal = Number(
-          itemWholesaleRates[item.id] !== undefined ? itemWholesaleRates[item.id] : wholesaleRate
-        );
-
-        const rateDynamic = qty < item.quantity ? itemRetailRateVal : itemWholesaleRateVal;
-        unitSellDynamic = Math.round(unitCurrent * (rateDynamic / 100));
-      }
-
-      // Add sticker price addition
-      const stickerScanTotalPrice = getItemStickerScanTotal(item);
-      if (stickerScanTotalPrice > 0) {
-        const itemStickerRateVal = Number(
-          itemStickerRates[item.id] !== undefined ? itemStickerRates[item.id] : 0
-        );
-        const stickerAddVnd = Math.round((stickerScanTotalPrice * itemStickerRateVal) / 100);
-        unitSellDynamic += stickerAddVnd;
-      }
-
-      totalInvested += unitBuy * qty;
-      totalCurrentValue += unitSellDynamic * qty;
-    });
-
-    const profitAmount = totalCurrentValue - totalInvested;
-    const profitPercent = totalInvested > 0 ? (profitAmount / totalInvested) * 100 : 0;
-
-    return {
-      totalInvested,
-      totalCurrentValue,
-      profitAmount,
-      profitPercent,
-    };
-  }, [
-    activeItems,
-    sellQuantities,
-    itemRetailRates,
-    itemWholesaleRates,
-    wholesaleRate,
-    retailRate,
-    buffCnyPrices,
-    buffRates,
-    buffPricesCny,
-    buffCnyToVndRate,
-    itemStickerRates,
-    getItemStickerScanTotal,
-  ]);
+  // Tính chỉ số realtime dựa trên số lượng bán tùy chỉnh và rate từng vật phẩm
+  const metrics = useMemo(
+    () =>
+      calculateSellSelectedMetrics({
+        activeItems,
+        sellQuantities,
+        itemRetailRates,
+        itemWholesaleRates,
+        wholesaleRate,
+        retailRate,
+        buffCnyPrices,
+        buffRates,
+        buffPricesCny,
+        buffCnyToVndRate,
+        itemStickerRates,
+        getItemStickerScanTotal,
+      }),
+    [
+      activeItems,
+      sellQuantities,
+      itemRetailRates,
+      itemWholesaleRates,
+      wholesaleRate,
+      retailRate,
+      buffCnyPrices,
+      buffRates,
+      buffPricesCny,
+      buffCnyToVndRate,
+      itemStickerRates,
+      getItemStickerScanTotal,
+    ]
+  );
 
   const itemsCount = activeItems.length;
 
@@ -559,39 +491,8 @@ export function SellSelectedDialog({
     <>
       <Dialog open={open} onOpenChange={(val) => !bulkLoading && !val && onClose()}>
         <DialogContent className="bg-card text-foreground shadow-soft flex max-h-[92vh] max-w-7xl flex-col overflow-hidden rounded-[2px] border border-stone-800 p-6 backdrop-blur-3xl dark:shadow-[0_20px_50px_rgba(0,0,0,0.95)]">
-          {/* Main Modal Spinner overlay when bulk loading */}
-          {bulkLoading && (
-            <div className="bg-card/90 absolute inset-0 z-50 flex flex-col items-center justify-center backdrop-blur-md transition-all duration-300">
-              <Loader2 className="mb-3 size-10 animate-spin text-blue-400" />
-              <p className="font-mono text-sm font-black tracking-widest text-stone-200 uppercase">
-                {t('portfolio.updatingPortfolio', 'Updating Portfolio...')}
-              </p>
-              <p className="mt-1 font-mono text-xs text-stone-500">
-                {t('portfolio.syncingData', 'Synchronizing data with the server...')}
-              </p>
-            </div>
-          )}
-
-          <DialogHeader className="mb-4 border-b border-stone-800 pb-4">
-            <div className="flex items-center gap-3">
-              <div className="bg-blue-955/20 flex size-10 items-center justify-center rounded-[2px] border border-blue-500/25 text-blue-400 shadow-inner">
-                <ShoppingBag className="size-5" />
-              </div>
-              <div>
-                <DialogTitle className="flex items-center gap-2 text-lg font-bold tracking-wider text-stone-100">
-                  {t('portfolio.confirmSell', 'Confirm Sale')}{' '}
-                  <span className="font-mono font-black text-blue-400">{itemsCount}</span>{' '}
-                  {t('portfolio.itemTypesCount', 'item type(s)')}
-                </DialogTitle>
-                <DialogDescription className="mt-0.5 font-mono text-xs text-stone-500">
-                  {t(
-                    'portfolio.doubleCheckOrder',
-                    'Please review your sell list before proceeding'
-                  )}
-                </DialogDescription>
-              </div>
-            </div>
-          </DialogHeader>
+          {bulkLoading && <SellSelectedLoadingOverlay />}
+          <SellSelectedDialogHeader itemsCount={itemsCount} />
 
           {/* Main Content: Interactive Items Table */}
           <div className="relative flex min-h-0 flex-1 flex-col overflow-hidden">
@@ -642,104 +543,19 @@ export function SellSelectedDialog({
         </DialogContent>
       </Dialog>
 
-      {/* Confirm dialog for single row sell */}
-      {confirmSingle && (
-        <ConfirmDialog
-          open={confirmSingle.open}
-          onClose={() => setConfirmSingle(null)}
-          title={t('portfolio.confirmSellTransaction', 'Confirm Sell Transaction')}
-          description={t(
-            'portfolio.confirmSellSingleDesc',
-            'Are you sure you want to sell {{quantity}} unit(s) of "{{name}}"? This will update the quantity or permanently remove the item from your portfolio.',
-            { quantity: confirmSingle.quantity, name: confirmSingle.itemName }
-          )}
-          confirmText={t('portfolio.confirmSellButton', 'Confirm Sell')}
-          cancelText={t('common.cancel', 'Cancel')}
-          variant="primary"
-          onConfirm={() => executeSingleSell(confirmSingle.itemId, confirmSingle.quantity)}
-        />
-      )}
-
-      {/* Confirm dialog for bulk sell */}
-      {confirmBulk && (
-        <ConfirmDialog
-          open={confirmBulk}
-          onClose={() => setConfirmBulk(false)}
-          title={t('portfolio.confirmSellAllTitle', 'Confirm Sale of All Selected Items')}
-          description={t(
-            'portfolio.confirmSellAllDesc',
-            'Are you sure you want to sell all configured units for these {{count}} item(s)? The corresponding quantities will be deducted or permanently removed from your portfolio.',
-            { count: itemsCount }
-          )}
-          confirmText={t('portfolio.confirmSellAllButton', 'Yes, Sell All')}
-          cancelText={t('common.cancel', 'Cancel')}
-          variant="danger"
-          onConfirm={executeBulkSell}
-        >
-          {activeItems.length > 0 && (
-            <div className="mt-4 rounded-xl border border-red-500/10 bg-red-950/5 p-4 text-xs">
-              <p className="mb-2.5 text-[10px] font-bold tracking-wider text-red-400/90 uppercase">
-                {t('portfolio.sellSelectedConfirmListHeader', 'Items to be sold:')}
-              </p>
-              {(() => {
-                const summaryMap = new Map<string, number>();
-                activeItems.forEach((item) => {
-                  const name = item.case.name;
-                  const qty = getSellQuantity(item.id, item.quantity);
-                  const currentQty = summaryMap.get(name) || 0;
-                  summaryMap.set(name, currentQty + qty);
-                });
-                const summaryList = Array.from(summaryMap.entries()).map(([name, qty]) => ({
-                  name,
-                  qty,
-                }));
-                const visibleList = isBulkSellListExpanded ? summaryList : summaryList.slice(0, 5);
-                const remainingCount = summaryList.length - 5;
-
-                return (
-                  <div className="space-y-2">
-                    <ul
-                      className={`space-y-2 text-stone-300 ${isBulkSellListExpanded ? 'max-h-[200px] scrollbar-thin scrollbar-thumb-stone-800 scrollbar-track-transparent overflow-y-auto pr-1.5' : ''}`}
-                    >
-                      {visibleList.map((item, idx) => (
-                        <li
-                          key={idx}
-                          className="flex items-center justify-between border-b border-stone-900 pb-1.5 last:border-b-0 last:pb-0"
-                        >
-                          <span className="truncate font-semibold text-stone-200">{item.name}</span>
-                          <span className="ml-2 inline-flex size-5 shrink-0 items-center justify-center rounded-full bg-red-500/10 text-[10.5px] font-extrabold text-red-400">
-                            {item.qty}
-                          </span>
-                        </li>
-                      ))}
-                    </ul>
-                    {summaryList.length > 5 && (
-                      <button
-                        type="button"
-                        onClick={() => setIsBulkSellListExpanded(!isBulkSellListExpanded)}
-                        className="mt-2.5 flex w-full items-center justify-between border-t border-stone-900 pt-2 text-left font-semibold text-stone-400 italic transition-colors hover:text-stone-200"
-                      >
-                        <span>
-                          {isBulkSellListExpanded
-                            ? t('portfolio.deleteSelectedConfirmListCollapse', 'Collapse list')
-                            : t(
-                                'portfolio.deleteSelectedConfirmListRemaining',
-                                '... and {{count}} other items',
-                                { count: remainingCount }
-                              )}
-                        </span>
-                        <span className="rounded border border-red-500/10 bg-red-500/5 px-2 py-0.5 text-[10px] tracking-wider text-red-400/80 uppercase not-italic hover:bg-red-500/10">
-                          {isBulkSellListExpanded ? t('common.collapse') : t('common.expand')}
-                        </span>
-                      </button>
-                    )}
-                  </div>
-                );
-              })()}
-            </div>
-          )}
-        </ConfirmDialog>
-      )}
+      <SellSelectedConfirmDialogs
+        confirmSingle={confirmSingle}
+        onCloseSingle={() => setConfirmSingle(null)}
+        onConfirmSingle={executeSingleSell}
+        confirmBulk={confirmBulk}
+        onCloseBulk={() => setConfirmBulk(false)}
+        onConfirmBulk={executeBulkSell}
+        itemsCount={itemsCount}
+        activeItems={activeItems}
+        isBulkSellListExpanded={isBulkSellListExpanded}
+        onToggleBulkSellListExpanded={() => setIsBulkSellListExpanded((value) => !value)}
+        getSellQuantity={getSellQuantity}
+      />
     </>
   );
 }

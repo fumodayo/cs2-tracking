@@ -58,8 +58,8 @@ export function RateInput({
   );
 }
 
-// Forward declaration — ItemCell is in portfolio-item-cell.tsx
-// This import is here for circular-dependency avoidance; caller passes ItemCell as a render prop.
+// Khai báo trước — ItemCell nằm trong portfolio-item-cell.tsx
+// Import này ở đây để tránh phụ thuộc vòng; caller truyền ItemCell dưới dạng render prop.
 export type BuildColumnsParams = {
   t: TFunction;
   mode: PortfolioTableMode;

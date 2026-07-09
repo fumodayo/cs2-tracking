@@ -66,7 +66,7 @@ export function ImportExcelMappingDialog({
 }: ImportExcelMappingDialogProps) {
   const { t } = useTranslation();
 
-  // Mapping state: key -> header index
+  // Trạng thái ánh xạ: key -> index tiêu đề
   const [mapping, setMapping] = useState<Partial<ColumnMapping>>({});
   const [saveAsTemplate, setSaveAsTemplate] = useState(false);
   const [templateLabel, setTemplateLabel] = useState('');
@@ -75,7 +75,7 @@ export function ImportExcelMappingDialog({
   const [previewRows, setPreviewRows] = useState<PortfolioImportRow[]>([]);
   const [selectedTemplateId, setSelectedTemplateId] = useState<string>('');
 
-  // Target system fields definitions
+  // Định nghĩa các trường hệ thống đích
   const systemFields = useMemo(
     () => [
       {
@@ -118,12 +118,12 @@ export function ImportExcelMappingDialog({
     [t]
   );
 
-  // Fingerprint of current headers to auto-match template
+  // Dấu vân tay của tiêu đề hiện tại để tự khớp mẫu
   const headerFingerprint = useMemo(() => {
     return JSON.stringify([...excelHeaders].sort());
   }, [excelHeaders]);
 
-  // Load template mapping
+  // Nạp mapping template
   const loadTemplate = (template: MappingTemplate) => {
     const newMapping: Partial<ColumnMapping> = {};
     const keys: (keyof ColumnMapping)[] = [
@@ -142,10 +142,10 @@ export function ImportExcelMappingDialog({
     setMapping(newMapping);
   };
 
-  // Initialize mapping with suggested or matching template
+  // Khởi tạo mapping bằng template gợi ý hoặc template khớp
   useEffect(() => {
     if (open) {
-      // Check if there is a saved template with matching headers fingerprint
+      // Kiểm tra có mẫu đã lưu khớp dấu vân tay tiêu đề không
       const autoMatch = savedTemplates.find((tpl) => tpl.headerFingerprint === headerFingerprint);
       if (autoMatch) {
         loadTemplate(autoMatch);
@@ -160,7 +160,7 @@ export function ImportExcelMappingDialog({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, suggestedMapping, savedTemplates, headerFingerprint]);
 
-  // Update preview table when mapping changes
+  // Cập nhật bảng xem trước khi ánh xạ thay đổi
   useEffect(() => {
     if (mapping.name === undefined) {
       setPreviewRows([]);
@@ -197,7 +197,7 @@ export function ImportExcelMappingDialog({
     }
   };
 
-  // Drag and Drop handlers
+  // Handler kéo thả
   const handleDragStart = (e: React.DragEvent, index: number) => {
     setDraggedHeaderIndex(index);
     e.dataTransfer.effectAllowed = 'move';
@@ -235,7 +235,7 @@ export function ImportExcelMappingDialog({
 
   const isConfirmedDisabled = mapping.name === undefined;
 
-  // Find if a header index is currently mapped to any system field
+  // Tìm xem index tiêu đề hiện có ánh xạ vào trường hệ thống nào không
   const getMappedField = (index: number) => {
     const match = Object.entries(mapping).find(([, val]) => val === index);
     return match ? match[0] : null;
@@ -271,7 +271,7 @@ export function ImportExcelMappingDialog({
           </DialogDescription>
         </DialogHeader>
 
-        {/* Template Selection */}
+        {/* Chọn template */}
         {savedTemplates.length > 0 && (
           <div className="border-border bg-surface-muted/30 mb-4 flex flex-col justify-between gap-2.5 rounded-lg border p-3 sm:flex-row sm:items-center sm:px-4 sm:py-2.5">
             <span className="text-muted-foreground text-xs font-medium">
@@ -315,9 +315,9 @@ export function ImportExcelMappingDialog({
           </div>
         )}
 
-        {/* Main Grid: Left Excel columns, Right System fields */}
+        {/* Lưới chính: cột Excel bên trái, trường hệ thống bên phải */}
         <div className="grid grid-cols-1 gap-6 md:grid-cols-5">
-          {/* Left Side: Excel Columns - Hidden on mobile as drag & drop is not fully supported on touch */}
+          {/* Bên trái: cột Excel - ẩn trên mobile vì kéo thả chưa hỗ trợ tốt trên màn hình cảm ứng */}
           <div className="hidden flex-col md:col-span-2 md:flex">
             <h3 className="text-muted-foreground mb-2 text-xs font-semibold tracking-wider uppercase">
               {t('excelMapping.excelColumns', 'Excel Columns')}

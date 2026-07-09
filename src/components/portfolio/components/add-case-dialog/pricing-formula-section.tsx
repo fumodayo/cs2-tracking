@@ -23,7 +23,7 @@ export function PricingFormulaSection({
   return (
     <div className="space-y-2">
       <div className="flex flex-col items-stretch gap-2 sm:flex-row sm:items-end">
-        {/* Buff Price Input */}
+        {/* Ô nhập giá Buff */}
         <div className="min-w-0 flex-1">
           <label
             htmlFor="pricing-buff-price"
@@ -46,7 +46,7 @@ export function PricingFormulaSection({
           />
         </div>
 
-        {/* Multiplication Sign */}
+        {/* Dấu nhân */}
         <div className="text-muted-foreground/60 hidden items-center justify-center px-1 pb-2.5 text-sm font-black select-none sm:flex">
           ×
         </div>
@@ -54,7 +54,7 @@ export function PricingFormulaSection({
           {t('portfolio.multipliedByRate', 'nhân với')}
         </div>
 
-        {/* Exchange Rate Input */}
+        {/* Ô nhập tỷ giá */}
         <div className="min-w-0 flex-1">
           <label
             htmlFor="pricing-buff-rate"
@@ -77,7 +77,7 @@ export function PricingFormulaSection({
           />
         </div>
 
-        {/* Equals Sign */}
+        {/* Dấu bằng */}
         <div className="text-muted-foreground/60 hidden items-center justify-center px-1 pb-2.5 text-sm font-black select-none sm:flex">
           =
         </div>
@@ -85,7 +85,7 @@ export function PricingFormulaSection({
           {t('portfolio.equalsVnd', 'bằng (VND)')}
         </div>
 
-        {/* Final Buy Price Input */}
+        {/* Ô nhập giá mua cuối */}
         <div className="min-w-0 flex-[1.2]">
           <label
             htmlFor="pricing-buy-price"

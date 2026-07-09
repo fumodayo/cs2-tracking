@@ -53,7 +53,7 @@ export interface PortfolioTableToolbarProps {
   isMobile?: boolean;
   visibleCount: number;
 
-  // Bulk actions
+  // Thao tác hàng loạt
   selectedIds: string[];
   setRowSelection: (selection: Record<string, boolean>) => void;
   setSellDialogOpen: (open: boolean) => void;

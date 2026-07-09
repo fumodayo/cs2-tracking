@@ -1,5 +1,5 @@
-import { formatDateTime } from "@/utils/format";
-import type { PortfolioTableRow } from "./portfolio-table-model";
+import { formatDateTime } from '@/utils/format';
+import type { PortfolioTableRow } from './portfolio-table-model';
 
 export function buildAccountOptions(rows: PortfolioTableRow[]) {
   const map = new Map<string, { steamId64: string; name: string }>();
@@ -8,9 +8,7 @@ export function buildAccountOptions(rows: PortfolioTableRow[]) {
       map.set(account.steamId64, account);
     }
   }
-  return Array.from(map.values()).sort((first, second) =>
-    first.name.localeCompare(second.name),
-  );
+  return Array.from(map.values()).sort((first, second) => first.name.localeCompare(second.name));
 }
 
 export function getBuyDateSortValue(value: string | null): number {
@@ -18,40 +16,35 @@ export function getBuyDateSortValue(value: string | null): number {
     return 0;
   }
 
-  const firstValue = value.split("|")[0];
+  const firstValue = value.split('|')[0];
   const timestamp = new Date(firstValue).getTime();
   return Number.isFinite(timestamp) ? timestamp : 0;
 }
 
 export function formatBuyDate(value: string | null): string {
   if (!value) {
-    return "None";
+    return 'None';
   }
 
-  const [from, to] = value.split("|");
+  const [from, to] = value.split('|');
   if (!to) {
-    return formatDateTime(from).split(" ")[0];
+    return formatDateTime(from).split(' ')[0];
   }
 
-  return `${formatDateTime(from).split(" ")[0]} - ${formatDateTime(to).split(" ")[0]}`;
+  return `${formatDateTime(from).split(' ')[0]} - ${formatDateTime(to).split(' ')[0]}`;
 }
 
-export function formatSourceAccountTitle(
-  accounts: PortfolioTableRow["sourceAccounts"],
-): string {
-  return accounts.map((account) => account.name).join(", ");
+export function formatSourceAccountTitle(accounts: PortfolioTableRow['sourceAccounts']): string {
+  return accounts.map((account) => account.name).join(', ');
 }
 
-export function calculateRatedValue(
-  item: PortfolioTableRow,
-  ratePercent: number,
-): number | null {
+export function calculateRatedValue(item: PortfolioTableRow, ratePercent: number): number | null {
   if (item.currentPrice === null || !Number.isFinite(ratePercent)) {
     return null;
   }
 
   const hasBuff =
-    item.itemType === "skin" &&
+    item.itemType === 'skin' &&
     item.currentPrice !== null &&
     item.steamPrice !== null &&
     item.steamPrice !== undefined &&
@@ -68,51 +61,51 @@ export function getSteamMarketListingUrl(marketHashName: string): string {
   return `https://steamcommunity.com/market/listings/730/${encodeURIComponent(marketHashName)}`;
 }
 
-export function getItemTypeColor(type: PortfolioTableRow["itemType"]): string {
+export function getItemTypeColor(type: PortfolioTableRow['itemType']): string {
   switch (type) {
-    case "skin":
-      return "#b0c3d9"; // Consumer grade fallback
-    case "sticker":
-      return "#4b69ff";
-    case "capsule":
-    case "case":
-    case "graffiti":
-    case "agent":
-    case "music_kit":
-    case "patch":
-    case "pin":
-    case "charm":
-      return "#b0c3d9"; // ALWAYS Consumer grade color
+    case 'skin':
+      return '#b0c3d9'; // Dự phòng cấp Consumer
+    case 'sticker':
+      return '#4b69ff';
+    case 'capsule':
+    case 'case':
+    case 'graffiti':
+    case 'agent':
+    case 'music_kit':
+    case 'patch':
+    case 'pin':
+    case 'charm':
+      return '#b0c3d9'; // Luôn dùng màu cấp Consumer
   }
 }
 
-export function getItemTypeLabel(type: PortfolioTableRow["itemType"]): string {
+export function getItemTypeLabel(type: PortfolioTableRow['itemType']): string {
   switch (type) {
-    case "skin":
-      return "Skin";
-    case "sticker":
-      return "Sticker";
-    case "capsule":
-      return "Capsule";
-    case "case":
-      return "Case";
-    case "graffiti":
-      return "Graffiti";
-    case "agent":
-      return "Agent";
-    case "music_kit":
-      return "Music Kit";
-    case "patch":
-      return "Patch";
-    case "pin":
-      return "Pin";
-    case "charm":
-      return "Charm";
+    case 'skin':
+      return 'Skin';
+    case 'sticker':
+      return 'Sticker';
+    case 'capsule':
+      return 'Capsule';
+    case 'case':
+      return 'Case';
+    case 'graffiti':
+      return 'Graffiti';
+    case 'agent':
+      return 'Agent';
+    case 'music_kit':
+      return 'Music Kit';
+    case 'patch':
+      return 'Patch';
+    case 'pin':
+      return 'Pin';
+    case 'charm':
+      return 'Charm';
   }
 }
 
 export function colorWithAlpha(hex: string, alpha: number): string {
-  const normalized = hex.replace("#", "");
+  const normalized = hex.replace('#', '');
   const red = Number.parseInt(normalized.slice(0, 2), 16);
   const green = Number.parseInt(normalized.slice(2, 4), 16);
   const blue = Number.parseInt(normalized.slice(4, 6), 16);
@@ -121,12 +114,10 @@ export function colorWithAlpha(hex: string, alpha: number): string {
 
 export function toInputNumber(value: number): string {
   if (!Number.isFinite(value)) {
-    return "";
+    return '';
   }
 
-  return Number.isInteger(value)
-    ? String(value)
-    : value.toFixed(2).replace(/\.?0+$/, "");
+  return Number.isInteger(value) ? String(value) : value.toFixed(2).replace(/\.?0+$/, '');
 }
 
 export const PAGE_SIZES = [5, 10, 20, 50];

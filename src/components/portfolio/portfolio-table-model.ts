@@ -1,103 +1,23 @@
-import type { PriceRange } from '@/domain/price';
-import type {
-  CaseDto,
-  PortfolioReportDto,
-  PortfolioReportRowDto,
-  PriceChangeDto,
-} from '@/types/report';
-import type { PatternInfo } from '@/domain/pattern-info';
+import type { CaseDto, PortfolioReportDto, PortfolioReportRowDto } from '@/types/report';
 import { estimateOverpay } from '@/services/pattern/overpay-calculator';
 import { buildItemVariantKey } from '@/utils/item-identity';
-import { getRemainingHoldDays } from '@/utils/date';
+import type {
+  PortfolioRowItemType,
+  PortfolioSourceAccount,
+  PortfolioTableMode,
+  PortfolioTableRow,
+} from './portfolio-table-types';
 
-export type PortfolioTableMode = 'transactions' | 'case-summary';
-export type PortfolioSourceFilter = 'all' | 'manual' | 'existing';
-export type PortfolioItemTypeFilter =
-  | 'all'
-  | 'case'
-  | 'capsule'
-  | 'sticker'
-  | 'skin'
-  | 'graffiti'
-  | 'agent'
-  | 'music_kit'
-  | 'patch'
-  | 'pin'
-  | 'charm';
-export type PortfolioRowSourceType = 'manual' | 'existing';
-export type PortfolioRowItemType =
-  | 'case'
-  | 'capsule'
-  | 'sticker'
-  | 'skin'
-  | 'graffiti'
-  | 'agent'
-  | 'music_kit'
-  | 'patch'
-  | 'pin'
-  | 'charm';
-
-export type PortfolioSourceAccount = {
-  steamId64: string;
-  name: string;
-  breakdown?: {
-    tradeable: number;
-    onMarket: number;
-    tradeProtected: number;
-    hold: number;
-    holdDetails?: Array<{
-      quantity: number;
-      holdDays: number;
-    }>;
-  };
-};
-
-export type PortfolioTableRow = {
-  id: string;
-  mode: PortfolioTableMode;
-  case: CaseDto;
-  itemIds: string[];
-  quantity: number;
-  lotCount: number;
-  buyPrice: number;
-  buyDate: string | null;
-  createdAt: string | null;
-  note?: string;
-  sourceType: PortfolioRowSourceType;
-  itemType: PortfolioRowItemType;
-  sourceAccounts: PortfolioSourceAccount[];
-  currentPrice: number | null;
-  steamPrice?: number | null;
-  skinCurrentPrice?: number | null;
-  currentPriceCapturedAt: string | null;
-  investedValue: number;
-  currentValue: number | null;
-  profitAmount: number | null;
-  profitPercent: number | null;
-  marketChanges: Record<PriceRange, PriceChangeDto>;
-  tradeHoldUntil: string | null;
-  isTemporaryPrice?: boolean;
-  storageUnitQuantity?: number;
-  storageUnitDetails?: Array<{
-    storageUnitId?: string;
-    storageUnitName?: string;
-    quantity: number;
-    steamId64?: string;
-  }>;
-  storageUnitId?: string;
-  isVirtual?: boolean;
-  dopplerPhase?: string;
-  inspectLink?: string;
-  patternInfo?: PatternInfo;
-  stickerPriceRate?: number;
-  stickerPriceAdd?: number;
-  stickerBuyPriceRate?: number;
-  stickerBuyPriceAdd?: number;
-  stickerScanTotalPrice?: number;
-  stickerScanPriceCapturedAt?: string;
-  hasMixedVariants?: boolean;
-  variantCount?: number;
-};
+export type {
+  PortfolioItemTypeFilter,
+  PortfolioRowItemType,
+  PortfolioRowSourceType,
+  PortfolioSourceAccount,
+  PortfolioSourceFilter,
+  PortfolioTableMode,
+  PortfolioTableRow,
+} from './portfolio-table-types';
+export { getItemStatusBreakdown } from './portfolio-table-status';
 
 export function buildPortfolioTableRows(
   report: PortfolioReportDto,
@@ -119,6 +39,7 @@ export function remapPortfolioRowSelection(
   currentRows: PortfolioTableRow[],
   nextRows: PortfolioTableRow[]
 ): Record<string, boolean> {
+  // Giữ lựa chọn khi đổi mode bằng cách theo dõi ID vật phẩm gốc, không dùng row ID dễ thay đổi.
   const selectedItemIds = new Set<string>();
   const currentRowsById = new Map(currentRows.map((row) => [row.id, row]));
 
@@ -159,6 +80,7 @@ export function mapTransactionRow(
   const marketHashName = row.case.marketHashName;
   const buffPriceCny = buffPricesCny ? buffPricesCny[marketHashName] : undefined;
 
+  // Ghi đè BUFF thay thế giá Steam nhưng vẫn cộng phần phụ trội sticker lên giá skin gốc.
   const overpayInfo =
     row.item.patternInfo && buffPriceCny !== undefined && buffPriceCny > 0
       ? estimateOverpay(row.item.patternInfo, buffPriceCny)
@@ -225,6 +147,7 @@ function buildCaseSummaryRows(
   const groupedRows = new Map<string, PortfolioReportRowDto[]>();
 
   for (const row of rows) {
+    // Chế độ summary chỉ gom theo case và phase; biến thể inspect/pattern lẫn nhau sẽ được đánh dấu sau.
     const key = `${row.case.id}:${row.item.dopplerPhase ?? 'normal'}`;
     const currentRows = groupedRows.get(key) ?? [];
     currentRows.push(row);
@@ -290,6 +213,7 @@ function mapCaseSummaryRow(
     }
 
     if (itemPriceVnd === null) {
+      // Chỉ một giá không rõ cũng làm tổng giá trị hiện tại thành không rõ thay vì tính một phần.
       hasNullPrice = true;
     } else {
       const qty =
@@ -342,6 +266,7 @@ function mapCaseSummaryRow(
       rows.flatMap((r) => r.item.storageUnitDetails ?? [])
     ),
     dopplerPhase: firstRow.item.dopplerPhase,
+    // Tránh hiển thị trường inspect/pattern theo asset khi summary chứa biến thể lẫn nhau.
     inspectLink: hasMixedVariants ? undefined : firstRow.item.inspectLink,
     patternInfo: hasMixedVariants ? undefined : firstRow.item.patternInfo,
     stickerPriceRate: hasMixedVariants ? undefined : firstRow.item.stickerPriceRate,
@@ -391,54 +316,6 @@ function compareManualRowsFirst(first: PortfolioTableRow, second: PortfolioTable
   return getDateSortValue(second.createdAt) - getDateSortValue(first.createdAt);
 }
 
-export function getItemStatusBreakdown(item: {
-  sourceType: string;
-  quantity: number;
-  tradeHoldUntil: string | null;
-  sourceAccounts?: Array<{
-    steamId64: string;
-    name: string;
-    breakdown?: {
-      tradeable: number;
-      onMarket: number;
-      tradeProtected: number;
-      hold: number;
-    };
-  }>;
-}) {
-  const consolidated = {
-    tradeable: 0,
-    onMarket: 0,
-    tradeProtected: 0,
-    hold: 0,
-  };
-
-  let hasBreakdown = false;
-  if (item.sourceAccounts && item.sourceAccounts.length > 0) {
-    for (const acc of item.sourceAccounts) {
-      if (acc.breakdown) {
-        hasBreakdown = true;
-        consolidated.tradeable += acc.breakdown.tradeable ?? 0;
-        consolidated.onMarket += acc.breakdown.onMarket ?? 0;
-        consolidated.tradeProtected += acc.breakdown.tradeProtected ?? 0;
-        consolidated.hold += acc.breakdown.hold ?? 0;
-      }
-    }
-  }
-
-  if (!hasBreakdown) {
-    const holdDays = getRemainingHoldDays(item.tradeHoldUntil);
-
-    if (holdDays > 0) {
-      consolidated.hold = item.quantity;
-    } else {
-      consolidated.tradeable = item.quantity;
-    }
-  }
-
-  return consolidated;
-}
-
 function isManualTableRow(row: PortfolioTableRow): boolean {
   return !isInventoryImportNote(row.note);
 }
@@ -465,7 +342,7 @@ function inferItemType(caseItem: CaseDto): PortfolioRowItemType {
   if (value.startsWith('pin |') || value.startsWith('collectible pin')) return 'pin';
   if (value.startsWith('charm |')) return 'charm';
 
-  // Detect Agent
+  // Nhận diện Agent
   if (
     value.startsWith('agent |') ||
     value.includes('biệt kích') ||
@@ -574,7 +451,7 @@ export function getRowSubtype(row: {
   const hashName = row.case.marketHashName;
   const lowerName = name.toLowerCase();
 
-  // Detect Gloves first
+  // Nhận diện găng trước
   if (
     lowerName.includes('gloves') ||
     lowerName.includes('wraps') ||
@@ -582,7 +459,7 @@ export function getRowSubtype(row: {
   ) {
     return 'Gloves';
   }
-  // Detect Knives
+  // Nhận diện dao
   if (
     lowerName.includes('knife') ||
     lowerName.includes('bayonet') ||
@@ -601,7 +478,7 @@ export function getRowSubtype(row: {
   ) {
     return 'Knives';
   }
-  // Detect Agent
+  // Nhận diện Agent
   if (
     lowerName.startsWith('agent |') ||
     lowerName.includes('biệt kích') ||
@@ -619,11 +496,11 @@ export function getRowSubtype(row: {
   ) {
     return 'Agent';
   }
-  // Detect Music Kit
+  // Nhận diện Music Kit
   if (lowerName.includes('music kit')) {
     return 'Music Kit';
   }
-  // Detect patch, pin, graffiti, etc.
+  // Nhận diện patch, pin, graffiti, v.v.
   if (lowerName.startsWith('patch |')) {
     return 'Patch';
   }
@@ -634,11 +511,11 @@ export function getRowSubtype(row: {
     return 'Graffiti';
   }
 
-  // Otherwise, it's a weapon skin. Extract weapon name before " | "
+  // Nếu không thì đây là skin vũ khí. Trích tên vũ khí trước " | "
   const parts = name.split(' | ');
   if (parts.length > 0) {
     let weapon = parts[0].trim();
-    // Strip ★ prefix just in case
+    // Bỏ tiền tố ★ để phòng trường hợp còn sót
     if (weapon.startsWith('★ ')) {
       weapon = weapon.slice(2).trim();
     }

@@ -58,13 +58,13 @@ export function StorageUnitInspectPanel({
   const [searchQuery, setSearchQuery] = useState('');
   const [deleteTarget, setDeleteTarget] = useState<StorageUnitItem | null>(null);
 
-  // Helper to get Steam Price in VND
+  // Helper lấy giá Steam theo VND
   const getSteamPrice = (marketHashName: string): number => {
     const matchedRow = report?.rows.find((r) => r.case.marketHashName === marketHashName);
     return matchedRow?.currentPrice ?? 0;
   };
 
-  // Helper to get Buff Price in VND
+  // Helper lấy giá Buff theo VND
   const getBuffPrice = (marketHashName: string): number => {
     const priceCny = buffPricesCny[marketHashName];
     if (priceCny && priceCny > 0) {
@@ -73,13 +73,13 @@ export function StorageUnitInspectPanel({
     return 0;
   };
 
-  // Get item price (Buff if available, fallback to Steam)
+  // Lấy giá vật phẩm (ưu tiên Buff nếu có, fallback về Steam)
   const getItemPrice = (marketHashName: string): number => {
     const buff = getBuffPrice(marketHashName);
     return buff > 0 ? buff : getSteamPrice(marketHashName);
   };
 
-  // Compute total values for summary
+  // Tính tổng giá trị cho summary
   const totals = useMemo(() => {
     let totalSteam = 0;
     let totalBuff = 0;
@@ -101,7 +101,7 @@ export function StorageUnitInspectPanel({
     };
   }, [storageUnit.items, report, buffPricesCny, buffCnyToVndRate]);
 
-  // Filter items based on search query
+  // Lọc vật phẩm theo query tìm kiếm
   const filteredItems = useMemo(() => {
     if (!searchQuery.trim()) return storageUnit.items;
     const query = searchQuery.toLowerCase().trim();
@@ -113,7 +113,7 @@ export function StorageUnitInspectPanel({
 
   return (
     <div className="flex h-full flex-col space-y-5">
-      {/* Summary HUD Header */}
+      {/* Phần đầu HUD tổng quan */}
       <div className="border-border bg-surface/10 grid shrink-0 grid-cols-2 gap-3 rounded-sm border p-4">
         <div>
           <span className="text-muted-foreground block font-mono text-[10px] tracking-wider uppercase">
@@ -125,7 +125,7 @@ export function StorageUnitInspectPanel({
               / {storageUnit.maxCapacity}
             </span>
           </span>
-          {/* Progress bar */}
+          {/* Thanh tiến độ */}
           <div className="border-stone-850 mt-1.5 h-1.5 w-full overflow-hidden rounded-none border bg-stone-900">
             <div
               className="h-full bg-amber-500 transition-all duration-300"

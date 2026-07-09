@@ -1,11 +1,16 @@
-import { useMemo, useState, memo } from 'react';
+﻿import { useMemo, useState, memo } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Loader2, Trash2, Minus, Plus } from 'lucide-react';
+import { Loader2, Trash2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { CaseThumbnail } from './case-thumbnail';
 import type { PortfolioTableRow } from './portfolio-table-model';
-import { proxySteamUrl } from '@/utils/url';
-import { formatStickerWearPercent } from '@/utils/accessories';
+import { SellSelectedAccessoryDetails } from './components/sell-selected-dialog/sell-selected-accessory-details';
+import { SellSelectedItemQuantitySelector } from './components/sell-selected-dialog/sell-selected-item-quantity-selector';
+import {
+  calculateSellSelectedAllocatedAccounts,
+  calculateSellSelectedRowPricing,
+  calculateSellSelectedTotalTradableQty,
+} from './sell-selected-dialog-utils';
 
 type SellSelectedDialogItemRowProps = {
   item: PortfolioTableRow;
@@ -66,133 +71,63 @@ export const SellSelectedDialogItemRow = memo(
     const { t } = useTranslation();
     const [now] = useState(() => Date.now());
 
-    const totalTradableQty = useMemo(() => {
-      let total = 0;
-      if (item.sourceAccounts && item.sourceAccounts.length > 0) {
-        let hasAnyBreakdown = false;
-        for (const acc of item.sourceAccounts) {
-          if (acc.breakdown) {
-            hasAnyBreakdown = true;
-            total += acc.breakdown.tradeable ?? 0;
-          }
-        }
-        if (!hasAnyBreakdown) {
-          const hasHold = item.tradeHoldUntil
-            ? new Date(item.tradeHoldUntil).getTime() > now
-            : false;
-          total = hasHold ? 0 : item.quantity;
-        }
-      } else {
-        const hasHold = item.tradeHoldUntil ? new Date(item.tradeHoldUntil).getTime() > now : false;
-        total = hasHold ? 0 : item.quantity;
-      }
-      return Math.min(total, maxQty);
-    }, [item, now, maxQty]);
-
-    const allocatedAccounts = useMemo(() => {
-      if (!item.sourceAccounts) return [];
-      let remaining = maxQty;
-      return item.sourceAccounts.map((acc) => {
-        const hasBreakdown = !!acc.breakdown;
-        if (!hasBreakdown) {
-          const hasHold = item.tradeHoldUntil
-            ? new Date(item.tradeHoldUntil).getTime() > now
-            : false;
-          const tradableQty = hasHold ? 0 : Math.min(item.quantity, remaining);
-          remaining -= tradableQty;
-          const holdQty = hasHold ? Math.min(item.quantity, remaining) : 0;
-          remaining -= holdQty;
-          return {
-            steamId64: acc.steamId64,
-            name: acc.name,
-            tradable: tradableQty,
-            onMarket: 0,
-            hold: holdQty,
-          };
-        }
-        const rawTradable = acc.breakdown?.tradeable ?? 0;
-        const rawOnMarket = acc.breakdown?.onMarket ?? 0;
-        const rawHold = acc.breakdown?.hold ?? 0;
-
-        const tradableQty = Math.min(rawTradable, remaining);
-        remaining -= tradableQty;
-
-        const onMarketQty = Math.min(rawOnMarket, remaining);
-        remaining -= onMarketQty;
-
-        const holdQty = Math.min(rawHold, remaining);
-        remaining -= holdQty;
-
-        return {
-          steamId64: acc.steamId64,
-          name: acc.name,
-          tradable: tradableQty,
-          onMarket: onMarketQty,
-          hold: holdQty,
-        };
-      });
-    }, [item, maxQty, now]);
-
-    const unitBuy = item.buyPrice;
-    let unitCurrent = item.currentPrice ?? item.buyPrice;
-
-    // Skin BUFF price check (same as calculateRatedValue logic)
-    const hasBuff =
-      item.itemType === 'skin' &&
-      item.currentPrice !== null &&
-      item.steamPrice !== null &&
-      item.steamPrice !== undefined &&
-      item.currentPrice !== item.steamPrice;
-
-    if (hasBuff) {
-      const cnyPriceVal = Number(
-        buffCnyPrices[item.id] !== undefined
-          ? buffCnyPrices[item.id]
-          : (buffPricesCny?.[item.case.marketHashName] ??
-              (item.currentPrice ? item.currentPrice / (buffCnyToVndRate ?? 3600) : 0))
-      );
-      const cnyRateVal = Number(
-        buffRates[item.id] !== undefined ? buffRates[item.id] : (buffCnyToVndRate ?? 3600)
-      );
-      unitCurrent = Math.round(cnyPriceVal * cnyRateVal);
-    }
-
-    const isFullSell = sellQty === maxQty;
-
-    const itemRetailRateVal = Number(
-      itemRetailRates[item.id] !== undefined ? itemRetailRates[item.id] : retailRate
-    );
-    const itemWholesaleRateVal = Number(
-      itemWholesaleRates[item.id] !== undefined ? itemWholesaleRates[item.id] : wholesaleRate
+    const totalTradableQty = useMemo(
+      () => calculateSellSelectedTotalTradableQty({ item, maxQty, now }),
+      [item, maxQty, now]
     );
 
-    const activeRate = hasBuff ? 100 : !isFullSell ? itemRetailRateVal : itemWholesaleRateVal;
-    const activeRateStr = isFullSell
-      ? itemWholesaleRates[item.id] !== undefined
-        ? itemWholesaleRates[item.id]
-        : String(wholesaleRate)
-      : itemRetailRates[item.id] !== undefined
-        ? itemRetailRates[item.id]
-        : String(retailRate);
+    const allocatedAccounts = useMemo(
+      () => calculateSellSelectedAllocatedAccounts({ item, maxQty, now }),
+      [item, maxQty, now]
+    );
+
+    const {
+      hasBuff,
+      unitCurrent,
+      isFullSell,
+      activeRateStr,
+      itemStickerRateVal,
+      stickerScanTotalPrice,
+      unitSell,
+      rowCurrentValue,
+      rowProfit,
+      rowProfitPositive,
+    } = useMemo(
+      () =>
+        calculateSellSelectedRowPricing({
+          item,
+          sellQty,
+          maxQty,
+          wholesaleRate,
+          retailRate,
+          buffPricesCny,
+          buffCnyToVndRate,
+          buffCnyPrices,
+          buffRates,
+          itemRetailRates,
+          itemWholesaleRates,
+          itemStickerRates,
+          getItemStickerScanTotal,
+        }),
+      [
+        item,
+        sellQty,
+        maxQty,
+        wholesaleRate,
+        retailRate,
+        buffPricesCny,
+        buffCnyToVndRate,
+        buffCnyPrices,
+        buffRates,
+        itemRetailRates,
+        itemWholesaleRates,
+        itemStickerRates,
+        getItemStickerScanTotal,
+      ]
+    );
 
     const stickers = item.patternInfo?.stickers ?? [];
     const charms = item.patternInfo?.charms ?? [];
-    const hasAccessories = stickers.length > 0 || charms.length > 0;
-
-    const itemStickerRateVal =
-      itemStickerRates[item.id] !== undefined ? itemStickerRates[item.id] : '0';
-    const stickerScanTotalPrice = getItemStickerScanTotal(item);
-    const stickerPriceAdd =
-      stickerScanTotalPrice > 0
-        ? Math.round((stickerScanTotalPrice * Number(itemStickerRateVal)) / 100)
-        : 0;
-
-    const unitSell = Math.round(unitCurrent * (activeRate / 100)) + stickerPriceAdd;
-
-    const rowInvested = unitBuy * sellQty;
-    const rowCurrentValue = unitSell * sellQty;
-    const rowProfit = rowCurrentValue - rowInvested;
-    const rowProfitPositive = rowProfit >= 0;
 
     return (
       <div
@@ -228,7 +163,7 @@ export const SellSelectedDialogItemRow = memo(
         <div className="flex min-w-0 flex-1 flex-col gap-3">
           {/* Row 1: Item Header (Name, Sell Button, Profit Badge and Exclude Button) */}
           <div className="flex items-center justify-between gap-4">
-            {/* Left: Name, Sell button, and Lãi/Lỗ ròng badge */}
+            {/* Left: Name, Sell button, and LÃ£i/Lá»— rÃ²ng badge */}
             <div className="flex min-w-0 flex-1 items-center gap-3">
               <p
                 className="truncate text-xs leading-tight font-extrabold tracking-wide text-stone-200 transition-colors hover:text-blue-400 sm:text-sm"
@@ -290,67 +225,17 @@ export const SellSelectedDialogItemRow = memo(
             </div>
           </div>
 
-          {/* Row 2: Quantity selector */}
-          {item.itemType !== 'skin' && (
-            <div className="flex flex-col gap-1.5">
-              <label className="font-mono text-[9px] font-bold tracking-widest text-stone-500">
-                {t('portfolio.sellQtyLabel', 'Sell Qty')}
-              </label>
-              <div className="flex flex-wrap items-center gap-2">
-                <div className="bg-card/50 flex h-8 w-24 items-center overflow-hidden rounded-[2px] border border-stone-800 shadow-inner transition-all duration-200 focus-within:border-stone-600 focus-within:ring-1 focus-within:ring-stone-600/30">
-                  <button
-                    type="button"
-                    onClick={() => handleQuantityChange(item.id, sellQty - 1, maxQty)}
-                    disabled={sellQty <= 1 || isLoading}
-                    className="flex h-full w-8 items-center justify-center text-stone-400 transition-colors hover:bg-stone-900/50 hover:text-stone-200 disabled:cursor-not-allowed disabled:opacity-25"
-                  >
-                    <Minus className="size-3" />
-                  </button>
-                  <input
-                    type="number"
-                    value={sellQty}
-                    onChange={(e) =>
-                      handleQuantityChange(item.id, parseInt(e.target.value) || 1, maxQty)
-                    }
-                    disabled={isLoading}
-                    className="w-full flex-1 [appearance:textfield] bg-transparent text-center font-mono text-xs font-bold text-stone-100 outline-none [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
-                  />
-                  <button
-                    type="button"
-                    onClick={() => handleQuantityChange(item.id, sellQty + 1, maxQty)}
-                    disabled={sellQty >= maxQty || isLoading}
-                    className="flex h-full w-8 items-center justify-center text-stone-400 transition-colors hover:bg-stone-900/50 hover:text-stone-200 disabled:cursor-not-allowed disabled:opacity-25"
-                  >
-                    <Plus className="size-3" />
-                  </button>
-                </div>
-
-                {/* ALL button sets to totalTradableQty */}
-                <button
-                  type="button"
-                  onClick={() => {
-                    const targetQty = Math.max(1, Math.min(totalTradableQty, maxQty));
-                    handleQuantityChange(item.id, targetQty, maxQty);
-                  }}
-                  disabled={isLoading || totalTradableQty === 0}
-                  className={`disabled:border-stone-850 disabled:text-stone-650 bg-card/50 flex h-8 items-center justify-center rounded-[2px] border px-3 font-mono text-[10px] font-bold tracking-wider transition-all duration-200 active:scale-[0.97] disabled:cursor-not-allowed disabled:bg-stone-950/20 ${
-                    hasBuff
-                      ? 'border-amber-500/20 text-amber-400 hover:border-amber-500/40 hover:bg-amber-500/10 hover:text-amber-300'
-                      : isFullSell
-                        ? 'border-rose-500/20 text-rose-400 hover:border-rose-500/40 hover:bg-rose-500/10 hover:text-rose-300'
-                        : 'border-blue-500/20 text-blue-400 hover:border-blue-500/40 hover:bg-blue-500/10 hover:text-blue-300'
-                  }`}
-                  title={t(
-                    'portfolio.setAllTradableTooltip',
-                    'Set quantity to all immediately tradeable items ({{count}})',
-                    { count: totalTradableQty }
-                  )}
-                >
-                  {t('common.all', 'All')} ({totalTradableQty})
-                </button>
-              </div>
-            </div>
-          )}
+          <SellSelectedItemQuantitySelector
+            itemId={item.id}
+            itemType={item.itemType}
+            sellQty={sellQty}
+            maxQty={maxQty}
+            totalTradableQty={totalTradableQty}
+            isLoading={isLoading}
+            hasBuff={hasBuff}
+            isFullSell={isFullSell}
+            handleQuantityChange={handleQuantityChange}
+          />
 
           {/* Account Ownership breakdown */}
           {allocatedAccounts.length > 0 && (
@@ -364,7 +249,7 @@ export const SellSelectedDialogItemRow = memo(
                   const onMarket = acc.onMarket;
                   const hold = acc.hold;
 
-                  // Only render account status badges if there are items to show
+                  // Chỉ render badge trạng thái tài khoản khi có vật phẩm để hiển thị
                   if (tradable === 0 && onMarket === 0 && hold === 0) return null;
 
                   return (
@@ -380,7 +265,7 @@ export const SellSelectedDialogItemRow = memo(
                       </span>
                       {onMarket > 0 && (
                         <>
-                          <span className="text-stone-800">•</span>
+                          <span className="text-stone-800">â€¢</span>
                           <span className="font-mono text-stone-500">
                             {t('portfolio.onMarket', 'On Market')}:{' '}
                             <strong className="font-extrabold text-blue-400">{onMarket}</strong>
@@ -389,7 +274,7 @@ export const SellSelectedDialogItemRow = memo(
                       )}
                       {hold > 0 && (
                         <>
-                          <span className="text-stone-850">•</span>
+                          <span className="text-stone-850">â€¢</span>
                           <span className="font-mono text-stone-500">
                             {t('portfolio.hold', 'Hold')}:{' '}
                             <strong className="font-extrabold text-rose-400">{hold}</strong>
@@ -403,65 +288,12 @@ export const SellSelectedDialogItemRow = memo(
             </div>
           )}
 
-          {/* Stickers & Charms Breakdown */}
-          {hasAccessories && (
-            <div className="flex flex-col gap-1 border-t border-stone-900 pt-2.5">
-              <span className="font-mono text-[9px] font-bold tracking-widest text-stone-500">
-                {t('portfolio.stickersAndCharms', 'Chi tiết Sticker & Charm')}
-              </span>
-              <div className="mt-1 grid grid-cols-1 gap-2 sm:grid-cols-2">
-                {[...stickers, ...charms].map((acc, index) => {
-                  const wearPercent = 'wear' in acc ? formatStickerWearPercent(acc.wear) : null;
-                  const price = acc.marketHashName
-                    ? accessoryPriceMap.get(acc.marketHashName)
-                    : undefined;
-                  return (
-                    <div
-                      key={`detail-acc-${acc.id ?? index}-${acc.slot ?? index}`}
-                      className="border-stone-850 flex items-center justify-between gap-3 rounded-[2px] border bg-stone-950/40 p-2 text-[10px] shadow-inner"
-                    >
-                      <div className="flex min-w-0 items-center gap-2">
-                        <div className="relative flex h-8 w-8 shrink-0 items-center justify-center rounded border border-stone-800 bg-stone-950 p-0.5">
-                          {acc.imageUrl ? (
-                            <img
-                              src={proxySteamUrl(acc.imageUrl)}
-                              alt={acc.name}
-                              className="size-full object-contain"
-                              loading="lazy"
-                            />
-                          ) : (
-                            <div className="size-4 rounded bg-stone-800" />
-                          )}
-                          {wearPercent ? (
-                            <span className="absolute inset-x-0 bottom-0 bg-black/75 px-0.5 py-0.5 text-center text-[7px] leading-none font-bold text-white">
-                              {wearPercent}
-                            </span>
-                          ) : null}
-                        </div>
-                        <div className="flex min-w-0 flex-col">
-                          <span
-                            className="truncate font-sans font-bold text-stone-200"
-                            title={acc.name}
-                          >
-                            {acc.name}
-                          </span>
-                          <span className="font-mono text-[9px] text-stone-500">
-                            {wearPercent ? `Còn ${wearPercent}` : 'Còn 100%'}
-                            {acc.slot !== undefined ? ` • Slot ${acc.slot + 1}` : ''}
-                          </span>
-                        </div>
-                      </div>
-                      {price !== undefined && (
-                        <span className="shrink-0 rounded border border-emerald-500/10 bg-emerald-500/5 px-1.5 py-0.5 font-mono font-bold text-emerald-400">
-                          {formatCurrency(price)}
-                        </span>
-                      )}
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
-          )}
+          <SellSelectedAccessoryDetails
+            stickers={stickers}
+            charms={charms}
+            accessoryPriceMap={accessoryPriceMap}
+            formatCurrency={formatCurrency}
+          />
 
           {/* Row 3: The Equation Flow */}
           <div className="flex flex-wrap items-end justify-start gap-1.5 pt-1">
@@ -486,19 +318,19 @@ export const SellSelectedDialogItemRow = memo(
                       className="w-full [appearance:textfield] bg-transparent text-right font-mono text-xs font-bold text-stone-100 outline-none [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
                     />
                     <span className="ml-1.5 font-mono text-[9px] font-black text-amber-500 select-none">
-                      ¥
+                      Â¥
                     </span>
                   </div>
                 </div>
 
                 <span className="flex h-8 items-center justify-center px-1 font-mono text-[10px] font-bold text-stone-600 select-none">
-                  ×
+                  Ã—
                 </span>
 
                 {/* Input Rate CNY */}
                 <div className="flex w-[7.5rem] flex-col gap-1">
                   <label className="font-mono text-[9px] font-bold tracking-widest text-stone-500">
-                    {t('portfolio.cnyRate', 'Tỷ giá CNY')}
+                    {t('portfolio.cnyRate', 'Tá»· giÃ¡ CNY')}
                   </label>
                   <div className="bg-card/50 flex h-8 items-center rounded-[2px] border border-stone-800 px-2.5 shadow-inner transition-all focus-within:border-amber-500/50 focus-within:ring-1 focus-within:ring-amber-500/20">
                     <input
@@ -513,7 +345,7 @@ export const SellSelectedDialogItemRow = memo(
                       className="text-stone-150 w-full [appearance:textfield] bg-transparent text-right font-mono text-xs font-bold outline-none [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
                     />
                     <span className="ml-1.5 font-mono text-[9px] font-bold text-stone-500 select-none">
-                      đ
+                      Ä‘
                     </span>
                   </div>
                 </div>
@@ -553,7 +385,7 @@ export const SellSelectedDialogItemRow = memo(
                 {/* Calculated Unit Price VND */}
                 <div className="flex w-[7.5rem] flex-col gap-1">
                   <label className="font-mono text-[9px] font-bold tracking-widest text-stone-500">
-                    {t('portfolio.sellPriceVnd', 'Giá bán')}
+                    {t('portfolio.sellPriceVnd', 'GiÃ¡ bÃ¡n')}
                   </label>
                   <div className="flex h-8 items-center justify-end px-1 font-mono text-xs font-bold text-amber-400 select-none">
                     {formatCurrency(unitSell)}
@@ -563,13 +395,15 @@ export const SellSelectedDialogItemRow = memo(
                 {sellQty > 1 && (
                   <>
                     <span className="flex h-8 items-center justify-center px-1 font-mono text-[10px] font-bold text-stone-600 select-none">
-                      →
+                      â†’
                     </span>
 
                     {/* Total calculated price for BUFF row */}
                     <div className="flex w-[8.5rem] flex-col gap-1">
                       <label className="font-mono text-[9px] font-bold tracking-widest text-stone-500">
-                        {t('portfolio.totalQtyMoney', 'Tổng tiền ({{count}})', { count: sellQty })}
+                        {t('portfolio.totalQtyMoney', 'Tá»•ng tiá»n ({{count}})', {
+                          count: sellQty,
+                        })}
                       </label>
                       <div className="flex h-8 items-center justify-end rounded-[2px] border border-amber-500/10 bg-amber-500/5 px-2.5 font-black text-amber-400 shadow-[0_2px_8px_rgba(245,158,11,0.05)] select-none">
                         <span className="font-mono text-xs">{formatCurrency(rowCurrentValue)}</span>
@@ -583,7 +417,7 @@ export const SellSelectedDialogItemRow = memo(
                 {/* Price 1 Unit */}
                 <div className="flex w-[7.5rem] flex-col gap-1">
                   <label className="font-mono text-[9px] font-bold tracking-widest text-stone-500">
-                    {t('portfolio.currentPrice', 'Giá hiện tại')}
+                    {t('portfolio.currentPrice', 'GiÃ¡ hiá»‡n táº¡i')}
                   </label>
                   <div className="flex h-8 items-center justify-end px-1 font-mono text-xs font-semibold text-stone-300 select-none">
                     {formatCurrency(unitCurrent)}
@@ -591,15 +425,15 @@ export const SellSelectedDialogItemRow = memo(
                 </div>
 
                 <span className="flex h-8 items-center justify-center px-1 font-mono text-[10px] font-bold text-stone-600 select-none">
-                  ×
+                  Ã—
                 </span>
 
                 {/* Active Rate Input Box */}
                 <div className="flex w-[7.5rem] flex-col gap-1">
                   <label className="font-mono text-[9px] font-bold tracking-widest text-stone-500">
                     {isFullSell
-                      ? t('portfolio.bulkRatePct', 'Tỷ lệ bán sỉ %')
-                      : t('portfolio.retailRatePct', 'Tỷ lệ bán lẻ %')}
+                      ? t('portfolio.bulkRatePct', 'Tá»· lá»‡ bÃ¡n sá»‰ %')
+                      : t('portfolio.retailRatePct', 'Tá»· lá»‡ bÃ¡n láº» %')}
                   </label>
                   <div
                     className={`bg-card/50 flex h-8 items-center rounded-[2px] border px-2.5 shadow-inner transition-all ${
@@ -661,7 +495,7 @@ export const SellSelectedDialogItemRow = memo(
                 {/* Calculated Sell Price VND */}
                 <div className="flex w-[7.5rem] flex-col gap-1">
                   <label className="font-mono text-[9px] font-bold tracking-widest text-stone-500">
-                    {t('portfolio.sellPriceVnd', 'Giá bán')}
+                    {t('portfolio.sellPriceVnd', 'GiÃ¡ bÃ¡n')}
                   </label>
                   <div
                     className={`flex h-8 items-center justify-end px-1 font-mono text-xs font-bold select-none ${
@@ -675,13 +509,15 @@ export const SellSelectedDialogItemRow = memo(
                 {sellQty > 1 && (
                   <>
                     <span className="flex h-8 items-center justify-center px-1 font-mono text-[10px] font-bold text-stone-600 select-none">
-                      →
+                      â†’
                     </span>
 
                     {/* Total calculated price for the row */}
                     <div className="flex w-[8.5rem] flex-col gap-1">
                       <label className="font-mono text-[9px] font-bold tracking-widest text-stone-500">
-                        {t('portfolio.totalQtyMoney', 'Tổng tiền ({{count}})', { count: sellQty })}
+                        {t('portfolio.totalQtyMoney', 'Tá»•ng tiá»n ({{count}})', {
+                          count: sellQty,
+                        })}
                       </label>
                       <div
                         className={`flex h-8 items-center justify-end rounded-[2px] border px-2.5 select-none ${

@@ -28,7 +28,7 @@ export function usePortfolioTableState({
   const searchParams = useSearchParams();
   const didMountRef = useRef(false);
 
-  // Read page from searchParams, default to 1 (which is index 0)
+  // Đọc trang từ searchParams, mặc định là 1 (tương ứng index 0)
   const pageParam = searchParams.get('page');
   const initialPageIndex = pageParam ? Math.max(0, parseInt(pageParam, 10) - 1) : 0;
 
@@ -41,7 +41,7 @@ export function usePortfolioTableState({
 
   const [visibleCount, setVisibleCount] = useState(10);
 
-  // Persisted state using useLocalStorage hook
+  // State lưu bền bằng hook useLocalStorage
   const [rowSelection, setRowSelection] = useLocalStorage<Record<string, boolean>>(
     'cs2t_portfolio_rowSelection',
     {}
@@ -59,7 +59,7 @@ export function usePortfolioTableState({
     }
   );
 
-  // Read page from URL
+  // Đọc trang từ URL
   useEffect(() => {
     const pageVal = searchParams.get('page');
     const pIndex = pageVal ? Math.max(0, parseInt(pageVal, 10) - 1) : 0;
@@ -68,7 +68,7 @@ export function usePortfolioTableState({
     }
   }, [searchParams, pagination.pageIndex]);
 
-  // Fallback to previous page if current page becomes empty after deletion
+  // Lùi về trang trước nếu trang hiện tại rỗng sau khi xóa
   useEffect(() => {
     const totalPages = Math.ceil(filteredDataCount / pagination.pageSize);
     if (filteredDataCount > 0 && pagination.pageIndex >= totalPages) {
@@ -77,7 +77,7 @@ export function usePortfolioTableState({
     }
   }, [filteredDataCount, pagination.pageSize, pagination.pageIndex]);
 
-  // Reset to first page when search filters change
+  // Reset về trang đầu khi bộ lọc tìm kiếm thay đổi
   useEffect(() => {
     if (!didMountRef.current) {
       didMountRef.current = true;
@@ -98,7 +98,7 @@ export function usePortfolioTableState({
     priceSourceFilters,
   ]);
 
-  // Sync pagination.pageIndex change to the URL query parameters
+  // Đồng bộ thay đổi pagination.pageIndex lên query parameter URL
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     const currentPageVal = params.get('page');

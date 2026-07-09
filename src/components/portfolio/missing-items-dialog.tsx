@@ -4,7 +4,6 @@ import { useState, useEffect, useMemo, useCallback } from 'react';
 import { motion } from 'framer-motion';
 import { Archive, ArrowRightLeft, Trash2, HelpCircle, PlusCircle, CheckCircle } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
-import { proxySteamUrl } from '@/utils/url';
 import { Select } from '@/components/ui/select';
 import { Button } from '@/components/ui/button';
 import {
@@ -14,49 +13,15 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
+import { MissingItemsDialogItemCell } from './components/missing-items-dialog-item-cell';
+import type { ExtraItem, MissingItem, SyncStorageUnit } from './missing-items-dialog-types';
 
-export type AccountChangeDetail = {
-  steamId64: string;
-  name: string;
-  change: number;
-  previousQuantity: number;
-  currentQuantity: number;
-};
-
-export type MissingItem = {
-  caseId: string;
-  marketHashName: string;
-  caseName: string;
-  imageUrl: string | null;
-  previousQuantity: number;
-  currentQuantity: number;
-  missingQuantity: number;
-  accounts?: AccountChangeDetail[];
-};
-
-export type ExtraItem = {
-  caseId: string;
-  marketHashName: string;
-  caseName: string;
-  imageUrl: string | null;
-  previousQuantity: number;
-  currentQuantity: number;
-  extraQuantity: number;
-  accounts?: AccountChangeDetail[];
-  breakdown?: {
-    tradeable: number;
-    onMarket: number;
-    tradeProtected: number;
-    hold: number;
-  };
-};
-
-export type SyncStorageUnit = {
-  id: string;
-  name: string;
-  steamId64: string;
-  currentCount: number;
-};
+export type {
+  AccountChangeDetail,
+  ExtraItem,
+  MissingItem,
+  SyncStorageUnit,
+} from './missing-items-dialog-types';
 
 type Resolution = 'storage_unit' | 'traded' | 'deleted' | 'unknown';
 
@@ -131,7 +96,7 @@ export function MissingItemsDialog({
     [storageUnits]
   );
 
-  // Reset/Initialize state when dialog opens or items change
+  // Reset/khởi tạo state khi dialog mở hoặc items thay đổi
   useEffect(() => {
     if (open) {
       const initial: Record<string, { resolution: Resolution; storageUnitId?: string }> = {};
@@ -151,7 +116,7 @@ export function MissingItemsDialog({
 
   const showTabs = missingItems.length > 0 && extraItems.length > 0;
 
-  // Dynamic Title and Description
+  // Tiêu đề và mô tả động
   let title = t('missingItemsDialog.defaultTitle', 'Steam Inventory Scan Results');
   let description = t(
     'missingItemsDialog.defaultDesc',
@@ -213,7 +178,7 @@ export function MissingItemsDialog({
   return (
     <Dialog open={open} onOpenChange={(nextOpen) => !nextOpen && onClose()}>
       <DialogContent className="border-stone-850 text-foreground flex max-h-[88vh] max-w-4xl flex-col overflow-hidden bg-white p-8 shadow-xl backdrop-blur-3xl sm:rounded-2xl dark:bg-[#0c0f17]/98 dark:shadow-[0_30px_90px_rgba(0,0,0,0.95)]">
-        {/* Header */}
+        {/* Phần đầu */}
         <DialogHeader className="mb-4">
           <DialogTitle className="flex items-center gap-3 text-xl font-bold">
             <span
@@ -323,49 +288,7 @@ export function MissingItemsDialog({
                       >
                         {/* Item Details */}
                         <td className="px-6 py-4">
-                          <div className="flex items-center gap-4">
-                            {item.imageUrl ? (
-                              <img
-                                src={proxySteamUrl(item.imageUrl)}
-                                alt={item.caseName}
-                                className="bg-background border-stone-850 size-12 shrink-0 rounded-lg border object-contain shadow-inner"
-                              />
-                            ) : (
-                              <div className="bg-background border-stone-850 flex size-12 shrink-0 items-center justify-center rounded-lg border shadow-inner">
-                                <Archive className="size-5 text-stone-500" />
-                              </div>
-                            )}
-                            <div className="min-w-0 flex-1">
-                              <p
-                                className="text-foreground truncate text-sm leading-tight font-bold"
-                                title={item.caseName}
-                              >
-                                {item.caseName}
-                              </p>
-                              <p
-                                className="mt-1 truncate text-xs font-medium text-stone-500"
-                                title={item.marketHashName}
-                              >
-                                {item.marketHashName}
-                              </p>
-                              {item.accounts && item.accounts.length > 0 && (
-                                <p className="mt-1.5 inline-block rounded border border-amber-200 bg-amber-50 px-2 py-0.5 text-xs font-semibold text-amber-700 dark:border-amber-500/10 dark:bg-amber-500/5 dark:text-amber-400">
-                                  {t(
-                                    'missingItemsDialog.accountBreakdown',
-                                    'Account: {{details}}',
-                                    {
-                                      details: item.accounts
-                                        .map(
-                                          (a) =>
-                                            `${a.name} (${a.change > 0 ? `+${a.change}` : a.change})`
-                                        )
-                                        .join(', '),
-                                    }
-                                  )}
-                                </p>
-                              )}
-                            </div>
-                          </div>
+                          <MissingItemsDialogItemCell item={item} tone="missing" />
                         </td>
 
                         {/* Quantity change */}
@@ -474,44 +397,7 @@ export function MissingItemsDialog({
                   >
                     {/* Item Details */}
                     <td className="px-6 py-4">
-                      <div className="flex items-center gap-4">
-                        {item.imageUrl ? (
-                          <img
-                            src={proxySteamUrl(item.imageUrl)}
-                            alt={item.caseName}
-                            className="bg-background border-stone-850 size-12 shrink-0 rounded-lg border object-contain shadow-inner"
-                          />
-                        ) : (
-                          <div className="bg-background border-stone-850 flex size-12 shrink-0 items-center justify-center rounded-lg border shadow-inner">
-                            <Archive className="size-5 text-stone-500" />
-                          </div>
-                        )}
-                        <div className="min-w-0 flex-1">
-                          <p
-                            className="text-foreground truncate text-sm leading-tight font-bold"
-                            title={item.caseName}
-                          >
-                            {item.caseName}
-                          </p>
-                          <p
-                            className="mt-1 truncate text-xs font-medium text-stone-500"
-                            title={item.marketHashName}
-                          >
-                            {item.marketHashName}
-                          </p>
-                          {item.accounts && item.accounts.length > 0 && (
-                            <p className="mt-1.5 inline-block rounded border border-emerald-200 bg-emerald-50 px-2 py-0.5 text-xs font-semibold text-emerald-700 dark:border-emerald-500/10 dark:bg-emerald-500/5 dark:text-emerald-400">
-                              {t('missingItemsDialog.accountBreakdown', 'Account: {{details}}', {
-                                details: item.accounts
-                                  .map(
-                                    (a) => `${a.name} (${a.change > 0 ? `+${a.change}` : a.change})`
-                                  )
-                                  .join(', '),
-                              })}
-                            </p>
-                          )}
-                        </div>
-                      </div>
+                      <MissingItemsDialogItemCell item={item} tone="extra" />
                     </td>
 
                     {/* Quantity change */}

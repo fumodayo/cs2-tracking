@@ -1,21 +1,13 @@
 'use client';
 
-import React, { useState, useMemo, useEffect } from 'react';
-import { useQuery } from '@tanstack/react-query';
+import React, { useState, useMemo, useEffect, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
-import { usePatternInspect } from '@/components/inventory-scanner/hooks/use-pattern-inspect';
-import {
-  STEAM_ACCOUNTS_QUERY_KEY,
-  STORAGE_UNITS_QUERY_KEY,
-  fetchSteamAccounts,
-  fetchAccountStorageUnits,
-} from '@/lib/api-client/steam-accounts-api';
 import { SlidePanel, SlidePanelContent } from '@/components/ui/slide-panel';
 
 import { formatIntegerViInput, formatDecimalViInput, parseViFloat } from '@/utils/format';
 
 import { PortfolioTableRow } from '../portfolio-table-model';
-import { getItemTypeColor, toInputNumber } from '../portfolio-table-utils';
+import { getItemTypeColor } from '../portfolio-table-utils';
 
 import { VirtualItemCard } from '../components/virtual-item-card';
 import { AccountAllocationBreakdown } from '@/components/steam-accounts';
@@ -28,13 +20,17 @@ import { SingleLotEditSection } from './single-lot-edit-section';
 import { StorageUnitAllocationSection } from './storage-unit-allocation-section';
 import {
   buildLotSourceAccounts,
-  getDefaultItemTradeState,
   getItemHoverCardTargetId,
   getTradeHoldUntilForState,
   type ItemTradeState,
 } from './lot-update-helpers';
-
-type ItemPatternInfo = NonNullable<PortfolioTableRow['patternInfo']>;
+import {
+  getItemHoverCardDefaultFormValues,
+  getItemHoverCardDraftFormValues,
+  type ItemHoverCardFormValues,
+} from './item-hover-card-form-values';
+import { useItemPatternInspectControls } from './use-item-pattern-inspect-controls';
+import { useItemHoverCardAccounts } from './use-item-hover-card-accounts';
 
 export function ItemHoverCard({
   item,
@@ -116,226 +112,87 @@ export function ItemHoverCard({
     return hasBuffPrice || currentDiffersFromSteam;
   }, [item, buffPricesCny]);
 
-  const [quantity, setQuantity] = useState(() => formatIntegerViInput(item.quantity));
-  const [priceCny, setPriceCny] = useState(() => {
-    if (hasBuff) {
-      const defaultVnd = item.buyPrice || item.steamPrice || item.currentPrice || 0;
-      return formatDecimalViInput(defaultVnd / (buffCnyToVndRate ?? 3600));
-    } else {
-      const defaultVnd = item.steamPrice || item.currentPrice || 0;
-      return formatIntegerViInput(defaultVnd);
-    }
-  });
-  const [buyRate, setBuyRate] = useState(() => {
-    if (hasBuff) {
-      return formatIntegerViInput(buffCnyToVndRate ?? 3600);
-    } else {
-      if (item.buyPrice > 0) {
-        const defaultMarket = item.steamPrice || item.currentPrice || 0;
-        if (defaultMarket > 0) {
-          return String(Math.round((item.buyPrice / defaultMarket) * 100));
-        }
-      }
-      return '100';
-    }
-  });
-  const [priceVnd, setPriceVnd] = useState(() => {
-    const defaultVnd = item.buyPrice || item.steamPrice || item.currentPrice || 0;
-    return formatIntegerViInput(defaultVnd);
-  });
-  const [note, setNote] = useState(() => item.note ?? '');
+  const defaultFormValues = useMemo(
+    () => getItemHoverCardDefaultFormValues({ item, hasBuff, buffCnyToVndRate }),
+    [item, hasBuff, buffCnyToVndRate]
+  );
+
+  const [quantity, setQuantity] = useState(() => defaultFormValues.quantity);
+  const [priceCny, setPriceCny] = useState(() => defaultFormValues.priceCny);
+  const [buyRate, setBuyRate] = useState(() => defaultFormValues.buyRate);
+  const [priceVnd, setPriceVnd] = useState(() => defaultFormValues.priceVnd);
+  const [note, setNote] = useState(() => defaultFormValues.note);
   const [saving, setSaving] = useState(false);
   const [isResetting, setIsResetting] = useState(false);
-  const [sellRate, setSellRate] = useState(() => formatIntegerViInput(buffCnyToVndRate ?? 3600));
+  const [sellRate, setSellRate] = useState(() => defaultFormValues.sellRate);
 
-  const [stickerRate, setStickerRate] = useState(() => String(item.stickerPriceRate ?? 0));
-  const [stickerBuyRate, setStickerBuyRate] = useState(() => String(item.stickerBuyPriceRate ?? 0));
+  const [stickerRate, setStickerRate] = useState(() => defaultFormValues.stickerRate);
+  const [stickerBuyRate, setStickerBuyRate] = useState(() => defaultFormValues.stickerBuyRate);
   const [stickerFormulaTotal, setStickerFormulaTotal] = useState<number | null>(null);
   const [capturedScanTotal, setCapturedScanTotal] = useState<number | null>(
-    () => item.stickerScanTotalPrice ?? null
+    () => defaultFormValues.capturedScanTotal
   );
   const [capturedScanDate, setCapturedScanDate] = useState<string | undefined>(
-    () => item.stickerScanPriceCapturedAt
+    () => defaultFormValues.capturedScanDate
   );
 
-  const { inspectingKeys, inspectPattern } = usePatternInspect();
-  const [inspectError, setInspectError] = useState<string | null>(null);
-  const isInspecting = inspectingKeys.has(item.case.marketHashName);
-  async function applyPatternInspectResult(patternInfo: ItemPatternInfo, inspectLink?: string) {
-    const updatePayload = {
-      dopplerPhase: patternInfo.dopplerPhase || item.dopplerPhase,
-      patternInfo,
-      ...(inspectLink ? { inspectLink } : {}),
-    };
+  const {
+    isInspecting,
+    inspectError,
+    manualInspectLink,
+    setManualInspectLink,
+    handleInspect,
+    handleManualInspect,
+    handleAutoFind,
+    isFindingLink,
+    findStatus,
+  } = useItemPatternInspectControls({ item, onUpdateLot });
 
-    if (item.itemIds && item.itemIds.length > 0) {
-      for (const id of item.itemIds) {
-        await onUpdateLot?.(id, updatePayload);
-      }
-    } else {
-      await onUpdateLot?.(item.id, updatePayload);
-    }
-  }
-
-  const handleInspect = async () => {
-    if (!item.inspectLink) return;
-    setInspectError(null);
-    const res = await inspectPattern(item.inspectLink, item.case.marketHashName, item.dopplerPhase);
-    if (res.success && res.data?.patternInfo) {
-      await applyPatternInspectResult(res.data.patternInfo);
-    } else {
-      setInspectError(res.error || 'failedToInspectFromCSFloat');
-    }
-  };
-
-  const [manualInspectLink, setManualInspectLink] = useState('');
-
-  const handleManualInspect = async () => {
-    if (!manualInspectLink.trim()) return;
-    setInspectError(null);
-    const res = await inspectPattern(
-      manualInspectLink.trim(),
-      item.case.marketHashName,
-      item.dopplerPhase
-    );
-    if (res.success && res.data?.patternInfo) {
-      await applyPatternInspectResult(res.data.patternInfo, manualInspectLink.trim());
-    } else {
-      setInspectError(res.error || 'failedToInspectFromCSFloat');
-    }
-  };
-
-  const [isFindingLink, setIsFindingLink] = useState(false);
-  const [findStatus, setFindStatus] = useState<'idle' | 'success' | 'error'>('idle');
-
-  const handleAutoFind = async () => {
-    setIsFindingLink(true);
-    setFindStatus('idle');
-    setInspectError(null);
-    try {
-      const res = await fetch(
-        `/api/portfolio/find-inspect-link?marketHashName=${encodeURIComponent(
-          item.case.marketHashName
-        )}`
-      );
-      if (!res.ok) throw new Error('failedToFind');
-      const data = await res.json();
-      if (data.inspectLink) {
-        setFindStatus('success');
-        setManualInspectLink(data.inspectLink);
-
-        // Auto-run inspect pattern with the link found
-        const scanRes = await inspectPattern(
-          data.inspectLink,
-          item.case.marketHashName,
-          item.dopplerPhase
-        );
-        if (scanRes.success && scanRes.data?.patternInfo) {
-          await applyPatternInspectResult(scanRes.data.patternInfo, data.inspectLink);
-        } else {
-          setInspectError(scanRes.error || 'failedToInspectFromCSFloat');
-          setFindStatus('error');
-        }
-      } else {
-        setFindStatus('error');
-      }
-    } catch {
-      setFindStatus('error');
-    } finally {
-      setIsFindingLink(false);
-    }
-  };
-
-  const [editAccountId, setEditAccountId] = useState(
-    () => item.sourceAccounts?.[0]?.steamId64 ?? ''
+  const [editAccountId, setEditAccountId] = useState(() => defaultFormValues.editAccountId);
+  const [editStorageUnitId, setEditStorageUnitId] = useState(
+    () => defaultFormValues.editStorageUnitId
   );
-  const [editStorageUnitId, setEditStorageUnitId] = useState(() => item.storageUnitId ?? '');
-  const [editState, setEditState] = useState<ItemTradeState>(
-    () => getDefaultItemTradeState(item).state
-  );
-  const [editHoldDays, setEditHoldDays] = useState(() => getDefaultItemTradeState(item).holdDays);
+  const [editState, setEditState] = useState<ItemTradeState>(() => defaultFormValues.editState);
+  const [editHoldDays, setEditHoldDays] = useState(() => defaultFormValues.editHoldDays);
 
-  const accountsQuery = useQuery({
-    queryKey: STEAM_ACCOUNTS_QUERY_KEY,
-    queryFn: () => fetchSteamAccounts(),
-    staleTime: 5 * 60 * 1000,
-  });
-
-  const storageUnitsQuery = useQuery({
-    queryKey: STORAGE_UNITS_QUERY_KEY(editAccountId),
-    queryFn: () => fetchAccountStorageUnits(editAccountId),
-    enabled: !!editAccountId,
-    staleTime: 5 * 60 * 1000,
-  });
-
-  const accountOptions = useMemo(() => {
-    const map = new Map<string, { id: string; steamId64: string; name: string }>();
-
-    for (const account of accountsQuery.data ?? []) {
-      map.set(account.steamId64, {
-        id: account.id,
-        steamId64: account.steamId64,
-        name: account.name,
-      });
-    }
-
-    for (const account of item.sourceAccounts ?? []) {
-      if (!account.steamId64 || map.has(account.steamId64)) continue;
-      map.set(account.steamId64, {
-        id: account.steamId64,
-        steamId64: account.steamId64,
-        name: account.name || account.steamId64,
-      });
-    }
-
-    return Array.from(map.values());
-  }, [accountsQuery.data, item.sourceAccounts]);
+  const { accountOptions, storageUnits } = useItemHoverCardAccounts({ item, editAccountId });
 
   const isVirtual = item.sourceType === 'existing' && item.isVirtual;
 
-  // Load draft from localStorage on mount/props changes, falling back to props values
+  const applyFormValues = useCallback((values: ItemHoverCardFormValues, includeSellRate = true) => {
+    setQuantity(values.quantity);
+    setPriceCny(values.priceCny);
+    setBuyRate(values.buyRate);
+    setPriceVnd(values.priceVnd);
+    setNote(values.note);
+    if (includeSellRate) {
+      setSellRate(values.sellRate);
+    }
+    setEditAccountId(values.editAccountId);
+    setEditStorageUnitId(values.editStorageUnitId);
+    setEditState(values.editState);
+    setEditHoldDays(values.editHoldDays);
+    setStickerRate(values.stickerRate);
+    setStickerBuyRate(values.stickerBuyRate);
+    setCapturedScanTotal(values.capturedScanTotal);
+    setCapturedScanDate(values.capturedScanDate);
+  }, []);
+
+  // Nạp bản nháp từ localStorage khi mount/props đổi, fallback về giá trị props
   useEffect(() => {
+    let nextValues = defaultFormValues;
     let loadedFromDraft = false;
     try {
       const saved = localStorage.getItem(`item_hover_card_draft_${item.id}`);
       if (saved) {
         const draft = JSON.parse(saved);
         if (draft) {
-          const defaultVnd = item.buyPrice || item.steamPrice || item.currentPrice || 0;
-          setQuantity(formatIntegerViInput(draft.quantity ?? String(item.quantity)));
-          setPriceVnd(formatIntegerViInput(draft.priceVnd ?? toInputNumber(defaultVnd)));
-
-          if (hasBuff) {
-            setPriceCny(
-              formatDecimalViInput(
-                draft.priceCny ?? toInputNumber(defaultVnd / (buffCnyToVndRate ?? 3600))
-              )
-            );
-            setBuyRate(
-              formatIntegerViInput(draft.buyRate ?? toInputNumber(buffCnyToVndRate ?? 3600))
-            );
-          } else {
-            const defaultMarket = item.steamPrice || item.currentPrice || 0;
-            setPriceCny(formatIntegerViInput(draft.priceCny ?? toInputNumber(defaultMarket)));
-            if (item.buyPrice > 0 && defaultMarket > 0) {
-              setBuyRate(
-                formatIntegerViInput(
-                  draft.buyRate ?? String(Math.round((item.buyPrice / defaultMarket) * 100))
-                )
-              );
-            } else {
-              setBuyRate(formatIntegerViInput(draft.buyRate ?? '100'));
-            }
-          }
-          setNote(draft.note ?? item.note ?? '');
-          setEditAccountId(draft.editAccountId ?? item.sourceAccounts?.[0]?.steamId64 ?? '');
-          setEditStorageUnitId(draft.editStorageUnitId ?? item.storageUnitId ?? '');
-          setEditState(draft.editState ?? 'tradeable');
-          setEditHoldDays(draft.editHoldDays ?? '');
-          setStickerRate(draft.stickerRate ?? String(item.stickerPriceRate ?? 0));
-          setStickerBuyRate(draft.stickerBuyRate ?? String(item.stickerBuyPriceRate ?? 0));
-          setCapturedScanTotal(draft.capturedScanTotal ?? item.stickerScanTotalPrice ?? null);
-          setCapturedScanDate(draft.capturedScanDate ?? item.stickerScanPriceCapturedAt);
+          nextValues = getItemHoverCardDraftFormValues({
+            item,
+            draft,
+            hasBuff,
+            buffCnyToVndRate,
+          });
           loadedFromDraft = true;
         }
       }
@@ -343,90 +200,28 @@ export function ItemHoverCard({
       console.error('Failed to parse item draft from localStorage', e);
     }
 
-    if (!loadedFromDraft) {
-      const defaultVnd = item.buyPrice || item.steamPrice || item.currentPrice || 0;
-      setQuantity(formatIntegerViInput(item.quantity));
-      setPriceVnd(formatIntegerViInput(defaultVnd));
-      if (hasBuff) {
-        setPriceCny(formatDecimalViInput(defaultVnd / (buffCnyToVndRate ?? 3600)));
-        setBuyRate(formatIntegerViInput(buffCnyToVndRate ?? 3600));
-      } else {
-        const defaultMarket = item.steamPrice || item.currentPrice || 0;
-        setPriceCny(formatIntegerViInput(defaultMarket));
-        if (item.buyPrice > 0 && defaultMarket > 0) {
-          setBuyRate(String(Math.round((item.buyPrice / defaultMarket) * 100)));
-        } else {
-          setBuyRate('100');
-        }
-      }
-      setNote(item.note ?? '');
-      setSellRate(formatIntegerViInput(buffCnyToVndRate ?? 3600));
+    applyFormValues(nextValues, !loadedFromDraft);
+  }, [item, defaultFormValues, hasBuff, buffCnyToVndRate, applyFormValues]);
 
-      const steamId = item.sourceAccounts?.[0]?.steamId64 ?? '';
-      setEditAccountId(steamId);
-      setEditStorageUnitId(item.storageUnitId ?? '');
-
-      const defaultTradeState = getDefaultItemTradeState({
-        sourceAccounts: item.sourceAccounts,
-        tradeHoldUntil: item.tradeHoldUntil,
-      });
-      setEditState(defaultTradeState.state);
-      setEditHoldDays(defaultTradeState.holdDays);
-
-      setStickerRate(String(item.stickerPriceRate ?? 0));
-      setStickerBuyRate(String(item.stickerBuyPriceRate ?? 0));
-      setCapturedScanTotal(item.stickerScanTotalPrice ?? null);
-      setCapturedScanDate(item.stickerScanPriceCapturedAt);
-    }
-  }, [
-    item.id,
-    item.quantity,
-    item.buyPrice,
-    item.currentPrice,
-    item.steamPrice,
-    item.note,
-    buffCnyToVndRate,
-    item.sourceAccounts,
-    item.storageUnitId,
-    item.tradeHoldUntil,
-    item.stickerPriceRate,
-    item.stickerBuyPriceRate,
-    item.stickerScanTotalPrice,
-    item.stickerScanPriceCapturedAt,
-    hasBuff,
-  ]);
-
-  // Check if form values match default values from props
+  // Kiểm tra giá trị form có khớp giá trị mặc định từ props không
   const isDefault = useMemo(() => {
-    const defaultTradeState = getDefaultItemTradeState(item);
-
-    const defaultMarket = hasBuff
-      ? (item.buyPrice || item.steamPrice || item.currentPrice || 0) / (buffCnyToVndRate ?? 3600)
-      : item.steamPrice || item.currentPrice || 0;
-
-    const defaultRate = hasBuff
-      ? (buffCnyToVndRate ?? 3600)
-      : item.buyPrice > 0 && (item.steamPrice || item.currentPrice || 0) > 0
-        ? Math.round((item.buyPrice / (item.steamPrice || item.currentPrice || 1)) * 100)
-        : 100;
-
     return (
-      parseViFloat(quantity) === item.quantity &&
-      parseViFloat(priceVnd) === (item.buyPrice || item.steamPrice || item.currentPrice || 0) &&
-      parseViFloat(priceCny) === defaultMarket &&
-      parseViFloat(buyRate) === defaultRate &&
-      note === (item.note ?? '') &&
-      editAccountId === (item.sourceAccounts?.[0]?.steamId64 ?? '') &&
-      editStorageUnitId === (item.storageUnitId ?? '') &&
-      editState === defaultTradeState.state &&
-      (editState !== 'hold' || editHoldDays === defaultTradeState.holdDays) &&
-      parseViFloat(stickerRate) === (item.stickerPriceRate ?? 0) &&
-      parseViFloat(stickerBuyRate) === (item.stickerBuyPriceRate ?? 0) &&
-      capturedScanTotal === (item.stickerScanTotalPrice ?? null) &&
-      capturedScanDate === item.stickerScanPriceCapturedAt
+      parseViFloat(quantity) === parseViFloat(defaultFormValues.quantity) &&
+      parseViFloat(priceVnd) === parseViFloat(defaultFormValues.priceVnd) &&
+      parseViFloat(priceCny) === parseViFloat(defaultFormValues.priceCny) &&
+      parseViFloat(buyRate) === parseViFloat(defaultFormValues.buyRate) &&
+      note === defaultFormValues.note &&
+      editAccountId === defaultFormValues.editAccountId &&
+      editStorageUnitId === defaultFormValues.editStorageUnitId &&
+      editState === defaultFormValues.editState &&
+      (editState !== 'hold' || editHoldDays === defaultFormValues.editHoldDays) &&
+      parseViFloat(stickerRate) === parseViFloat(defaultFormValues.stickerRate) &&
+      parseViFloat(stickerBuyRate) === parseViFloat(defaultFormValues.stickerBuyRate) &&
+      capturedScanTotal === defaultFormValues.capturedScanTotal &&
+      capturedScanDate === defaultFormValues.capturedScanDate
     );
   }, [
-    item,
+    defaultFormValues,
     quantity,
     priceVnd,
     priceCny,
@@ -436,15 +231,13 @@ export function ItemHoverCard({
     editStorageUnitId,
     editState,
     editHoldDays,
-    buffCnyToVndRate,
     stickerRate,
     stickerBuyRate,
     capturedScanTotal,
     capturedScanDate,
-    hasBuff,
   ]);
 
-  // Auto-save draft on changes
+  // Tự lưu bản nháp khi có thay đổi
   useEffect(() => {
     if (!item.id) return;
     try {
@@ -613,35 +406,8 @@ export function ItemHoverCard({
     } catch {
       /* ignore */
     }
-    setQuantity(formatIntegerViInput(item.quantity));
-
-    const defaultVnd = item.buyPrice || item.steamPrice || item.currentPrice || 0;
-    setPriceVnd(formatIntegerViInput(defaultVnd));
-    if (hasBuff) {
-      setPriceCny(formatDecimalViInput(defaultVnd / (buffCnyToVndRate ?? 3600)));
-      setBuyRate(formatIntegerViInput(buffCnyToVndRate ?? 3600));
-    } else {
-      const defaultMarket = item.steamPrice || item.currentPrice || 0;
-      setPriceCny(formatIntegerViInput(defaultMarket));
-      if (item.buyPrice > 0 && defaultMarket > 0) {
-        setBuyRate(String(Math.round((item.buyPrice / defaultMarket) * 100)));
-      } else {
-        setBuyRate('100');
-      }
-    }
-    setNote(item.note ?? '');
-    setSellRate(formatIntegerViInput(buffCnyToVndRate ?? 3600));
-    const steamId = item.sourceAccounts?.[0]?.steamId64 ?? '';
-    setEditAccountId(steamId);
-    setEditStorageUnitId(item.storageUnitId ?? '');
-    setStickerRate(String(item.stickerPriceRate ?? 0));
-    setStickerBuyRate(String(item.stickerBuyPriceRate ?? 0));
-    setCapturedScanTotal(item.stickerScanTotalPrice ?? null);
-    setCapturedScanDate(item.stickerScanPriceCapturedAt);
+    applyFormValues(defaultFormValues);
     setStickerFormulaTotal(null);
-    const defaultTradeState = getDefaultItemTradeState(item);
-    setEditState(defaultTradeState.state);
-    setEditHoldDays(defaultTradeState.holdDays);
     setTimeout(() => {
       setIsResetting(false);
       onClose?.();
@@ -721,7 +487,7 @@ export function ItemHoverCard({
               editHoldDays={editHoldDays}
               setEditHoldDays={setEditHoldDays}
               accounts={accountOptions}
-              storageUnits={storageUnitsQuery.data}
+              storageUnits={storageUnits}
               onSelectOpenChange={onSelectOpenChange}
               priceVnd={priceVnd}
               setPriceVnd={setPriceVnd}

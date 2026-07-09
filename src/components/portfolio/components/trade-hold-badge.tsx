@@ -1,20 +1,20 @@
-"use client";
+'use client';
 
-import React, { useState, useEffect } from "react";
-import { TbClock, TbCircleCheck } from "react-icons/tb";
-import { formatDateTimeVi } from "@/utils/date";
-import { useTranslation } from "react-i18next";
+import React, { useState, useEffect } from 'react';
+import { TbClock, TbCircleCheck } from 'react-icons/tb';
+import { formatDateTimeVi } from '@/utils/date';
+import { useTranslation } from 'react-i18next';
 
 interface TradeHoldBadgeProps {
   tradeHoldUntil: string | Date | null | undefined;
   className?: string;
-  size?: "sm" | "md";
+  size?: 'sm' | 'md';
 }
 
 export function TradeHoldBadge({
   tradeHoldUntil,
-  className = "",
-  size = "md",
+  className = '',
+  size = 'md',
 }: TradeHoldBadgeProps) {
   const { t } = useTranslation();
   const [timeLeft, setTimeLeft] = useState<string | null>(null);
@@ -49,22 +49,34 @@ export function TradeHoldBadge({
       if (diffMs > oneDay) {
         const days = Math.floor(diffMs / oneDay);
         const hours = Math.floor((diffMs % oneDay) / oneHour);
-        setTimeLeft(t("portfolio.holdCountdownDaysHours", "Hold {{days}}d {{hours}}h", { days, hours }));
+        setTimeLeft(
+          t('portfolio.holdCountdownDaysHours', 'Hold {{days}}d {{hours}}h', { days, hours })
+        );
       } else if (diffMs > oneHour) {
         const hours = Math.floor(diffMs / oneHour);
         const minutes = Math.floor((diffMs % oneHour) / (60 * 1000));
-        setTimeLeft(t("portfolio.holdCountdownHoursMinutes", "Hold {{hours}}h {{minutes}}m", { hours, minutes }));
+        setTimeLeft(
+          t('portfolio.holdCountdownHoursMinutes', 'Hold {{hours}}h {{minutes}}m', {
+            hours,
+            minutes,
+          })
+        );
       } else {
         const minutes = Math.floor(diffMs / (60 * 1000));
         const seconds = Math.floor((diffMs % (60 * 1000)) / 1000);
-        setTimeLeft(t("portfolio.holdCountdownMinutesSeconds", "Hold {{minutes}}m {{seconds}}s", { minutes, seconds }));
+        setTimeLeft(
+          t('portfolio.holdCountdownMinutesSeconds', 'Hold {{minutes}}m {{seconds}}s', {
+            minutes,
+            seconds,
+          })
+        );
       }
     };
 
-    // Initial update
+    // Cập nhật ban đầu
     updateCountdown();
 
-    // Determine interval speed: 1s if less than 1 hour remaining, otherwise 10s is plenty
+    // Xác định tốc độ interval: còn dưới 1 giờ thì 1s, ngược lại 10s là đủ
     const diffMs = targetTime - Date.now();
     const intervalMs = diffMs < 60 * 60 * 1000 ? 1000 : 10000;
 
@@ -74,18 +86,21 @@ export function TradeHoldBadge({
 
   if (!tradeHoldUntil) return null;
 
-  const exactTimeStr = t("portfolio.holdUntilTime", "Hold ends at: {{time}}", { time: formatDateTimeVi(tradeHoldUntil) });
-  const sizeClasses = size === "sm" ? "px-1.5 py-0.5 text-[9px] gap-1" : "px-2 py-1 text-[10px] gap-1.5";
+  const exactTimeStr = t('portfolio.holdUntilTime', 'Hold ends at: {{time}}', {
+    time: formatDateTimeVi(tradeHoldUntil),
+  });
+  const sizeClasses =
+    size === 'sm' ? 'px-1.5 py-0.5 text-[9px] gap-1' : 'px-2 py-1 text-[10px] gap-1.5';
 
   if (isExpired) {
     return (
       <span
         title={exactTimeStr}
-        aria-label={`${t("portfolio.tradeableNow", "Tradeable now")}. ${exactTimeStr}`}
+        aria-label={`${t('portfolio.tradeableNow', 'Tradeable now')}. ${exactTimeStr}`}
         className={`inline-flex items-center rounded-md border border-emerald-500/20 bg-emerald-500/10 font-bold text-emerald-400 select-none ${sizeClasses} ${className}`}
       >
-        <TbCircleCheck className={size === "sm" ? "size-2.5" : "size-3.5"} />
-        {t("portfolio.tradeableNow", "Tradeable now")}
+        <TbCircleCheck className={size === 'sm' ? 'size-2.5' : 'size-3.5'} />
+        {t('portfolio.tradeableNow', 'Tradeable now')}
       </span>
     );
   }
@@ -98,7 +113,7 @@ export function TradeHoldBadge({
       aria-label={`${timeLeft}. ${exactTimeStr}`}
       className={`inline-flex items-center rounded border border-rose-500/20 bg-rose-500/10 font-bold text-rose-400 uppercase select-none ${sizeClasses} ${className}`}
     >
-      <TbClock className={`${size === "sm" ? "size-2.5" : "size-3.5"} animate-pulse`} />
+      <TbClock className={`${size === 'sm' ? 'size-2.5' : 'size-3.5'} animate-pulse`} />
       {timeLeft}
     </span>
   );

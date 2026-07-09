@@ -461,8 +461,8 @@ export function usePortfolioFilters({ rows, buffPricesCny }: UsePortfolioFilters
         if (breakdown.tradeProtected > 0) statuses.add('protected');
         if (breakdown.hold > 0) statuses.add('hold');
 
-        // If status is unknown (no breakdown data), don't exclude the item —
-        // we can't determine its real status so we let it pass all status filters.
+        // Nếu trạng thái không rõ (không có dữ liệu breakdown), không loại vật phẩm —
+        // vì không xác định được trạng thái thật nên cho qua mọi bộ lọc trạng thái.
         if (statuses.size === 0) return true;
 
         const matchesStatus = statusFilters.some((s) => statuses.has(s));

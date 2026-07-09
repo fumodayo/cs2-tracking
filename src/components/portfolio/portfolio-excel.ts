@@ -1,24 +1,25 @@
-import * as XLSX from 'xlsx';
 import type { PortfolioReportDto } from '@/types/report';
 import type { PortfolioImportRow } from '@/types/portfolio-import';
 export type { PortfolioImportRow } from '@/types/portfolio-import';
 
 export type ColumnMapping = {
-  name: number; // BẮT BUỘC — index cột chứa tên vật phẩm
-  quantity?: number; // optional — index cột số lượng
-  buyPrice?: number; // optional — index cột giá mua
-  buyDate?: number; // optional — index cột ngày mua
-  note?: number; // optional — index cột ghi chú
-  caseId?: number; // optional — index cột caseId
+  name: number;
+  quantity?: number;
+  buyPrice?: number;
+  buyDate?: number;
+  note?: number;
+  caseId?: number;
 };
 
 export type MappingTemplate = {
-  id: string; // unique id (crypto.randomUUID)
-  label: string; // tên template do user đặt
-  headerFingerprint: string; // JSON.stringify(sortedHeaders) để so sánh
-  mapping: ColumnMapping; // mapping đã lưu
-  createdAt: string; // ISO date
+  id: string;
+  label: string;
+  headerFingerprint: string;
+  mapping: ColumnMapping;
+  createdAt: string;
 };
+
+const MAX_IMPORT_BYTES = 2 * 1024 * 1024;
 
 const EXPORT_COLUMNS = {
   caseId: 'Case ID',
@@ -49,55 +50,52 @@ const HEADER_ALIASES = {
 } as const;
 
 export function exportPortfolioToExcel(report: PortfolioReportDto) {
-  const rows = report.rows.map((row) => ({
-    [EXPORT_COLUMNS.caseId]: row.item.caseId,
-    [EXPORT_COLUMNS.caseName]: row.case.name,
-    [EXPORT_COLUMNS.marketHashName]: row.case.marketHashName,
-    [EXPORT_COLUMNS.quantity]: row.item.quantity,
-    [EXPORT_COLUMNS.buyPrice]: row.item.buyPrice,
-    [EXPORT_COLUMNS.buyDate]: row.item.buyDate.slice(0, 10),
-    [EXPORT_COLUMNS.note]: row.item.note ?? '',
-  }));
-
-  const worksheet = XLSX.utils.json_to_sheet(rows);
-  worksheet['!cols'] = [
-    { wch: 26 },
-    { wch: 34 },
-    { wch: 34 },
-    { wch: 10 },
-    { wch: 14 },
-    { wch: 14 },
-    { wch: 32 },
+  const rows = [
+    [
+      EXPORT_COLUMNS.caseId,
+      EXPORT_COLUMNS.caseName,
+      EXPORT_COLUMNS.marketHashName,
+      EXPORT_COLUMNS.quantity,
+      EXPORT_COLUMNS.buyPrice,
+      EXPORT_COLUMNS.buyDate,
+      EXPORT_COLUMNS.note,
+    ],
+    ...report.rows.map((row) => [
+      row.item.caseId,
+      row.case.name,
+      row.case.marketHashName,
+      row.item.quantity,
+      row.item.buyPrice,
+      row.item.buyDate.slice(0, 10),
+      row.item.note ?? '',
+    ]),
   ];
 
-  const workbook = XLSX.utils.book_new();
-  XLSX.utils.book_append_sheet(workbook, worksheet, 'Portfolio');
-  XLSX.writeFile(workbook, `cs2-portfolio-${new Date().toISOString().slice(0, 10)}.xlsx`);
+  const csv = serializeDelimitedRows(rows, ',');
+  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' });
+  const url = URL.createObjectURL(blob);
+  const anchor = document.createElement('a');
+  anchor.href = url;
+  anchor.download = `cs2-portfolio-${new Date().toISOString().slice(0, 10)}.csv`;
+  document.body.appendChild(anchor);
+  anchor.click();
+  anchor.remove();
+  URL.revokeObjectURL(url);
 }
 
 export async function parsePortfolioExcelFile(file: File): Promise<PortfolioImportRow[]> {
-  const buffer = await file.arrayBuffer();
-  const workbook = XLSX.read(buffer, { type: 'array', cellDates: true });
-  const rows = workbook.SheetNames.flatMap((sheetName) =>
-    parsePortfolioWorksheet(workbook.Sheets[sheetName])
-  );
+  const text = await readSourceText(file);
+  const rows = parseDelimitedRows(text, detectDelimiter(text, file.name));
+  const parsedRows = parsePortfolioWorksheet(rows);
 
-  if (rows.length === 0) {
+  if (parsedRows.length === 0) {
     throw new Error('File does not contain valid portfolio rows.');
   }
 
-  return rows;
+  return parsedRows;
 }
 
-function parsePortfolioWorksheet(worksheet: XLSX.WorkSheet | undefined): PortfolioImportRow[] {
-  if (!worksheet) {
-    return [];
-  }
-
-  const matrix = XLSX.utils.sheet_to_json<unknown[]>(worksheet, {
-    header: 1,
-    defval: '',
-  });
+function parsePortfolioWorksheet(matrix: unknown[][]): PortfolioImportRow[] {
   const headerIndex = matrix.findIndex((row) => Boolean(findFlexibleColumns(row)));
   if (headerIndex === -1) {
     return [];
@@ -146,8 +144,8 @@ function normalizeFlexibleImportRow(
         : normalizeExcelDate(row[columns.buyDate]),
     note:
       columns.note === undefined
-        ? 'Imported from Excel'
-        : stringifyCell(row[columns.note]) || 'Imported from Excel',
+        ? 'Imported from CSV'
+        : stringifyCell(row[columns.note]) || 'Imported from CSV',
   };
 }
 
@@ -188,8 +186,6 @@ function normalizeHeaderKey(value: unknown): string {
   return stringifyCell(value)
     .normalize('NFD')
     .replace(/[\u0300-\u036f]/g, '')
-    .replace(/đ/g, 'd')
-    .replace(/Đ/g, 'D')
     .replace(/[^a-zA-Z0-9]/g, '')
     .toLowerCase();
 }
@@ -215,8 +211,6 @@ function isSummaryOrFormulaRow(name: string): boolean {
   const normalized = name
     .normalize('NFD')
     .replace(/[\u0300-\u036f]/g, '')
-    .replace(/đ/g, 'd')
-    .replace(/Đ/g, 'D')
     .replace(/[^a-zA-Z]/g, '')
     .toLowerCase();
 
@@ -258,10 +252,8 @@ function normalizeExcelDate(value: unknown): string {
   }
 
   if (typeof value === 'number') {
-    const parsed = XLSX.SSF.parse_date_code(value);
-    if (parsed) {
-      return new Date(Date.UTC(parsed.y, parsed.m - 1, parsed.d)).toISOString().slice(0, 10);
-    }
+    const excelEpoch = Date.UTC(1899, 11, 30);
+    return new Date(excelEpoch + value * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
   }
 
   if (typeof value === 'string' && value.trim()) {
@@ -277,45 +269,26 @@ function normalizeExcelDate(value: unknown): string {
 export async function readExcelHeaders(
   source: File | string
 ): Promise<{ headers: string[]; headerRowIndex: number; matrix: unknown[][] }> {
-  if (typeof source === 'string') {
-    const lines = source
-      .split(/\r?\n/)
-      .map((line) => line.trim())
-      .filter((line) => line.length > 0);
-    if (lines.length === 0) {
-      return { headers: [], headerRowIndex: -1, matrix: [] };
-    }
-    const matrix = lines.map((line) => line.split('\t'));
-    const headers = matrix[0].map((h) => String(h).trim());
-    return { headers, headerRowIndex: 0, matrix };
-  } else {
-    const buffer = await source.arrayBuffer();
-    const workbook = XLSX.read(buffer, { type: 'array', cellDates: true });
-    const sheetName = workbook.SheetNames[0];
-    if (!sheetName) {
-      return { headers: [], headerRowIndex: -1, matrix: [] };
-    }
-    const worksheet = workbook.Sheets[sheetName];
-    const matrix = XLSX.utils.sheet_to_json<unknown[]>(worksheet, {
-      header: 1,
-      defval: '',
-    }) as unknown[][];
+  const text = await readSourceText(source);
+  const matrix = parseDelimitedRows(
+    text,
+    detectDelimiter(text, typeof source === 'string' ? '' : source.name)
+  );
 
-    const headerRowIndex = matrix.findIndex((row) => {
-      if (!Array.isArray(row)) return false;
-      const nonEmptyCells = row.filter(
-        (cell) => cell !== undefined && cell !== null && String(cell).trim() !== ''
-      );
-      return nonEmptyCells.length >= 2;
-    });
+  const headerRowIndex = matrix.findIndex((row) => {
+    if (!Array.isArray(row)) return false;
+    const nonEmptyCells = row.filter(
+      (cell) => cell !== undefined && cell !== null && String(cell).trim() !== ''
+    );
+    return nonEmptyCells.length >= 2;
+  });
 
-    if (headerRowIndex === -1) {
-      return { headers: [], headerRowIndex: -1, matrix: [] };
-    }
-
-    const headers = matrix[headerRowIndex].map((cell) => String(cell).trim());
-    return { headers, headerRowIndex, matrix };
+  if (headerRowIndex === -1) {
+    return { headers: [], headerRowIndex: -1, matrix: [] };
   }
+
+  const headers = matrix[headerRowIndex].map((cell) => String(cell).trim());
+  return { headers, headerRowIndex, matrix };
 }
 
 export async function parseExcelWithMapping(
@@ -323,25 +296,11 @@ export async function parseExcelWithMapping(
   mapping: ColumnMapping,
   headerRowIndex: number
 ): Promise<PortfolioImportRow[]> {
-  let matrix: unknown[][] = [];
-
-  if (typeof source === 'string') {
-    const lines = source.split(/\r?\n/).filter((line) => line.trim().length > 0);
-    matrix = lines.map((line) => line.split('\t'));
-  } else {
-    const buffer = await source.arrayBuffer();
-    const workbook = XLSX.read(buffer, { type: 'array', cellDates: true });
-    const sheetName = workbook.SheetNames[0];
-    if (!sheetName) {
-      return [];
-    }
-    const worksheet = workbook.Sheets[sheetName];
-    matrix = XLSX.utils.sheet_to_json<unknown[]>(worksheet, {
-      header: 1,
-      defval: '',
-    }) as unknown[][];
-  }
-
+  const text = await readSourceText(source);
+  const matrix = parseDelimitedRows(
+    text,
+    detectDelimiter(text, typeof source === 'string' ? '' : source.name)
+  );
   return parseMatrixWithMapping(matrix, mapping, headerRowIndex);
 }
 
@@ -382,8 +341,8 @@ export function parseMatrixWithMapping(
 
     const note =
       mapping.note !== undefined && mapping.note < row.length
-        ? stringifyCell(row[mapping.note]) || 'Imported from Excel'
-        : 'Imported from Excel';
+        ? stringifyCell(row[mapping.note]) || 'Imported from CSV'
+        : 'Imported from CSV';
 
     const caseId =
       mapping.caseId !== undefined && mapping.caseId < row.length
@@ -434,4 +393,99 @@ export function autoSuggestMapping(headers: string[]): Partial<ColumnMapping> {
   if (caseIdIdx !== undefined) mapping.caseId = caseIdIdx;
 
   return mapping;
+}
+
+async function readSourceText(source: File | string): Promise<string> {
+  if (typeof source === 'string') {
+    return source;
+  }
+
+  if (source.size > MAX_IMPORT_BYTES) {
+    throw new Error('csvFileTooLarge');
+  }
+
+  if (/\.(xlsx|xls)$/i.test(source.name)) {
+    throw new Error('binarySpreadsheetUnsupported');
+  }
+
+  return source.text();
+}
+
+function detectDelimiter(text: string, fileName: string): ',' | '\t' {
+  if (/\.tsv$/i.test(fileName)) return '\t';
+  if (/\.csv$/i.test(fileName)) return ',';
+
+  const firstLine = text.split(/\r?\n/, 1)[0] ?? '';
+  const tabs = (firstLine.match(/\t/g) ?? []).length;
+  const commas = (firstLine.match(/,/g) ?? []).length;
+  return tabs > commas ? '\t' : ',';
+}
+
+function parseDelimitedRows(text: string, delimiter: ',' | '\t'): string[][] {
+  const rows: string[][] = [];
+  let row: string[] = [];
+  let cell = '';
+  let inQuotes = false;
+
+  for (let index = 0; index < text.length; index += 1) {
+    const char = text[index];
+    const next = text[index + 1];
+
+    if (char === '"') {
+      if (inQuotes && next === '"') {
+        cell += '"';
+        index += 1;
+      } else {
+        inQuotes = !inQuotes;
+      }
+      continue;
+    }
+
+    if (!inQuotes && char === delimiter) {
+      row.push(cell);
+      cell = '';
+      continue;
+    }
+
+    if (!inQuotes && (char === '\n' || char === '\r')) {
+      if (char === '\r' && next === '\n') {
+        index += 1;
+      }
+      row.push(cell);
+      if (row.some((value) => value.trim() !== '')) {
+        rows.push(row);
+      }
+      row = [];
+      cell = '';
+      continue;
+    }
+
+    cell += char;
+  }
+
+  row.push(cell);
+  if (row.some((value) => value.trim() !== '')) {
+    rows.push(row);
+  }
+
+  return rows;
+}
+
+function serializeDelimitedRows(rows: unknown[][], delimiter: ',' | '\t'): string {
+  return rows
+    .map((row) => row.map((cell) => escapeDelimitedCell(cell, delimiter)).join(delimiter))
+    .join('\r\n');
+}
+
+function escapeDelimitedCell(value: unknown, delimiter: ',' | '\t'): string {
+  const text = stringifyCell(value);
+  if (
+    text.includes('"') ||
+    text.includes('\n') ||
+    text.includes('\r') ||
+    text.includes(delimiter)
+  ) {
+    return `"${text.replace(/"/g, '""')}"`;
+  }
+  return text;
 }

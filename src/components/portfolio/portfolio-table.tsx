@@ -156,10 +156,10 @@ export function PortfolioTable({
     [report, activeMode, buffPricesCny, buffCnyToVndRate]
   );
 
-  // Filters hook
+  // Hook bộ lọc
   const filters = usePortfolioFilters({ rows, buffPricesCny });
 
-  // Table state hook
+  // Hook state bảng
   const tableState = usePortfolioTableState({
     filteredDataCount: filters.filteredData.length,
     globalFilter: filters.globalFilter,

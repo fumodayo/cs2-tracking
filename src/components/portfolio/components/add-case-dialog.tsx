@@ -95,7 +95,7 @@ export function AddCaseDialog({
   const quantity = useWatch({ control, name: 'quantity' });
   const buyDate = useWatch({ control, name: 'buyDate' });
 
-  // Fetch linked accounts
+  // Lấy tài khoản đã liên kết
   const accountsQuery = useQuery({
     queryKey: STEAM_ACCOUNTS_QUERY_KEY,
     queryFn: () => fetchSteamAccounts(),
@@ -111,7 +111,7 @@ export function AddCaseDialog({
 
   const selectedSteamId = selectedAccount?.steamId64 ?? '';
 
-  // Fetch storage units for selected account
+  // Lấy storage unit cho tài khoản đang chọn
   const storageUnitsQuery = useQuery({
     queryKey: STORAGE_UNITS_QUERY_KEY(selectedSteamId),
     queryFn: () => fetchAccountStorageUnits(selectedSteamId),
@@ -130,7 +130,7 @@ export function AddCaseDialog({
     [buyDate, buyPrice, quantity, selectedCase]
   );
 
-  // Load draft or reset state when dialog opens
+  // Nạp bản nháp hoặc reset trạng thái khi dialog mở
   useEffect(() => {
     if (open) {
       try {
@@ -151,7 +151,7 @@ export function AddCaseDialog({
         console.error('Failed to load draft from localStorage', e);
       }
 
-      // Default reset if no draft found
+      // Reset mặc định nếu không có bản nháp
       setSelectedCase(null);
       reset({
         quantity: '1',
@@ -169,10 +169,10 @@ export function AddCaseDialog({
 
   const watchedValues = useWatch({ control });
 
-  // Save state to localStorage as draft
+  // Lưu trạng thái vào localStorage làm bản nháp
   useEffect(() => {
     if (open) {
-      // Check if values are default/empty to clean up the draft
+      // Kiểm tra giá trị mặc định/rỗng để dọn bản nháp
       const isDefault =
         !selectedCase &&
         watchedValues.quantity === '1' &&
@@ -200,7 +200,7 @@ export function AddCaseDialog({
     }
   }, [open, selectedCase, watchedValues, defaultBuffRate]);
 
-  // Recalculate buyPrice when buffPrice or buffRate changes
+  // Tính lại buyPrice khi buffPrice hoặc buffRate thay đổi
   const recalcBuyPrice = useCallback(
     (price: string, rate: string) => {
       const priceNum = parseViFloat(price);
@@ -214,7 +214,7 @@ export function AddCaseDialog({
     [setValue]
   );
 
-  // Recalculate buffPrice when buyPrice or buffRate changes
+  // Tính lại buffPrice khi buyPrice hoặc buffRate thay đổi
   const recalcBuffPrice = useCallback(
     (buyPriceVal: string, rate: string) => {
       const buyPriceNum = parseViFloat(buyPriceVal);
@@ -319,7 +319,7 @@ export function AddCaseDialog({
     try {
       localStorage.removeItem('add_case_dialog_draft');
     } catch {
-      // ignore
+      // bỏ qua
     }
     setSelectedCase(null);
     reset();
@@ -329,7 +329,7 @@ export function AddCaseDialog({
     try {
       localStorage.removeItem('add_case_dialog_draft');
     } catch {
-      // ignore
+      // bỏ qua
     }
     setSelectedCase(null);
     reset({
