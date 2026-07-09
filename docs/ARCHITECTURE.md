@@ -1,17 +1,19 @@
 # Kiến Trúc Dự Án
 
-Tài liệu này giải thích cách dự án CS2 Tracking được tổ chức, các layer chính, luồng dữ liệu và những quy ước cần giữ khi phát triển tiếp.
+Tài liệu này giải thích cách CS2 Tracking được tổ chức, dữ liệu đi qua các layer nào, dữ liệu nào nằm trong MongoDB, dữ liệu nào còn ở `localStorage`, và realtime portfolio đang hoạt động ra sao.
 
 ## Tổng Quan
 
-Dự án là một ứng dụng Next.js App Router có frontend React và API routes chạy trong cùng repo. Kiến trúc hiện tại là **hybrid Clean Architecture**:
+App là một dự án Next.js App Router. Frontend React và API routes nằm chung repo.
 
-- `domain` giữ model và interface cốt lõi.
-- `services` giữ business logic và orchestration server-side.
-- `infrastructure` giữ MongoDB, repository implementation và external drivers.
-- `app/api` là HTTP boundary.
-- `components` là UI.
-- `lib/api-client` là client-side wrapper để UI gọi API nội bộ.
+Kiến trúc hiện tại là hybrid Clean Architecture:
+
+- `components`: UI và hook theo feature.
+- `lib/api-client`: wrapper `fetch` chạy trong browser.
+- `app/api`: HTTP boundary của Next.js.
+- `services`: orchestration và business logic server-side.
+- `domain`: entity, domain type, repository interface.
+- `infrastructure`: MongoDB, repository implementation, Steam/price/external providers.
 
 ```mermaid
 flowchart TD
@@ -21,177 +23,228 @@ flowchart TD
     Services --> Domain["src/domain"]
     Services --> Infrastructure["src/infrastructure"]
     Infrastructure --> Mongo[("MongoDB")]
-    Infrastructure --> External["Steam / CS2Cap / CSFloat / Gemini / Cloudinary"]
+    Infrastructure --> External["Steam / CS2Cap / CSFloat / Gemini / Cloudinary / Ably"]
     ApiRoutes --> Infrastructure
 ```
 
-Một số API route lớn vẫn còn thao tác MongoDB trực tiếp. Đó là nợ kỹ thuật cần trả dần, không phải mẫu lý tưởng nên copy cho code mới.
+Một số API route lớn vẫn thao tác MongoDB trực tiếp. Khi thêm code mới, ưu tiên giữ route mỏng và đưa logic dài sang `src/services`.
 
 ## Bản Đồ Thư Mục
 
-| Thư mục | Vai trò | Ví dụ |
-| --- | --- | --- |
-| `src/app` | Next.js routes, pages, layouts | `app/api/portfolio/route.ts`, `app/portfolio/page.tsx` |
-| `src/components` | UI theo feature | `portfolio`, `inventory-scanner`, `steam-accounts` |
-| `src/lib/api-client` | Hàm `fetch` dùng trong browser | `portfolio-api.ts`, `steam-accounts-api.ts` |
-| `src/services` | Application services/server logic | `portfolio-service.ts`, `scan-service.ts`, `auth-service.ts` |
-| `src/domain` | Model, type, repository interface | `portfolio-item.ts`, `repositories.ts` |
-| `src/infrastructure` | MongoDB, repository, external provider | `db`, `repositories`, `price`, `steam.ts` |
-| `src/stores` | Store nhỏ cho UI progress/toast | `import-store.ts`, `sync-store.ts` |
-| `src/types` | DTO/type dùng chung | `report.ts`, `portfolio-import.ts` |
-| `src/utils` | Helper không gắn feature | `format.ts`, `validation.ts`, `local-api-key.ts` |
-| `src/i18n` | Bản dịch | `vi.json`, `en.json` |
-| `src/data` | Dữ liệu tĩnh | tier, multiplier, sticker map |
+| Thư mục              | Vai trò                               | Ví dụ                                             |
+| -------------------- | ------------------------------------- | ------------------------------------------------- |
+| `src/app`            | Pages, layouts, API routes            | `app/api/portfolio/route.ts`                      |
+| `src/components`     | UI theo feature                       | `dashboard`, `portfolio`, `inventory-scanner`     |
+| `src/lib/api-client` | Hàm `fetch` dùng trong browser        | `portfolio-api.ts`, `user-buff-prices-api.ts`     |
+| `src/services`       | Business logic server-side            | `auth-service.ts`, `realtime/portfolio-events.ts` |
+| `src/domain`         | Type và contract cốt lõi              | `portfolio-item.ts`, `storage-unit.ts`            |
+| `src/infrastructure` | MongoDB, repository, external drivers | `db`, `price`, `steam.ts`                         |
+| `src/hooks`          | Hook dùng chung                       | `use-portfolio-realtime.ts`                       |
+| `src/stores`         | Store nhỏ cho progress/toast          | `import-store.ts`, `sync-store.ts`                |
+| `src/types`          | DTO/type dùng chung                   | `report.ts`, `portfolio-import.ts`                |
+| `src/utils`          | Helper thuần                          | `buff-prices.ts`, `validation.ts`                 |
+| `src/i18n`           | Bản dịch                              | `vi.json`, `en.json`                              |
+| `src/data`           | Dữ liệu tĩnh                          | tier, pattern, sticker map                        |
 
 ## Quy Tắc Dependency
 
-### Hướng phụ thuộc nên giữ
+Hướng phụ thuộc nên giữ:
 
 ```text
 components -> lib/api-client -> app/api
 app/api -> services -> domain
-services -> infrastructure khi cần truy cập driver cụ thể
+services -> infrastructure khi cần DB/driver cụ thể
 infrastructure -> domain
 utils/types -> được dùng bởi nhiều layer
 ```
 
-### Không nên làm
+Không nên làm:
 
 - `services` import từ `components`.
 - `lib/api-client` import từ `components` hoặc `stores`.
-- `domain` import framework, database, React, Next.js.
-- API route mới chứa nhiều logic nghiệp vụ dài hàng trăm dòng.
-- Type dùng chung nằm trong barrel UI rồi bị server/service import ngược.
+- `domain` import MongoDB, Next.js, React hoặc browser API.
+- API route mới chứa quá nhiều orchestration dài hàng trăm dòng.
+- Type dùng chung nằm trong UI rồi bị server import ngược.
 
-### Khi cần thêm code mới
+## Owner, Auth Và Guest
 
-| Nếu bạn đang thêm | Nên đặt ở đâu |
-| --- | --- |
-| UI feature | `src/components/<feature>` |
-| Hook riêng của feature | `src/components/<feature>/hooks` |
-| Fetch wrapper client-side | `src/lib/api-client` |
-| Route handler | `src/app/api/<feature>` |
-| Business logic server-side | `src/services` |
-| Entity hoặc repository interface | `src/domain` |
-| Mongo repository/mapper/driver | `src/infrastructure` |
-| DTO/type dùng chung | `src/types` |
-| Helper thuần | `src/utils` |
+Auth hiện tại dùng Google OAuth và session cookie riêng:
 
-## Layer Chi Tiết
+- Session cookie: `cs2t_session`.
+- OAuth state cookie: `cs2t_oauth_state`.
+- Guest cookie: `cs2t_guest_id`.
 
-### Presentation: `src/components`
+Owner model:
 
-UI được chia theo feature:
+| Trạng thái      | `ownerId`               |
+| --------------- | ----------------------- |
+| Đã login Google | `google:<googleUserId>` |
+| Chưa login      | `guest:<uuid>`          |
 
-- `dashboard`: màn portfolio tổng, cards, import Excel, mutations.
-- `portfolio`: bảng portfolio, dialog thêm/sửa, Storage Unit panel, item detail.
-- `inventory-scanner`: UI quét inventory, filter, column, price retry.
-- `steam-accounts`: liên kết account, cookie, wallet, sync, Storage Unit.
-- `post-analyzer`: nhập bài đăng/HTML/ảnh và hiện kết quả AI.
-- `auth`: session, Google login status, CS2Cap API key modal.
-- `ui`: primitive UI dùng chung.
+Hàm chính:
 
-Nguyên tắc: component nên gọi `src/lib/api-client` hoặc hook feature, không nên gọi MongoDB/secret/server service trực tiếp.
+- `getCurrentUser()` đọc và verify session.
+- `getGuestId()` tạo/đọc guest owner.
+- `getPortfolioOwnerId()` trả về Google owner nếu login, ngược lại guest owner.
+- `getOwnerFilter(ownerId)` tạo filter MongoDB an toàn theo owner.
 
-### Client API: `src/lib/api-client`
+Khi Google callback thành công, `mergeGuestDataToUser()` gộp dữ liệu guest sang user:
 
-Đây là nơi đóng gói các request từ browser tới API routes:
+- `portfolio_items`
+- `storage_units`
+- `portfolio_accounts`
 
-- `portfolio-api.ts`: CRUD portfolio, refresh price, import Excel streaming.
-- `steam-accounts-api.ts`: Steam account, cookie check, Storage Unit list.
-- `buff-api.ts`: refresh giá BUFF163 cho item.
+Nếu có Steam account bị trùng `steamId64`, bản guest trùng sẽ bị xóa để tránh vi phạm unique index.
 
-Layer này nên thuần `fetch`, trả data/error rõ ràng. Nếu cần cập nhật store UI, dùng callback hoặc xử lý trong hook component.
+## Dữ Liệu Trong MongoDB Và localStorage
 
-### API Boundary: `src/app/api`
+### MongoDB là nguồn chính
 
-Route handler nên làm 4 việc:
+Các dữ liệu gắn với tài khoản hoặc portfolio phải nằm trong MongoDB:
 
-1. Đọc session/owner/admin.
-2. Validate input.
-3. Gọi service/repository.
-4. Trả `NextResponse`.
+- Portfolio item
+- Steam account đã link
+- Storage Unit
+- User Google
+- CS2Cap key đã mã hóa
+- BUFF price thủ công của user đã login
+- Event realtime ngắn hạn
 
-Một số route hiện vẫn có logic lớn, đặc biệt:
+### localStorage chỉ dùng cho dữ liệu nhẹ phía client
 
-- `portfolio/import-inventory`
-- `portfolio/accounts/sync`
-- `portfolio/accounts/sync/single`
-- `portfolio/[id]`
+`localStorage` hiện còn dùng cho:
 
-Khi refactor, ưu tiên đưa orchestration sang service riêng để route mỏng hơn.
+- BUFF price thủ công trước khi login: `cs2t_buffPricesCny`
+- Tỷ giá BUFF CNY/VND trong UI
+- Column visibility
+- Draft form
+- Recent imports
+- Một số flag chuyển trang/sync
 
-### Services: `src/services`
+Quy ước: dữ liệu nào cần đồng bộ giữa nhiều máy, nhiều tab hoặc cần tồn tại theo tài khoản thì không nên chỉ lưu ở `localStorage`.
 
-Đây là nơi chứa logic nghiệp vụ:
+## Luồng BUFF Price Thủ Công
 
-- `portfolio-service.ts`: CRUD item có domain rule cơ bản.
-- `portfolio-report-service.ts`: tạo report, tính summary và row.
-- `portfolio-import-service.ts`: import row đã normalize.
-- `portfolio-sync.ts`: logic sync inventory vào portfolio.
-- `scan-service.ts`: scan Steam inventory, market listings, hold, pricing.
-- `scan-cache.ts`, `scan-job-store.ts`: cache và job state.
-- `auth-service.ts`: Google OAuth, session, admin check.
-- `post-analysis-service.ts`: Gemini analysis và history.
-- `crypto-service.ts`: mã hóa/giải mã dữ liệu nhạy cảm.
+Mục tiêu: user chọn giá BUFF ở scanner hay portfolio thì dữ liệu phải giống nhau giữa localhost/production và giữa nhiều máy sau khi login.
 
-Service mới nên tránh import UI. Nếu cần type từ UI, hãy đưa type đó sang `src/types` hoặc `src/domain`.
+Luồng hiện tại:
 
-### Domain: `src/domain`
+```mermaid
+flowchart TD
+    A["Guest chọn giá BUFF"] --> B["Lưu localStorage cs2t_buffPricesCny"]
+    C["User login / mở dashboard hoặc scanner"] --> D{"Có user?"}
+    D -->|Không| B
+    D -->|Có| E["Đọc local BUFF prices"]
+    E --> F["POST /api/user/buff-prices để merge lên MongoDB"]
+    F --> G["Xóa localStorage key"]
+    G --> H["Dùng MongoDB user_buff_prices"]
+```
 
-Layer domain giữ các type/contract cốt lõi:
+API chính:
 
-- `case-item.ts`
-- `portfolio-item.ts`
-- `portfolio-report.ts`
-- `price.ts`
-- `storage-unit.ts`
-- `repositories.ts`
-- `price-provider.ts`
-- `pattern-info.ts`
+- `GET /api/user/buff-prices`: lấy map `{ [marketHashName]: priceCny }`.
+- `POST /api/user/buff-prices`: merge map vào DB.
+- `PUT /api/user/buff-prices`: replace toàn bộ map của user.
+- `PATCH /api/user/buff-prices`: update hoặc xóa một item.
 
-Domain nên thuần TypeScript, không biết MongoDB, Next.js hay React.
+Collection:
 
-### Infrastructure: `src/infrastructure`
+- `user_buff_prices`
+- Unique index: `{ ownerId: 1, marketHashName: 1 }`
 
-Chứa chi tiết kỹ thuật:
+Client helpers:
 
-- `db/mongo-client.ts`: kết nối MongoDB, bootstrap index lazy.
-- `db/ensure-indexes.ts`: tạo index cần thiết.
-- `db/mappers.ts`: map Mongo document <-> domain.
-- `repositories/*`: repository MongoDB.
-- `price/steam-market-price-provider.ts`: Steam Market, CSGOTrader fallback, tỷ giá USD/VND.
-- `steam.ts`: Steam profile, cookie, wallet, eligibility.
-- `cloudinary.ts`: upload ảnh.
-- `rate-limiter.ts`: rate limit MongoDB-backed.
-- `gemini-retry.ts`: retry/backoff cho Gemini.
+- `src/utils/buff-prices.ts`
+- `src/lib/api-client/user-buff-prices-api.ts`
+- `src/components/dashboard/hooks/use-buff-pricing.ts`
+- `src/components/inventory-scanner/use-inventory-scanner.ts`
 
-## Luồng Dữ Liệu Chính
+## Luồng Realtime Portfolio
 
-### 1. Portfolio dashboard
+Mục tiêu: nếu máy 1 xóa/sửa/import/sync portfolio, máy 2 đang mở cùng tài khoản sẽ tự cập nhật UI mà không cần reload.
+
+### Server side
+
+Các route portfolio gọi `publishPortfolioChanged(ownerId, action, detail)` sau mutation.
+
+Event có dạng:
+
+```ts
+type PortfolioRealtimeEvent = {
+  id: string;
+  type: 'portfolio.changed';
+  ownerId: string;
+  action:
+    | 'created'
+    | 'updated'
+    | 'deleted'
+    | 'deleted_many'
+    | 'imported'
+    | 'synced'
+    | 'prices_refreshed';
+  changedAt: string;
+  detail?: Record<string, unknown>;
+};
+```
+
+Khi publish, server làm ba việc:
+
+1. Emit trong memory cho các SSE subscriber cùng Node process.
+2. Ghi event vào MongoDB collection `portfolio_realtime_events`.
+3. Nếu có `ABLY_API_KEY`, publish lên Ably channel `portfolio:<ownerId>`.
+
+### Client side
+
+Dashboard gọi:
+
+```ts
+usePortfolioRealtime(Boolean(user), user ? `google:${user.id}` : undefined);
+```
+
+Hook sẽ:
+
+1. Gọi `/api/realtime/ably-token`.
+2. Nếu token hợp lệ, subscribe Ably event `portfolio.changed`.
+3. Nếu token lỗi, chưa login hoặc thiếu Ably config, fallback sang SSE `/api/realtime/portfolio`.
+4. Khi nhận event, invalidate:
+   - `PORTFOLIO_QUERY_KEY`
+   - `['portfolio-storage-units']`
+   - `STEAM_ACCOUNTS_QUERY_KEY`
+
+### Ably và SSE khác nhau thế nào
+
+| Cơ chế             | Dùng khi                           | Ghi chú                                                |
+| ------------------ | ---------------------------------- | ------------------------------------------------------ |
+| Ably               | Có `ABLY_API_KEY`                  | Phù hợp production, nhiều máy, nhiều region/serverless |
+| SSE fallback       | Không có Ably hoặc Ably token fail | Có MongoDB event log để catch-up ngắn hạn              |
+| In-memory listener | Cùng Node process                  | Nhanh nhưng không đủ cho multi-instance                |
+
+## Luồng Portfolio Dashboard
 
 ```mermaid
 sequenceDiagram
-    participant UI as Portfolio UI
-    participant Client as lib/api-client/portfolio-api
+    participant UI as Dashboard UI
+    participant Client as portfolio-api.ts
     participant API as /api/portfolio
-    participant Service as PortfolioReportService
-    participant Repo as Mongo repositories
+    participant Service as Portfolio services
     participant DB as MongoDB
+    participant RT as Realtime
 
     UI->>Client: fetchPortfolioReport()
     Client->>API: GET /api/portfolio
     API->>Service: build report for ownerId
-    Service->>Repo: load items, cases, prices
-    Repo->>DB: query collections
-    DB-->>Repo: documents
-    Repo-->>Service: domain models
+    Service->>DB: read items, cases, prices
+    DB-->>Service: documents
     Service-->>API: PortfolioReportDto
     API-->>Client: JSON
-    Client-->>UI: report
+    Client-->>UI: render table/cards/charts
+    UI->>Client: mutation
+    Client->>API: POST/PATCH/DELETE
+    API->>DB: write data
+    API->>RT: publishPortfolioChanged()
 ```
 
-### 2. Inventory scan
+## Luồng Inventory Scan
 
 ```mermaid
 sequenceDiagram
@@ -205,97 +258,76 @@ sequenceDiagram
     UI->>API: POST scan request
     API->>Jobs: create job
     API-->>UI: jobId
-    Jobs->>Scan: run in background
+    Jobs->>Scan: run background scan
     Scan->>Steam: fetch inventory/listings
-    Scan->>Price: resolve prices
+    Scan->>Price: resolve Steam/BUFF/sticker prices
     UI->>API: GET scan?jobId=...
     API-->>UI: progress or result
 ```
 
-### 3. Steam account sync
-
-```mermaid
-flowchart TD
-    A["User clicks sync"] --> B["/api/portfolio/accounts/sync"]
-    B --> C["Load linked accounts"]
-    C --> D["Scan each Steam inventory"]
-    D --> E["Match cases/items"]
-    E --> F["Update portfolio_items"]
-    E --> G["Update storage_units"]
-    F --> H["Return streaming progress"]
-    G --> H
-```
-
-### 4. Post analyzer
-
-```mermaid
-flowchart TD
-    A["Text / HTML / image input"] --> B["API post analyzer route"]
-    B --> C["Rate limit + validation"]
-    C --> D["Create fingerprint"]
-    D --> E{"Cache hit?"}
-    E -->|Yes| F["Return cached result"]
-    E -->|No| G["Upload image if needed"]
-    G --> H["Call Gemini"]
-    H --> I["Normalize result"]
-    I --> J["Save history"]
-    J --> K["Return analysis"]
-```
-
 ## MongoDB Collections
 
-| Collection | Vai trò | Ghi chú |
-| --- | --- | --- |
-| `users` | User Google OAuth | unique theo provider/providerAccountId |
-| `portfolio_accounts` | Steam account liên kết | ownerId + steamId64 unique |
-| `portfolio_items` | Item trong portfolio | ownerId là filter quan trọng |
-| `cases` | Catalog case/item | search theo name/marketHashName |
-| `price_snapshots` | Lịch sử giá | caseId + capturedAt |
-| `storage_units` | Storage Unit của Steam | ownerId + steamId64 |
-| `inventory_scan_cache` | Cache scan inventory | TTL theo `expiresAt` |
-| `scan_jobs` | Job scan ngắn hạn | TTL 1 giờ |
-| `post_analysis_history` | Kết quả/cached AI analysis | fingerprint unique |
-| `rate_limits` | Rate limit theo key/IP | TTL theo `updatedAt` |
-| `bug_reports` | Bug report của user | admin đọc/đổi status |
+| Collection                  | Vai trò                       | Index đáng chú ý                                   |
+| --------------------------- | ----------------------------- | -------------------------------------------------- |
+| `users`                     | User Google, CS2Cap key       | `id` unique, `provider + providerAccountId` unique |
+| `portfolio_items`           | Item portfolio                | `ownerId`, `ownerId + createdAt`                   |
+| `portfolio_accounts`        | Steam account đã link         | `ownerId + steamId64` unique                       |
+| `storage_units`             | Storage Unit                  | `ownerId`, `ownerId + steamId64`                   |
+| `user_buff_prices`          | BUFF price thủ công theo user | `ownerId + marketHashName` unique                  |
+| `portfolio_realtime_events` | Event realtime ngắn hạn       | `ownerId + createdAt`, TTL 1 giờ                   |
+| `inventory_scan_cache`      | Cache scan inventory          | TTL theo `expiresAt`, `steamId64`, `cacheKey`      |
+| `scan_jobs`                 | Job scan ngắn hạn             | `id` unique, TTL 1 giờ                             |
+| `rate_limits`               | Rate limit                    | `key` unique, TTL 1 giờ                            |
+| `bug_reports`               | Bug report                    | `createdAt`, `status`                              |
+| `cases`                     | Catalog case/item             | Tùy repository/search                              |
+| `price_snapshots`           | Lịch sử giá                   | Tùy price service                                  |
+| `post_analysis_history`     | Cache/lịch sử AI analyzer     | Fingerprint/history                                |
 
-Index được tạo trong `src/infrastructure/db/ensure-indexes.ts`. Hàm này được gọi lazy trong `getDatabase()`.
-
-## Owner, Auth Và Admin
-
-- User đăng nhập qua Google OAuth.
-- User chưa đăng nhập có guest owner/session riêng.
-- Data user-facing cần filter bằng `ownerId`.
-- Helper owner filter nằm ở `src/infrastructure/db/owner-filter.ts`.
-- Admin được xác định qua `ADMIN_EMAILS`.
-- Trong production, admin route/API không nên fail-open nếu chưa cấu hình admin.
-
-## Bảo Mật Dữ Liệu
-
-- Steam cookie và CS2Cap key cần được mã hóa trước khi lưu.
-- Secret chỉ được đọc server-side từ env.
-- Image proxy cần giới hạn domain hợp lệ để tránh SSRF.
-- Rate limit áp dụng cho API tốn tài nguyên cao: Gemini, CS2Cap validate, price retry, bug report.
-- File upload cần validate mime type, kích thước và số lượng.
-- Khi thao tác Storage Unit/portfolio, luôn kèm owner filter.
+Index được tạo trong `src/infrastructure/db/ensure-indexes.ts` khi `getDatabase()` chạy lần đầu.
 
 ## External Integrations
 
-| Service | Dùng cho | Vị trí chính |
-| --- | --- | --- |
-| Steam Community | profile, inventory, market listings, wallet | `src/infrastructure/steam.ts`, `src/services/scan-service.ts` |
-| Steam Market | giá Steam | `src/infrastructure/price/steam-market-price-provider.ts` |
-| CSGOTrader | fallback giá khi Steam rate limit | `src/infrastructure/price/steam-market-price-provider.ts` |
-| CS2Cap | giá BUFF163 và validate key | `src/utils/api-client.ts`, `src/services/parser/buff-price-client.ts` |
-| CSFloat | inspect float/paint seed | `src/services/pattern/csfloat-client.ts` |
-| Gemini | phân tích text/HTML/ảnh | `src/services/parser/gemini-client.ts` |
-| Cloudinary | upload ảnh cho analyzer/bug report | `src/infrastructure/cloudinary.ts` |
+| Service         | Dùng cho                             | File chính                                                    | Env                                        |
+| --------------- | ------------------------------------ | ------------------------------------------------------------- | ------------------------------------------ |
+| Google OAuth    | Đăng nhập                            | `src/services/auth-service.ts`                                | `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` |
+| Ably            | Realtime portfolio production        | `src/services/realtime/portfolio-events.ts`                   | `ABLY_API_KEY`                             |
+| Steam Community | Profile, inventory, listings, wallet | `src/infrastructure/steam.ts`, `src/services/scan-service.ts` | User cookie                                |
+| Steam Market    | Giá Steam                            | `src/infrastructure/price/steam-market-price-provider.ts`     | Không bắt buộc                             |
+| CSGOTrader      | Fallback giá Steam                   | `src/infrastructure/price/steam-market-price-provider.ts`     | Không bắt buộc                             |
+| CS2Cap          | Giá BUFF163 và validate key          | `src/services/parser/buff-price-client.ts`                    | `CS2CAP_API_KEY`                           |
+| CSFloat         | Inspect float/paint seed             | `src/services/pattern/csfloat-client.ts`                      | `CSFLOAT_API_KEY`                          |
+| Gemini          | Phân tích text/HTML/ảnh              | `src/services/parser/gemini-client.ts`                        | `GEMINI_API_KEY`, `GEMINI_MODEL`           |
+| Cloudinary      | Upload ảnh                           | `src/infrastructure/cloudinary.ts`                            | `CLOUDINARY_*`                             |
+
+## Bảo Mật Dữ Liệu
+
+- Secret chỉ đọc server-side từ env.
+- Google session ký bằng `AUTH_SECRET`.
+- Steam cookie và CS2Cap key cần được mã hóa trước khi lưu.
+- Không đưa `ABLY_API_KEY` vào client. Client chỉ nhận Ably token từ `/api/realtime/ably-token`.
+- Route đọc/ghi data user phải xác định `ownerId` sớm và filter mọi query/update/delete theo owner.
+- Image proxy cần giới hạn domain hợp lệ để tránh SSRF.
+- API tốn tài nguyên cần rate limit: Gemini, CS2Cap validate, price retry, bug report.
+
+## Khi Thêm Code Mới
+
+| Nếu đang thêm                  | Nên đặt ở đâu                    |
+| ------------------------------ | -------------------------------- |
+| UI feature                     | `src/components/<feature>`       |
+| Hook riêng của feature         | `src/components/<feature>/hooks` |
+| Hook dùng chung                | `src/hooks`                      |
+| Fetch wrapper browser          | `src/lib/api-client`             |
+| API route                      | `src/app/api/<feature>`          |
+| Business logic server-side     | `src/services`                   |
+| Entity/repository interface    | `src/domain`                     |
+| Mongo repository/mapper/driver | `src/infrastructure`             |
+| DTO/type dùng chung            | `src/types`                      |
+| Helper thuần                   | `src/utils`                      |
 
 ## Refactor Roadmap
 
-Những điểm nên ưu tiên khi có thời gian:
-
-1. Tách route import/sync lớn thành service nhỏ hơn.
-2. Chia component rất lớn thành subcomponent/hook theo domain UI.
-3. Giảm việc `services` phụ thuộc trực tiếp `infrastructure` nếu muốn đi theo Clean Architecture chặt hơn.
-4. Chuẩn hóa DTO cho request/response API.
-5. Bổ sung test cho service quan trọng trước khi refactor sync/import sâu hơn.
+1. Tách các route import/sync lớn thành service nhỏ hơn.
+2. Chuẩn hóa DTO request/response cho các API lớn.
+3. Bổ sung test cho realtime publish và BUFF price persistence.
+4. Giảm logic MongoDB trực tiếp trong API route mới.
+5. Tách các component dashboard/scanner lớn thành hook/subcomponent nhỏ hơn khi cần sửa sâu.
