@@ -1,37 +1,34 @@
-"use client";
+'use client';
 
-import React, {
-  useCallback,
-  useEffect,
-  useState,
-  useMemo,
-} from "react";
-import { useTranslation } from "react-i18next";
-import { Plus } from "lucide-react";
-import { CaseItemData } from "./types";
-import {
-  CaseSearchSelect,
-  type CaseItemSearchData,
-} from "@/components/portfolio";
-import { useQuery } from "@tanstack/react-query";
+import React, { useCallback, useEffect, useState, useMemo } from 'react';
+import { useTranslation } from 'react-i18next';
+import { Plus } from 'lucide-react';
+import { CaseItemData } from './types';
+import { CaseSearchSelect, type CaseItemSearchData } from '@/components/portfolio';
+import { useQuery } from '@tanstack/react-query';
 import {
   STEAM_ACCOUNTS_QUERY_KEY,
   STORAGE_UNITS_QUERY_KEY,
   fetchSteamAccounts,
   fetchAccountStorageUnits,
-} from "@/lib/api-client/steam-accounts-api";
+} from '@/lib/api-client/steam-accounts-api';
 import {
   Dialog,
   DialogContent,
   DialogDescription,
   DialogHeader,
   DialogTitle,
-} from "@/components/ui/dialog";
-import { Input } from "@/components/ui/input";
-import { DatePicker } from "@/components/ui/date-picker";
-import { Button } from "@/components/ui/button";
-import { Select } from "@/components/ui/select";
-import { formatInputDate, formatIntegerViInput as formatIntegerVi, formatDecimalViInput as formatDecimalVi, parseViFloat } from "@/utils/format";
+} from '@/components/ui/dialog';
+import { Input } from '@/components/ui/input';
+import { DatePicker } from '@/components/ui/date-picker';
+import { Button } from '@/components/ui/button';
+import { Select } from '@/components/ui/select';
+import {
+  formatInputDate,
+  formatIntegerViInput as formatIntegerVi,
+  formatDecimalViInput as formatDecimalVi,
+  parseViFloat,
+} from '@/utils/format';
 
 type AddCaseSearchProps = {
   onAdd: (
@@ -44,13 +41,11 @@ type AddCaseSearchProps = {
     storageUnitId?: string,
     buffPriceManual?: number,
     buffRateManual?: number,
-    storageUnitName?: string,
+    storageUnitName?: string
   ) => void;
   scannedAccounts?: Array<{ steamId64: string; name: string }>;
   defaultBuffRate?: number;
 };
-
-
 
 export const AddCaseSearch: React.FC<AddCaseSearchProps> = ({
   onAdd,
@@ -60,63 +55,61 @@ export const AddCaseSearch: React.FC<AddCaseSearchProps> = ({
   const { t } = useTranslation();
   const [isOpen, setIsOpen] = useState(false);
 
-  // Dialog / Form states
-  const [selectedCase, setSelectedCase] = useState<CaseItemSearchData | null>(
-    null,
-  );
-  const [quantity, setQuantity] = useState("1");
-  const [buyPrice, setBuyPrice] = useState("");
+  // Trạng thái dialog / form
+  const [selectedCase, setSelectedCase] = useState<CaseItemSearchData | null>(null);
+  const [quantity, setQuantity] = useState('1');
+  const [buyPrice, setBuyPrice] = useState('');
   const [buyDate, setBuyDate] = useState(formatInputDate(new Date()));
-  const [buffPrice, setBuffPrice] = useState("");
+  const [buffPrice, setBuffPrice] = useState('');
   const [buffRate, setBuffRate] = useState(formatIntegerVi(defaultBuffRate));
-  const [selectedAccountId, setSelectedAccountId] = useState("");
-  const [selectedStorageUnitId, setSelectedStorageUnitId] = useState("");
+  const [selectedAccountId, setSelectedAccountId] = useState('');
+  const [selectedStorageUnitId, setSelectedStorageUnitId] = useState('');
   const [error, setError] = useState<string | null>(null);
 
-  // Reset states
+  // Reset trạng thái
   const resetForm = useCallback(() => {
     setSelectedCase(null);
-    setQuantity("1");
-    setBuyPrice("");
+    setQuantity('1');
+    setBuyPrice('');
     setBuyDate(formatInputDate(new Date()));
-    setBuffPrice("");
+    setBuffPrice('');
     setBuffRate(formatIntegerVi(defaultBuffRate));
-    setSelectedAccountId("");
-    setSelectedStorageUnitId("");
+    setSelectedAccountId('');
+    setSelectedStorageUnitId('');
     setError(null);
   }, [defaultBuffRate]);
 
-  // Load draft or reset state when dialog opens
+  // Nạp bản nháp hoặc reset trạng thái khi dialog mở
   useEffect(() => {
     if (isOpen) {
       try {
-        const savedDraft = localStorage.getItem("add_case_search_draft");
+        const savedDraft = localStorage.getItem('add_case_search_draft');
         if (savedDraft) {
           const draft = JSON.parse(savedDraft);
           setSelectedCase(draft.selectedCase || null);
-          setQuantity(draft.quantity ?? "1");
-          setBuyPrice(draft.buyPrice ?? "");
+          setQuantity(draft.quantity ?? '1');
+          setBuyPrice(draft.buyPrice ?? '');
           setBuyDate(draft.buyDate ?? formatInputDate(new Date()));
-          setBuffPrice(draft.buffPrice ?? "");
+          setBuffPrice(draft.buffPrice ?? '');
           setBuffRate(draft.buffRate ?? formatIntegerVi(defaultBuffRate));
-          setSelectedAccountId(draft.selectedAccountId ?? "");
-          setSelectedStorageUnitId(draft.selectedStorageUnitId ?? "");
+          setSelectedAccountId(draft.selectedAccountId ?? '');
+          setSelectedStorageUnitId(draft.selectedStorageUnitId ?? '');
           setError(null);
           return;
         }
       } catch (e) {
-        console.error("Failed to load draft from localStorage", e);
+        console.error('Failed to load draft from localStorage', e);
       }
       resetForm();
     }
   }, [isOpen, defaultBuffRate, resetForm]);
 
-  // Save state to localStorage as draft
+  // Lưu trạng thái vào localStorage làm bản nháp
   useEffect(() => {
     if (isOpen) {
       const isDefault =
         !selectedCase &&
-        quantity === "1" &&
+        quantity === '1' &&
         !buyPrice &&
         !buffPrice &&
         buffRate === formatIntegerVi(defaultBuffRate) &&
@@ -125,7 +118,7 @@ export const AddCaseSearch: React.FC<AddCaseSearchProps> = ({
 
       try {
         if (isDefault) {
-          localStorage.removeItem("add_case_search_draft");
+          localStorage.removeItem('add_case_search_draft');
         } else {
           const draft = {
             selectedCase,
@@ -137,10 +130,10 @@ export const AddCaseSearch: React.FC<AddCaseSearchProps> = ({
             selectedAccountId,
             selectedStorageUnitId,
           };
-          localStorage.setItem("add_case_search_draft", JSON.stringify(draft));
+          localStorage.setItem('add_case_search_draft', JSON.stringify(draft));
         }
       } catch (e) {
-        console.error("Failed to update draft in localStorage", e);
+        console.error('Failed to update draft in localStorage', e);
       }
     }
   }, [
@@ -156,7 +149,7 @@ export const AddCaseSearch: React.FC<AddCaseSearchProps> = ({
     defaultBuffRate,
   ]);
 
-  // Fetch linked accounts from database
+  // Lấy tài khoản đã liên kết từ database
   const accountsQuery = useQuery({
     queryKey: STEAM_ACCOUNTS_QUERY_KEY,
     queryFn: () => fetchSteamAccounts(),
@@ -166,7 +159,7 @@ export const AddCaseSearch: React.FC<AddCaseSearchProps> = ({
 
   const dbAccounts = useMemo(() => accountsQuery.data ?? [], [accountsQuery.data]);
 
-  // Combine database and scanned accounts uniquely
+  // Gộp duy nhất tài khoản từ database và từ kết quả quét
   const accounts = useMemo(() => {
     const map = new Map<string, { steamId64: string; name: string }>();
     if (scannedAccounts) {
@@ -184,9 +177,9 @@ export const AddCaseSearch: React.FC<AddCaseSearchProps> = ({
     return accounts.find((acc) => acc.steamId64 === selectedAccountId);
   }, [accounts, selectedAccountId]);
 
-  const selectedSteamId = selectedAccount?.steamId64 ?? "";
+  const selectedSteamId = selectedAccount?.steamId64 ?? '';
 
-  // Fetch storage units for the selected account
+  // Lấy storage unit cho tài khoản đang chọn
   const storageUnitsQuery = useQuery({
     queryKey: STORAGE_UNITS_QUERY_KEY(selectedSteamId),
     queryFn: () => fetchAccountStorageUnits(selectedSteamId),
@@ -198,10 +191,10 @@ export const AddCaseSearch: React.FC<AddCaseSearchProps> = ({
 
   const handleAccountChange = (val: string) => {
     setSelectedAccountId(val);
-    setSelectedStorageUnitId("");
+    setSelectedStorageUnitId('');
   };
 
-  // Recalculate buyPrice when buffPrice or buffRate changes
+  // Tính lại buyPrice khi buffPrice hoặc buffRate thay đổi
   const handleBuffPriceChange = (val: string) => {
     const formatted = formatDecimalVi(val);
     setBuffPrice(formatted);
@@ -210,7 +203,7 @@ export const AddCaseSearch: React.FC<AddCaseSearchProps> = ({
     if (!isNaN(priceNum) && !isNaN(rateNum)) {
       setBuyPrice(formatIntegerVi(Math.round(priceNum * rateNum)));
     } else {
-      setBuyPrice("");
+      setBuyPrice('');
     }
   };
 
@@ -222,7 +215,7 @@ export const AddCaseSearch: React.FC<AddCaseSearchProps> = ({
     if (!isNaN(priceNum) && !isNaN(rateNum)) {
       setBuyPrice(formatIntegerVi(Math.round(priceNum * rateNum)));
     } else if (!val) {
-      setBuyPrice("");
+      setBuyPrice('');
     }
   };
 
@@ -232,7 +225,7 @@ export const AddCaseSearch: React.FC<AddCaseSearchProps> = ({
     if (!isNaN(buyPriceNum) && !isNaN(rateNum) && rateNum > 0) {
       setBuffPrice(formatDecimalVi(buyPriceNum / rateNum));
     } else if (!buyPriceVal) {
-      setBuffPrice("");
+      setBuffPrice('');
     }
   };
 
@@ -245,7 +238,7 @@ export const AddCaseSearch: React.FC<AddCaseSearchProps> = ({
   const canSubmit = useMemo(() => {
     return (
       selectedCase &&
-      Number(quantity.replace(/\D/g, "")) > 0 &&
+      Number(quantity.replace(/\D/g, '')) > 0 &&
       parseViFloat(buyPrice) > 0 &&
       buyDate
     );
@@ -256,7 +249,7 @@ export const AddCaseSearch: React.FC<AddCaseSearchProps> = ({
     setError(null);
 
     if (!selectedCase || !canSubmit) {
-      setError(t("inventoryScanner.errInvalidPriceQty"));
+      setError(t('inventoryScanner.errInvalidPriceQty'));
       return;
     }
 
@@ -264,12 +257,10 @@ export const AddCaseSearch: React.FC<AddCaseSearchProps> = ({
       ? [{ steamId64: selectedAccount.steamId64, name: selectedAccount.name }]
       : undefined;
 
-    const selectedStorageUnit = storageUnits.find(
-      (su) => su.id === selectedStorageUnitId,
-    );
+    const selectedStorageUnit = storageUnits.find((su) => su.id === selectedStorageUnitId);
 
     const parsedBuyPrice = parseViFloat(buyPrice) || 0;
-    const parsedQuantity = Number(quantity.replace(/\D/g, "")) || 1;
+    const parsedQuantity = Number(quantity.replace(/\D/g, '')) || 1;
 
     onAdd(
       {
@@ -284,13 +275,13 @@ export const AddCaseSearch: React.FC<AddCaseSearchProps> = ({
       selectedStorageUnitId || undefined,
       parseViFloat(buffPrice) || undefined,
       parseViFloat(buffRate) || undefined,
-      selectedStorageUnit?.name || undefined,
+      selectedStorageUnit?.name || undefined
     );
 
     try {
-      localStorage.removeItem("add_case_search_draft");
+      localStorage.removeItem('add_case_search_draft');
     } catch {
-      // ignore
+      // bỏ qua
     }
 
     setIsOpen(false);
@@ -302,25 +293,25 @@ export const AddCaseSearch: React.FC<AddCaseSearchProps> = ({
       <Button
         type="button"
         onClick={() => setIsOpen(true)}
-        className="inline-flex h-10 items-center gap-2 rounded-md bg-accent px-4 text-sm font-semibold text-accent-foreground shadow-[0_2px_10px_rgba(59,130,246,0.2)] transition-all hover:bg-accent-hover"
+        className="bg-accent text-accent-foreground hover:bg-accent-hover inline-flex h-10 items-center gap-2 rounded-md px-4 text-sm font-semibold shadow-[0_2px_10px_rgba(59,130,246,0.2)] transition-all"
       >
         <Plus className="size-4" />
-        {t("inventoryScanner.addItem")}
+        {t('inventoryScanner.addItem')}
       </Button>
 
       <Dialog open={isOpen} onOpenChange={setIsOpen}>
-        <DialogContent className="border-border max-h-[95vh] max-w-xl overflow-y-auto rounded-[6px] bg-card p-6 text-foreground shadow-xl backdrop-blur-3xl">
+        <DialogContent className="border-border bg-card text-foreground max-h-[95vh] max-w-xl overflow-y-auto rounded-[6px] p-6 shadow-xl backdrop-blur-3xl">
           <form onSubmit={handleSubmit} className="space-y-5">
             <DialogHeader>
               <DialogTitle className="text-xl font-bold dark:text-stone-200">
-                {t("inventoryScanner.addItem")}
+                {t('inventoryScanner.addItem')}
               </DialogTitle>
               <DialogDescription className="text-xs text-stone-500 dark:text-stone-400">
-                {t("inventoryScanner.addItemDesc")}
+                {t('inventoryScanner.addItemDesc')}
               </DialogDescription>
             </DialogHeader>
 
-            {/* Case Selection area */}
+            {/* Khu chọn case */}
             <CaseSearchSelect
               selectedCase={selectedCase}
               onSelect={(caseItem, price) => {
@@ -330,77 +321,77 @@ export const AddCaseSearch: React.FC<AddCaseSearchProps> = ({
                 }
               }}
               onClear={() => setSelectedCase(null)}
-              label={t("inventoryScanner.searchItem")}
+              label={t('inventoryScanner.searchItem')}
             />
 
             {selectedCase && (
               <>
-                {/* Pricing Formula Row */}
+                {/* Hàng công thức giá */}
                 <div className="space-y-2">
                   <div className="flex flex-col items-stretch gap-2 sm:flex-row sm:items-end">
-                    {/* Buff Price Input */}
+                    {/* Ô nhập giá Buff */}
                     <div className="min-w-0 flex-1">
                       <label className="mb-1 block text-[10px] font-semibold text-stone-500 dark:text-stone-400">
-                        {t("inventoryScanner.buffPriceCny")}
+                        {t('inventoryScanner.buffPriceCny')}
                       </label>
                       <Input
                         value={buffPrice}
                         onChange={(e) => handleBuffPriceChange(e.target.value)}
-                        placeholder={t("inventoryScanner.placeholderBuffPrice")}
+                        placeholder={t('inventoryScanner.placeholderBuffPrice')}
                         className="h-10 text-sm"
                       />
                     </div>
 
-                    {/* Multiplication Sign */}
-                    <div className="hidden items-center justify-center px-1 pb-2.5 text-sm font-black text-stone-400 dark:text-stone-600 select-none sm:flex">
+                    {/* Dấu nhân */}
+                    <div className="hidden items-center justify-center px-1 pb-2.5 text-sm font-black text-stone-400 select-none sm:flex dark:text-stone-600">
                       ×
                     </div>
-                    <div className="text-center text-xs font-black text-stone-400 dark:text-stone-600 select-none sm:hidden">
-                      {t("inventoryScanner.multipliedByRate")}
+                    <div className="text-center text-xs font-black text-stone-400 select-none sm:hidden dark:text-stone-600">
+                      {t('inventoryScanner.multipliedByRate')}
                     </div>
 
-                    {/* Exchange Rate Input */}
+                    {/* Ô nhập tỷ giá */}
                     <div className="min-w-0 flex-1">
                       <label className="mb-1 block text-[10px] font-semibold text-stone-500 dark:text-stone-400">
-                        {t("inventoryScanner.buffRate")}
+                        {t('inventoryScanner.buffRate')}
                       </label>
                       <Input
                         value={buffRate}
                         onChange={(e) => handleBuffRateChange(e.target.value)}
-                        placeholder={t("inventoryScanner.placeholderBuffRate")}
+                        placeholder={t('inventoryScanner.placeholderBuffRate')}
                         className="h-10 text-sm"
                       />
                     </div>
 
-                    {/* Equals Sign */}
-                    <div className="hidden items-center justify-center px-1 pb-2.5 text-sm font-black text-stone-400 dark:text-stone-600 select-none sm:flex">
+                    {/* Dấu bằng */}
+                    <div className="hidden items-center justify-center px-1 pb-2.5 text-sm font-black text-stone-400 select-none sm:flex dark:text-stone-600">
                       =
                     </div>
-                    <div className="text-center text-xs font-black text-stone-400 dark:text-stone-600 select-none sm:hidden">
-                      {t("inventoryScanner.equalsVnd")}
+                    <div className="text-center text-xs font-black text-stone-400 select-none sm:hidden dark:text-stone-600">
+                      {t('inventoryScanner.equalsVnd')}
                     </div>
 
-                    {/* Final Buy Price Input */}
+                    {/* Ô nhập giá mua cuối */}
                     <div className="min-w-0 flex-[1.2]">
-                      <label className="mb-1 block text-[10px] font-bold text-accent">
-                        {t("inventoryScanner.buyPricePerCaseVnd")}
+                      <label className="text-accent mb-1 block text-[10px] font-bold">
+                        {t('inventoryScanner.buyPricePerCaseVnd')}
                       </label>
                       <Input
                         value={buyPrice}
                         onChange={(event) => handleBuyPriceChange(event.target.value)}
                         inputMode="numeric"
-                        placeholder={t("inventoryScanner.placeholderBuyPrice")}
-                        className="h-10 text-sm font-bold text-accent focus:border-accent/80 focus:ring-1 focus:ring-accent/30"
+                        placeholder={t('inventoryScanner.placeholderBuyPrice')}
+                        className="text-accent focus:border-accent/80 focus:ring-accent/30 h-10 text-sm font-bold focus:ring-1"
                       />
                     </div>
                   </div>
                 </div>
 
-                {/* Quantity & Buy Date Side by Side */}
+                {/* Số lượng và ngày mua đặt cạnh nhau */}
                 <div className="grid grid-cols-2 gap-4">
                   <div>
                     <label className="mb-1.5 block text-xs font-semibold text-stone-600 dark:text-stone-300">
-                      {t("inventoryScanner.quantity")}
+                      {t('inventoryScanner.quantity')}
                     </label>
                     <Input
                       value={quantity}
@@ -411,7 +402,7 @@ export const AddCaseSearch: React.FC<AddCaseSearchProps> = ({
                   </div>
                   <div>
                     <label className="mb-1.5 block text-xs font-semibold text-stone-600 dark:text-stone-300">
-                      {t("inventoryScanner.buyDate")}
+                      {t('inventoryScanner.buyDate')}
                     </label>
                     <DatePicker
                       value={buyDate}
@@ -427,18 +418,18 @@ export const AddCaseSearch: React.FC<AddCaseSearchProps> = ({
                       className="mb-1.5 block text-xs font-semibold text-stone-600 dark:text-stone-300"
                       htmlFor="account-select"
                     >
-                      {t("inventoryScanner.owningAccount")}
+                      {t('inventoryScanner.owningAccount')}
                     </label>
                     <Select
-                      value={selectedAccountId || "__manual__"}
-                      onValueChange={(val) => handleAccountChange(val === "__manual__" ? "" : val)}
+                      value={selectedAccountId || '__manual__'}
+                      onValueChange={(val) => handleAccountChange(val === '__manual__' ? '' : val)}
                     >
                       <Select.Trigger id="account-select" className="h-10">
-                        <Select.Value placeholder={t("inventoryScanner.manualNoAccount")} />
+                        <Select.Value placeholder={t('inventoryScanner.manualNoAccount')} />
                       </Select.Trigger>
                       <Select.Content>
                         <Select.Item value="__manual__">
-                          {t("inventoryScanner.manualNoAccount")}
+                          {t('inventoryScanner.manualNoAccount')}
                         </Select.Item>
                         {accounts.map((acc) => (
                           <Select.Item key={acc.steamId64} value={acc.steamId64}>
@@ -455,27 +446,29 @@ export const AddCaseSearch: React.FC<AddCaseSearchProps> = ({
                       className="mb-1.5 block text-xs font-semibold text-stone-600 dark:text-stone-300"
                       htmlFor="storage-unit-select"
                     >
-                      {t("inventoryScanner.storedInStorageUnit")}
+                      {t('inventoryScanner.storedInStorageUnit')}
                     </label>
                     <Select
-                      value={selectedStorageUnitId || "__inventory__"}
-                      onValueChange={(val) => setSelectedStorageUnitId(val === "__inventory__" ? "" : val)}
+                      value={selectedStorageUnitId || '__inventory__'}
+                      onValueChange={(val) =>
+                        setSelectedStorageUnitId(val === '__inventory__' ? '' : val)
+                      }
                       disabled={!selectedAccountId || storageUnits.length === 0}
                     >
                       <Select.Trigger id="storage-unit-select" className="h-10">
                         <Select.Value
                           placeholder={
                             !selectedAccountId
-                              ? t("inventoryScanner.selectAccountFirst")
+                              ? t('inventoryScanner.selectAccountFirst')
                               : storageUnits.length === 0
-                                ? t("inventoryScanner.noStorageUnits")
-                                : t("inventoryScanner.defaultInventory")
+                                ? t('inventoryScanner.noStorageUnits')
+                                : t('inventoryScanner.defaultInventory')
                           }
                         />
                       </Select.Trigger>
                       <Select.Content>
                         <Select.Item value="__inventory__">
-                          {t("inventoryScanner.defaultInventory")}
+                          {t('inventoryScanner.defaultInventory')}
                         </Select.Item>
                         {storageUnits.map((su) => (
                           <Select.Item key={su.id} value={su.id}>
@@ -491,38 +484,38 @@ export const AddCaseSearch: React.FC<AddCaseSearchProps> = ({
 
             {error && <p className="text-xs text-red-500 dark:text-red-400">{error}</p>}
 
-            {/* Footer Actions */}
+            {/* Thao tác phần cuối */}
             <div className="mt-6 flex justify-end gap-2 pt-4">
               <Button
                 variant="ghost"
                 type="button"
                 onClick={() => {
                   try {
-                    localStorage.removeItem("add_case_search_draft");
+                    localStorage.removeItem('add_case_search_draft');
                   } catch {
-                    // ignore
+                    // bỏ qua
                   }
                   resetForm();
                 }}
-                className="h-9 text-xs text-muted-foreground hover:text-foreground mr-auto"
+                className="text-muted-foreground hover:text-foreground mr-auto h-9 text-xs"
               >
-                {t("portfolio.clearDraft", "Clear draft")}
+                {t('portfolio.clearDraft', 'Clear draft')}
               </Button>
               <Button
                 variant="outline"
                 type="button"
                 onClick={() => {
                   try {
-                    localStorage.removeItem("add_case_search_draft");
+                    localStorage.removeItem('add_case_search_draft');
                   } catch {
-                    // ignore
+                    // bỏ qua
                   }
                   setIsOpen(false);
                   resetForm();
                 }}
                 className="h-9 px-4 text-xs"
               >
-                {t("common.cancel")}
+                {t('common.cancel')}
               </Button>
               {selectedCase && (
                 <Button
@@ -531,7 +524,7 @@ export const AddCaseSearch: React.FC<AddCaseSearchProps> = ({
                   variant="primary"
                   className="h-9 px-4 text-xs"
                 >
-                  {t("inventoryScanner.addToList")}
+                  {t('inventoryScanner.addToList')}
                 </Button>
               )}
             </div>

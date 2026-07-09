@@ -20,7 +20,7 @@ export const BuffRateCard: React.FC<BuffRateCardProps> = ({
   className,
 }) => {
   const { t } = useTranslation();
-  // Auto-assign Coins icon
+  // Tự gán icon Coins
   const getIcon = () => {
     return icon || <Coins className="size-5" />;
   };

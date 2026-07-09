@@ -41,7 +41,7 @@ export function usePatternInspect() {
             errMsg = errData.message;
           }
         } catch {
-          /* ignore invalid error payload */
+          /* bỏ qua payload lỗi không hợp lệ */
         }
         return { success: false, error: errMsg };
       }

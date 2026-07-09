@@ -51,7 +51,7 @@ export function AccountCookieConfig({
 
   const [isFamilyViewEnabled, setIsFamilyViewEnabled] = useState(false);
 
-  // Sync initial values from acc when opened
+  // Đồng bộ giá trị ban đầu từ acc khi mở
   useEffect(() => {
     if (isExpanded) {
       if (acc.steamCookie) {
@@ -88,7 +88,7 @@ export function AccountCookieConfig({
       onUpdateSessionId(sSessionId);
     }
 
-    // Extract the clean token if the user pasted a full cookie string
+    // Trích token sạch nếu user dán nguyên chuỗi cookie
     const parsedCookie = parseSteamCookies(cookie.trim());
     const cleanCookieToken = parsedCookie.steamLoginSecure || cookie.trim();
 

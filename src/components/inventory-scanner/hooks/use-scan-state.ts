@@ -73,7 +73,7 @@ export function useScanState({ state, dispatch, scanAbortControllerRef }: UseSca
   );
 
   /**
-   * Periodically polls progress on the server for a queued background scan job.
+   * Định kỳ polling tiến độ trên server cho job quét nền đang xếp hàng.
    */
   const pollScanProgress = useCallback(
     async (jobId: string, accountId: string, signal?: AbortSignal): Promise<ScanProgress> => {

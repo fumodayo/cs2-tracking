@@ -26,7 +26,7 @@ export function useScannerPortfolioImport({
 }: UseScannerPortfolioImportProps) {
   const { t } = useTranslation();
   /**
-   * Imports all scanned items directly to user's personal tracking portfolio.
+   * Import trực tiếp toàn bộ vật phẩm đã quét vào portfolio theo dõi cá nhân của user.
    */
   const importInventoryToPortfolio = useCallback(async () => {
     const items = (mergedRaw?.items ?? []).map(applyBuffPricing);
@@ -91,7 +91,7 @@ export function useScannerPortfolioImport({
         );
       }
 
-      // Read streaming progress from server
+      // Đọc tiến độ stream từ server
       const reader = response.body.getReader();
       const decoder = new TextDecoder();
       let buffer = '';
@@ -133,7 +133,7 @@ export function useScannerPortfolioImport({
         }
       }
 
-      // Process any remaining buffer
+      // Xử lý buffer còn lại
       if (buffer.trim()) {
         try {
           const event = JSON.parse(buffer);

@@ -1,21 +1,20 @@
 import { type ColumnDef } from '@tanstack/react-table';
 import type { TFunction } from 'i18next';
 import { Loader2 } from 'lucide-react';
-import { FaSteam, FaCoins, FaSyncAlt, FaSearch } from 'react-icons/fa';
-import { cn } from '@/utils/cn';
+import { FaSteam, FaSyncAlt, FaSearch } from 'react-icons/fa';
 import * as HoverCard from '@radix-ui/react-hover-card';
 
-import { Tooltip } from '@/components/ui/tooltip';
 import { CopyButton, DataTableColumnHeader } from '@/components/ui/actions';
 import { formatRelative } from '@/utils/date';
 import { CaseThumbnail } from '@/components/portfolio';
 import type { ScanResultItem } from './types';
-import { Button } from '@/components/ui/button';
 import type { InspectPatternResult } from './hooks/use-pattern-inspect';
 import { AccessoryPricePreviewStrip } from './inventory-scanner-accessories';
 import { InventoryScannerItemHoverCardContent } from './inventory-scanner-item-hover-card';
+import { InventoryScannerManualQuantityCell } from './inventory-scanner-manual-quantity-cell';
+import { InventoryScannerPriceCell } from './inventory-scanner-price-cell';
 import { InventoryScannerStatusBadges } from './inventory-scanner-status-badges';
-import { getSteamMarketListingUrl, getItemTypeColor, formatPlainNumber } from './utils';
+import { getSteamMarketListingUrl, getItemTypeColor } from './utils';
 
 export type BuildInventoryColumnsParams = {
   t: TFunction;
@@ -95,27 +94,6 @@ export function buildInventoryColumns({
         const steamMarketUrl =
           row.original.steamMarketUrl ?? getSteamMarketListingUrl(marketHashName);
         const buffMarketUrl = `https://buff.market/market/all?search=${marketHashName}`;
-        const consolidated = {
-          tradeable: 0,
-          onMarket: 0,
-          tradeProtected: 0,
-          hold: 0,
-          holdDetails: [] as Array<{ quantity: number; holdDays: number }>,
-        };
-        if (row.original.sourceAccounts) {
-          for (const acc of row.original.sourceAccounts) {
-            if (acc.breakdown) {
-              consolidated.tradeable += acc.breakdown.tradeable ?? 0;
-              consolidated.onMarket += acc.breakdown.onMarket ?? 0;
-              consolidated.tradeProtected += acc.breakdown.tradeProtected ?? 0;
-              consolidated.hold += acc.breakdown.hold ?? 0;
-              if (acc.breakdown.holdDetails) {
-                consolidated.holdDetails.push(...acc.breakdown.holdDetails);
-              }
-            }
-          }
-        }
-
         const content = (
           <div className="flex items-center gap-3.5">
             <button
@@ -376,48 +354,11 @@ export function buildInventoryColumns({
       cell: ({ row }) => {
         if (row.original.isManual && updateManualItemQty && mode === 'transactions') {
           return (
-            <div className={cn('flex items-center justify-end', isMobile ? 'gap-0.5' : 'gap-2.5')}>
-              <Button
-                type="button"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  updateManualItemQty(
-                    row.original.id || row.original.caseItem.marketHashName,
-                    row.original.quantity - 1
-                  );
-                }}
-                className={cn(
-                  'inline-flex items-center justify-center rounded bg-stone-800 font-bold text-stone-400 transition-colors hover:bg-stone-700 hover:text-stone-200',
-                  isMobile ? 'h-4 w-4 text-[9px]' : 'size-6'
-                )}
-              >
-                -
-              </Button>
-              <span
-                className={cn(
-                  'text-center font-bold text-blue-400',
-                  isMobile ? 'w-3 text-[9px]' : 'w-8'
-                )}
-              >
-                {row.original.quantity}
-              </span>
-              <Button
-                type="button"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  updateManualItemQty(
-                    row.original.id || row.original.caseItem.marketHashName,
-                    row.original.quantity + 1
-                  );
-                }}
-                className={cn(
-                  'inline-flex items-center justify-center rounded bg-stone-800 font-bold text-stone-400 transition-colors hover:bg-stone-700 hover:text-stone-200',
-                  isMobile ? 'h-4 w-4 text-[9px]' : 'size-6'
-                )}
-              >
-                +
-              </Button>
-            </div>
+            <InventoryScannerManualQuantityCell
+              item={row.original}
+              isMobile={isMobile}
+              updateManualItemQty={updateManualItemQty}
+            />
           );
         }
 
@@ -439,149 +380,19 @@ export function buildInventoryColumns({
         />
       ),
       accessorFn: (row) => row.price,
-      cell: ({ row }) => {
-        const item = row.original;
-        const buyPriceSection =
-          item.isManual && item.buyPrice && item.buyPrice > 0 ? (
-            <span className="font-sans text-[10px] font-medium text-blue-400/90">
-              {t('inventoryScanner.buyPriceLabel')}
-              {renderVND(item.buyPrice)}
-            </span>
-          ) : null;
-
-        if (item.type !== 'Skin') {
-          const steamMarketUrl =
-            item.steamMarketUrl ?? getSteamMarketListingUrl(item.caseItem.marketHashName);
-          return (
-            <div className="flex min-h-[3rem] flex-col items-end justify-center text-right font-mono">
-              <a
-                href={steamMarketUrl}
-                target="_blank"
-                rel="noreferrer"
-                className="group flex items-center gap-1.5 transition-colors hover:text-blue-300"
-              >
-                <span className="text-[13px] font-medium text-stone-300 group-hover:text-stone-200">
-                  {renderVND(item.price)}
-                </span>
-                {!isMobile && (
-                  <FaSteam className="size-3.5 text-stone-500 transition-colors group-hover:text-sky-400" />
-                )}
-              </a>
-              {buyPriceSection}
-            </div>
-          );
-        }
-
-        const marketHashName = item.caseItem.marketHashName;
-        const overpayInfo = patternResults[marketHashName]?.overpay;
-        const buffPriceCny = item.buffPriceCny ?? buffPricesCny[marketHashName];
-        const rawItem = mergedRawItems?.find((i) => i.caseItem.marketHashName === marketHashName);
-        const steamPrice = rawItem?.price ?? item.price ?? 0;
-        const hasBuffPrice = Number.isFinite(buffPriceCny) && buffPriceCny > 0;
-        const buffError = buffPriceErrors[marketHashName];
-        const steamMarketUrl = item.steamMarketUrl ?? getSteamMarketListingUrl(marketHashName);
-        const buffMarketUrl = `https://buff.market/market/all?search=${marketHashName}`;
-
-        return (
-          <div className="flex min-h-[3rem] w-full flex-col items-end justify-center gap-1 py-1">
-            {/* Steam Price */}
-            <Tooltip content={t('inventoryScanner.steamPriceTooltip')}>
-              <a
-                href={steamMarketUrl}
-                target="_blank"
-                rel="noreferrer"
-                className="group relative flex cursor-help items-center gap-1.5 transition-colors hover:text-blue-300"
-              >
-                <span className="group-hover:text-stone-250 font-mono text-[13px] font-medium text-stone-300">
-                  {renderVND(steamPrice)}
-                </span>
-                {!isMobile && (
-                  <FaSteam className="size-3.5 text-stone-500 transition-colors group-hover:text-sky-400" />
-                )}
-              </a>
-            </Tooltip>
-
-            {/* Buff Price */}
-            {hasBuffPrice && (
-              <Tooltip
-                content={
-                  <>
-                    {overpayInfo
-                      ? `${t('inventoryScanner.buffPriceTooltip', {
-                          price: formatPlainNumber(buffPriceCny),
-                          rate: formatPlainNumber(buffCnyToVndRate),
-                        })} + Overpay (${overpayInfo.multiplierSource})`
-                      : t('inventoryScanner.buffPriceTooltip', {
-                          price: formatPlainNumber(buffPriceCny),
-                          rate: formatPlainNumber(buffCnyToVndRate),
-                        })}
-                  </>
-                }
-              >
-                <a
-                  href={buffMarketUrl}
-                  target="_blank"
-                  rel="noreferrer"
-                  className={cn(
-                    'group relative flex cursor-help transition-colors hover:text-blue-300',
-                    isMobile ? 'flex-col items-end gap-0.5' : 'items-center gap-1.5'
-                  )}
-                >
-                  <span
-                    className={cn(
-                      'text-right font-mono font-medium',
-                      overpayInfo ? 'text-emerald-400' : 'text-blue-400',
-                      isMobile
-                        ? 'flex flex-col items-end text-[11px]'
-                        : 'text-[13px] group-hover:underline'
-                    )}
-                  >
-                    <span>
-                      {renderVND(
-                        overpayInfo
-                          ? Math.round(overpayInfo.estimatedTypical * buffCnyToVndRate)
-                          : Math.round(buffPriceCny * buffCnyToVndRate)
-                      )}
-                    </span>
-                    {isMobile ? (
-                      <span className="flex flex-col items-end font-sans text-[9px] leading-tight font-normal text-stone-500">
-                        <span>
-                          ¥
-                          {formatPlainNumber(
-                            overpayInfo ? overpayInfo.estimatedTypical : buffPriceCny
-                          )}
-                        </span>
-                        <span>x {formatPlainNumber(buffCnyToVndRate)}</span>
-                      </span>
-                    ) : (
-                      <span className="ml-1 font-sans text-[10px] font-normal text-stone-500">
-                        {overpayInfo
-                          ? `(¥${formatPlainNumber(overpayInfo.estimatedTypical)} x ${formatPlainNumber(buffCnyToVndRate)})`
-                          : `(¥${formatPlainNumber(buffPriceCny)} x ${formatPlainNumber(buffCnyToVndRate)})`}
-                      </span>
-                    )}
-                  </span>
-                  {!isMobile && (
-                    <FaCoins
-                      className={cn(
-                        'transition-transform group-hover:scale-110',
-                        overpayInfo ? 'text-emerald-400' : 'text-blue-400',
-                        'size-3.5'
-                      )}
-                    />
-                  )}
-                </a>
-              </Tooltip>
-            )}
-            {buyPriceSection}
-            {buffError ? (
-              <span className="text-red-350 mt-1 max-w-44 text-right font-sans text-[11px]">
-                {buffError}
-              </span>
-            ) : null}
-          </div>
-        );
-      },
+      cell: ({ row }) => (
+        <InventoryScannerPriceCell
+          item={row.original}
+          t={t}
+          buffPricesCny={buffPricesCny}
+          buffPriceErrors={buffPriceErrors}
+          buffCnyToVndRate={buffCnyToVndRate}
+          mergedRawItems={mergedRawItems}
+          patternResults={patternResults}
+          isMobile={isMobile}
+          renderVND={renderVND}
+        />
+      ),
     },
     {
       id: 'total',

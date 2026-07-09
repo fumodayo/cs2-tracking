@@ -60,34 +60,36 @@ export type ScanCacheScope = {
 const COLLECTION_NAME = 'inventory_scan_cache';
 
 /**
- * Calculates the next 14:00 (UTC+7) after the current moment.
- * If it's currently before 14:00 today → expires today at 14:00.
- * If it's 14:00 or later → expires tomorrow at 14:00.
+ *
+ * Tính mốc 14:00 (UTC+7) kế tiếp sau thời điểm hiện tại.
+ * Nếu hiện tại trước 14:00 hôm nay → hết hạn lúc 14:00 hôm nay.
+ * Nếu hiện tại từ 14:00 trở đi → hết hạn lúc 14:00 ngày mai.
+ *
  */
 export function getNextExpiry(): Date {
   const VN_OFFSET_MS = 7 * 60 * 60 * 1000; // UTC+7
   const now = new Date();
 
-  // Current time in Vietnam
+  // Thời gian hiện tại ở Việt Nam
   const nowVN = new Date(now.getTime() + VN_OFFSET_MS);
 
-  // Build "today 14:00" in Vietnam time, then convert back to UTC
+  // Tạo mốc "hôm nay 14:00" theo giờ Việt Nam rồi đổi ngược về UTC
   const todayVN14 = new Date(
     Date.UTC(nowVN.getUTCFullYear(), nowVN.getUTCMonth(), nowVN.getUTCDate(), 14, 0, 0, 0)
   );
-  // todayVN14 is in "VN wall-clock as UTC", subtract offset to get real UTC
+  // todayVN14 là "giờ treo tường VN dưới dạng UTC", trừ offset để ra UTC thật
   const todayUtc14 = new Date(todayVN14.getTime() - VN_OFFSET_MS);
 
   if (now < todayUtc14) {
-    return todayUtc14; // today at 14:00 VN
+    return todayUtc14; // Hôm nay lúc 14:00 giờ VN.
   }
-  return new Date(todayUtc14.getTime() + 24 * 60 * 60 * 1000); // tomorrow at 14:00 VN
+  return new Date(todayUtc14.getTime() + 24 * 60 * 60 * 1000); // Ngày mai lúc 14:00 giờ VN.
 }
 
 export async function ensureCacheIndexes() {
   const db = await getDatabase();
   const col = db.collection(COLLECTION_NAME);
-  // TTL index — MongoDB checks every ~60s and deletes docs whose expiresAt < now
+  // Index TTL — MongoDB kiểm tra khoảng mỗi 60s và xóa document có expiresAt < now
   await col.createIndex({ expiresAt: 1 }, { expireAfterSeconds: 0 }).catch(() => {});
   await col.createIndex({ steamId64: 1 }).catch(() => {});
   await col.createIndex({ cacheKey: 1 }).catch(() => {});

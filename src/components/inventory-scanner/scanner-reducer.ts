@@ -1,5 +1,14 @@
 import { AccountEntry, CaseItemData, ScanProgress, ScanResponse, ScanResultItem } from './types';
-import { createAccount, getInventoryItemType } from './utils';
+import { createAccount } from './utils';
+import {
+  addManualItemToScannerState,
+  applyPriceRetrySuccess,
+  normalizeAccountItemTypes,
+  normalizeScanItemType,
+  removeItemFromScannerState,
+  updateManualItemInScannerState,
+  updateManualQuantityInScannerState,
+} from './scanner-reducer-handlers';
 
 export interface ScannerState {
   accounts: AccountEntry[];
@@ -94,6 +103,7 @@ export type ScannerAction =
   | { type: 'BUFF_FETCH_SUCCESS'; marketHashName: string; priceCny: number }
   | { type: 'BUFF_FETCH_FAILURE'; marketHashName: string; error: string }
   | { type: 'UPDATE_BUFF_PRICE_CNY'; marketHashName: string; rawValue: string }
+  | { type: 'SET_BUFF_PRICES_CNY'; buffPricesCny: Record<string, number> }
   | { type: 'START_PORTFOLIO_IMPORT' }
   | { type: 'UPDATE_PORTFOLIO_IMPORT_STATUS'; status: string }
   | { type: 'PORTFOLIO_IMPORT_SUCCESS'; message: string }
@@ -130,24 +140,6 @@ export function initScannerState(): ScannerState {
     portfolioImportError: null,
     retryingPrices: false,
     retryStatus: null,
-  };
-}
-
-function normalizeScanItemType(item: ScanResultItem): ScanResultItem {
-  const inferredType = getInventoryItemType(item.caseItem.name, item.caseItem.marketHashName);
-
-  return item.type === inferredType ? item : { ...item, type: inferredType };
-}
-
-function normalizeAccountItemTypes(account: AccountEntry): AccountEntry {
-  if (!account.result) return account;
-
-  return {
-    ...account,
-    result: {
-      ...account.result,
-      items: account.result.items.map(normalizeScanItemType),
-    },
   };
 }
 
@@ -383,141 +375,17 @@ export function scannerReducer(state: ScannerState, action: ScannerAction): Scan
     case 'SET_GLOBAL_FILTER':
       return { ...state, globalFilter: action.filter };
 
-    case 'ADD_MANUAL_ITEM': {
-      const {
-        caseItem,
-        price,
-        quantity,
-        buyPrice,
-        buyDate,
-        sourceAccounts,
-        storageUnitId,
-        storageUnitName,
-        buffPriceManual,
-        buffRateManual,
-        id,
-        note,
-        stickerPriceRate,
-        stickerBuyPriceRate,
-        stickerScanTotalPrice,
-        stickerScanPriceCapturedAt,
-        patternInfo,
-        dopplerPhase,
-        inspectLink,
-      } = action;
-      const type = getInventoryItemType(caseItem.name, caseItem.marketHashName);
-
-      const existingIdx = state.manualItems.findIndex(
-        (i) =>
-          i.caseItem.marketHashName === caseItem.marketHashName &&
-          i.buyPrice === buyPrice &&
-          i.buyDate === buyDate &&
-          i.storageUnitId === storageUnitId &&
-          JSON.stringify(i.sourceAccounts) === JSON.stringify(sourceAccounts)
-      );
-
-      let nextManualItems: ScanResultItem[];
-      if (existingIdx !== -1) {
-        nextManualItems = state.manualItems.map((item, idx) =>
-          idx === existingIdx
-            ? {
-                ...item,
-                quantity: item.quantity + quantity,
-                total: item.price * (item.quantity + quantity),
-              }
-            : item
-        );
-      } else {
-        nextManualItems = [
-          ...state.manualItems,
-          {
-            id: id || `manual-${Date.now()}-${Math.random()}`,
-            caseItem,
-            type,
-            quantity,
-            price,
-            total: price * quantity,
-            isManual: true,
-            buyPrice,
-            buyDate,
-            sourceAccounts,
-            storageUnitId,
-            storageUnitName,
-            buffPriceManual,
-            buffRateManual,
-            note,
-            stickerPriceRate,
-            stickerBuyPriceRate,
-            stickerScanTotalPrice,
-            stickerScanPriceCapturedAt,
-            patternInfo,
-            dopplerPhase,
-            inspectLink,
-          },
-        ];
-      }
-
-      const nextRemovedKeys = new Set(state.removedKeys);
-      nextRemovedKeys.delete(caseItem.marketHashName);
-
-      return {
-        ...state,
-        manualItems: nextManualItems,
-        removedKeys: nextRemovedKeys,
-      };
-    }
+    case 'ADD_MANUAL_ITEM':
+      return addManualItemToScannerState(state, action);
 
     case 'UPDATE_MANUAL_ITEM':
-      return {
-        ...state,
-        manualItems: state.manualItems.map((item) =>
-          item.id === action.id
-            ? {
-                ...item,
-                ...action.payload,
-                total: item.price * (action.payload.quantity ?? item.quantity),
-              }
-            : item
-        ),
-      };
+      return updateManualItemInScannerState(state, action);
 
     case 'UPDATE_MANUAL_QTY':
-      return {
-        ...state,
-        manualItems:
-          action.qty <= 0
-            ? state.manualItems.filter((i) =>
-                action.idOrName.startsWith('manual-')
-                  ? i.id !== action.idOrName
-                  : i.caseItem.marketHashName !== action.idOrName
-              )
-            : state.manualItems.map((i) =>
-                (
-                  action.idOrName.startsWith('manual-')
-                    ? i.id === action.idOrName
-                    : i.caseItem.marketHashName === action.idOrName
-                )
-                  ? { ...i, quantity: action.qty, total: i.price * action.qty }
-                  : i
-              ),
-      };
+      return updateManualQuantityInScannerState(state, action);
 
-    case 'REMOVE_ITEM': {
-      if (action.isManual) {
-        return {
-          ...state,
-          manualItems: state.manualItems.filter((i) =>
-            action.id ? i.id !== action.id : i.caseItem.marketHashName !== action.marketHashName
-          ),
-        };
-      }
-      const nextRemovedKeys = new Set(state.removedKeys);
-      nextRemovedKeys.add(action.id ?? action.marketHashName);
-      return {
-        ...state,
-        removedKeys: nextRemovedKeys,
-      };
-    }
+    case 'REMOVE_ITEM':
+      return removeItemFromScannerState(state, action);
 
     case 'RESET_REMOVED_KEYS':
       return { ...state, removedKeys: new Set<string>() };
@@ -580,6 +448,12 @@ export function scannerReducer(state: ScannerState, action: ScannerAction): Scan
       };
     }
 
+    case 'SET_BUFF_PRICES_CNY':
+      return {
+        ...state,
+        buffPricesCny: action.buffPricesCny,
+      };
+
     case 'START_PORTFOLIO_IMPORT':
       return {
         ...state,
@@ -640,54 +514,8 @@ export function scannerReducer(state: ScannerState, action: ScannerAction): Scan
         retryStatus: action.status,
       };
 
-    case 'PRICE_RETRY_SUCCESS': {
-      const { results, status } = action;
-      const priceMap = new Map<string, { price: number; priceSource?: string }>();
-      for (const r of results) {
-        if (r.price > 0) priceMap.set(r.marketHashName, r);
-      }
-
-      const updatedAccounts = state.accounts.map((acc) => {
-        if (!acc.result) return acc;
-        const updatedItems = acc.result.items.map((scanItem) => {
-          const found = priceMap.get(scanItem.caseItem.marketHashName);
-          if (!found) return scanItem;
-          return {
-            ...scanItem,
-            price: found.price,
-            total: found.price * scanItem.quantity,
-            priceSource: found.priceSource as ScanResultItem['priceSource'],
-          };
-        });
-        return {
-          ...acc,
-          result: {
-            ...acc.result,
-            items: updatedItems,
-            totalPrice: updatedItems.reduce((s: number, it: ScanResultItem) => s + it.total, 0),
-          },
-        };
-      });
-
-      const updatedManualItems = state.manualItems.map((mi) => {
-        const found = priceMap.get(mi.caseItem.marketHashName);
-        if (!found) return mi;
-        return {
-          ...mi,
-          price: found.price,
-          total: found.price * mi.quantity,
-          priceSource: found.priceSource as ScanResultItem['priceSource'],
-        };
-      });
-
-      return {
-        ...state,
-        accounts: updatedAccounts,
-        manualItems: updatedManualItems,
-        retryingPrices: false,
-        retryStatus: status,
-      };
-    }
+    case 'PRICE_RETRY_SUCCESS':
+      return applyPriceRetrySuccess(state, action);
 
     case 'PRICE_RETRY_FAILURE':
       return {

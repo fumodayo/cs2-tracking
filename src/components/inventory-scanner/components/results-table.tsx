@@ -1,17 +1,14 @@
-'use client';
+﻿'use client';
 
-import React from 'react';
 import { flexRender, type Table, type Row } from '@tanstack/react-table';
-import { ListChecks, RefreshCw, Search, Loader2, X } from 'lucide-react';
+import { Loader2 } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
-import { motion } from 'framer-motion';
-import { FilterPopover, ResetButton, ViewButton } from '@/components/ui/actions';
 import { TablePagination } from '@/components/shared/table-pagination';
 import { cn } from '@/utils/cn';
 import type { ScanResultItem } from '../types';
-import { Button } from '@/components/ui/button';
-import { FaBoxOpen, FaTrashAlt } from 'react-icons/fa';
 import { useResultsTableState } from './use-results-table-state';
+import { ResultsTableBulkActions } from './results-table-bulk-actions';
+import { ResultsTableToolbar } from './results-table-toolbar';
 
 function ScanResultTableRowComponent({
   row,
@@ -26,9 +23,9 @@ function ScanResultTableRowComponent({
 }) {
   const isManual = row.original.isManual;
 
-  // Solid background colors for sticky columns on mobile to prevent transparency when scrolled.
-  // These solid background classes are prefixed with max-md: so they ONLY apply on mobile screens,
-  // leaving desktop cells transparent (inheriting the row's normal responsive backgrounds).
+  // Dùng nền đặc cho cột sticky trên mobile để tránh trong suốt khi cuộn.
+  // Các class nền đặc này có tiền tố max-md: nên CHỈ áp dụng trên màn hình mobile,
+  // giữ ô desktop trong suốt và kế thừa nền responsive bình thường của dòng.
   const stickyBgClass = isManual
     ? isSelected
       ? 'max-md:bg-[color-mix(in_srgb,var(--accent)_8%,var(--card))]'
@@ -83,34 +80,6 @@ function ScanResultTableRowComponent({
         );
       })}
     </tr>
-  );
-}
-
-function ChipButton({
-  label,
-  active,
-  onClick,
-  colorClass,
-}: {
-  label: string;
-  active: boolean;
-  onClick: () => void;
-  colorClass?: string;
-}) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      className={cn(
-        'inline-flex h-8 shrink-0 cursor-pointer items-center justify-center gap-1.5 rounded-full border px-3.5 text-xs font-semibold transition-all select-none',
-        active
-          ? 'border-accent bg-accent/10 text-accent font-bold'
-          : 'border-stone-850 bg-stone-950 text-stone-400 hover:text-stone-300'
-      )}
-    >
-      {colorClass ? <span className={cn('size-1.5 rounded-full', colorClass)} /> : null}
-      {label}
-    </button>
   );
 }
 
@@ -194,390 +163,40 @@ export function ResultsTable({
     isMobile,
   });
 
-  const clearAllFilters = () => {
-    setSelectedSourceFilters([]);
-    clearTypeFilters();
-    setSelectedAccounts([]);
-    setSelectedStatuses([]);
-    setSelectedPriceSourceFilters([]);
-    table.setPageIndex(0);
-  };
-
-  const toggleValue = (values: string[], value: string) => {
-    return values.includes(value) ? values.filter((item) => item !== value) : [...values, value];
-  };
-
-  const itemTypeOptions = [
-    { label: t('inventoryScanner.case'), value: 'Case' },
-    { label: t('inventoryScanner.stickerCapsule'), value: 'Capsule' },
-    { label: t('inventoryScanner.sticker'), value: 'Sticker' },
-    { label: t('inventoryScanner.skin'), value: 'Skin' },
-  ];
-
-  const sourceOptions = [
-    { label: t('portfolio.sourceManual', 'Manual'), value: 'manual' },
-    { label: t('portfolio.sourceExisting', 'Existing'), value: 'existing' },
-  ];
-
-  const statusOptions = [
-    {
-      label: t('inventoryScanner.tradeable'),
-      value: 'tradeable',
-      colorClass: 'bg-emerald-500',
-      icon: ({ className }: { className?: string }) => (
-        <span className={cn('size-2 rounded-full bg-emerald-500', className)} />
-      ),
-    },
-    {
-      label: t('inventoryScanner.onMarket'),
-      value: 'market',
-      colorClass: 'bg-amber-500',
-      icon: ({ className }: { className?: string }) => (
-        <span className={cn('size-2 rounded-full bg-amber-500', className)} />
-      ),
-    },
-    {
-      label: t('inventoryScanner.tradeProtected'),
-      value: 'protected',
-      colorClass: 'bg-blue-500',
-      icon: ({ className }: { className?: string }) => (
-        <span className={cn('size-2 rounded-full bg-blue-500', className)} />
-      ),
-    },
-    {
-      label: t('inventoryScanner.hold'),
-      value: 'hold',
-      colorClass: 'bg-red-500',
-      icon: ({ className }: { className?: string }) => (
-        <span className={cn('size-2 rounded-full bg-red-500', className)} />
-      ),
-    },
-  ];
-
-  const priceSourceOptions = [
-    {
-      label: t('portfolio.pricingBuff', 'BUFF Price'),
-      value: 'buff',
-    },
-    {
-      label: t('portfolio.pricingSteam', 'Steam Price'),
-      value: 'steam',
-    },
-  ];
-
   return (
     <div className="overflow-hidden rounded-xl border border-stone-800 bg-stone-900/50">
-      <div className="flex flex-col gap-3 border-b border-stone-800 bg-stone-900/60 p-3 lg:flex-row lg:items-center lg:justify-between">
-        <div className="flex shrink-0 flex-wrap items-center gap-2">
-          {/* View Mode Switcher */}
-          {!isMobile && (
-            <div className="relative inline-flex h-9 shrink-0 items-center rounded-lg border border-stone-800 bg-stone-950 p-1 shadow-sm select-none">
-              <button
-                type="button"
-                onClick={() => {
-                  setMode('case-summary');
-                  table.setPageIndex(0);
-                }}
-                className={`relative inline-flex h-7 cursor-pointer items-center justify-center rounded-md px-3 py-1 text-[11.5px] font-extrabold transition-all duration-200 ${
-                  mode === 'case-summary' ? 'text-blue-400' : 'text-stone-500 hover:text-stone-300'
-                }`}
-              >
-                {mode === 'case-summary' && (
-                  <motion.div
-                    layoutId="activeTabToolbarScanner"
-                    className="absolute inset-0 rounded-md border border-stone-800 bg-stone-900 shadow-md"
-                    transition={{ type: 'spring', stiffness: 380, damping: 30 }}
-                  />
-                )}
-                <span className="relative z-10">{t('dashboard.caseSummaryMode', 'Gom')}</span>
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  setMode('transactions');
-                  table.setPageIndex(0);
-                }}
-                className={`relative inline-flex h-7 cursor-pointer items-center justify-center rounded-md px-3 py-1 text-[11.5px] font-extrabold transition-all duration-200 ${
-                  mode === 'transactions' ? 'text-blue-400' : 'text-stone-500 hover:text-stone-300'
-                }`}
-              >
-                {mode === 'transactions' && (
-                  <motion.div
-                    layoutId="activeTabToolbarScanner"
-                    className="absolute inset-0 rounded-md border border-stone-800 bg-stone-900 shadow-md"
-                    transition={{ type: 'spring', stiffness: 380, damping: 30 }}
-                  />
-                )}
-                <span className="relative z-10">{t('dashboard.viewMode', 'Chi tiết')}</span>
-              </button>
-            </div>
-          )}
-        </div>
-
-        <div className="flex w-full items-center gap-3 lg:w-auto">
-          <div className="min-w-0 flex-1 lg:w-72 lg:flex-none">
-            <label className="border-input-border bg-input focus-within:border-ring focus-within:ring-ring flex h-9 w-full items-center gap-2 rounded-md border px-3 text-xs transition-all focus-within:ring-1">
-              <Search className="text-muted-foreground size-3.5 shrink-0" />
-              <input
-                value={localQuery}
-                onChange={(e) => setLocalQuery(e.target.value)}
-                aria-label={t('inventoryScanner.searchPlaceholder')}
-                placeholder={t('inventoryScanner.searchPlaceholder')}
-                className="text-foreground placeholder:text-muted-foreground w-full bg-transparent text-xs font-medium outline-none"
-              />
-              {localQuery && (
-                <button
-                  type="button"
-                  onClick={() => {
-                    setLocalQuery('');
-                    setGlobalFilter('');
-                  }}
-                  className="shrink-0 cursor-pointer rounded-full p-0.5 text-stone-500 transition-colors hover:bg-stone-800/60 hover:text-stone-300"
-                  aria-label={t('common.clear', 'Clear')}
-                >
-                  <X className="size-3.5" />
-                </button>
-              )}
-            </label>
-          </div>
-          {onRefreshPrices && (
-            <Button
-              type="button"
-              onClick={onRefreshPrices}
-              disabled={isRefreshingPrices}
-              className="hover:bg-stone-850 flex h-9 shrink-0 cursor-pointer items-center gap-1.5 border border-stone-800 bg-stone-900/60 px-3 text-xs font-semibold hover:text-stone-200 disabled:cursor-wait disabled:opacity-50"
-              title={t('inventoryScanner.refreshPrices')}
-            >
-              <RefreshCw
-                className={`size-3.5 text-blue-400 ${isRefreshingPrices ? 'animate-spin' : ''}`}
-              />
-              <span className="text-stone-300 max-sm:sr-only">
-                {t('inventoryScanner.refreshPrices')}
-              </span>
-            </Button>
-          )}
-        </div>
-      </div>
-
-      {!isMobile && (
-        <div className="flex flex-col gap-3 border-b border-stone-800 bg-stone-900/60 px-3 py-2.5 lg:flex-row lg:items-center lg:justify-between">
-          <div className="no-scrollbar -mx-3 flex items-center gap-2 overflow-x-auto px-3">
-            <div className="mr-2 flex shrink-0 items-center gap-1.5 select-none">
-              <span className="text-xs font-bold tracking-wider text-stone-500 uppercase">
-                {t('portfolio.filtersLabel', 'Filters:')}
-              </span>
-            </div>
-            <div className="flex shrink-0 items-center gap-2">
-              <FilterPopover
-                label={t('portfolio.filterSource', 'Source')}
-                options={sourceOptions}
-                selectedValues={selectedSourceFilters}
-                onChange={(nextValues) => {
-                  setSelectedSourceFilters(nextValues);
-                  table.setPageIndex(0);
-                }}
-                hideOptionIcons={true}
-              />
-
-              <FilterPopover
-                label={t('portfolio.filterItemType', 'Item Type')}
-                options={itemTypeOptions}
-                selectedValues={Array.from(selectedTypes)}
-                onChange={(nextValues) => {
-                  clearTypeFilters();
-                  nextValues.forEach((val) => toggleTypeFilter(val));
-                  table.setPageIndex(0);
-                }}
-                hideOptionIcons={true}
-              />
-
-              <FilterPopover
-                label={t('portfolio.filterAccount', 'Account')}
-                options={accountOptions.map((account) => ({
-                  label: account.name,
-                  value: account.steamId64,
-                }))}
-                selectedValues={selectedAccounts}
-                onChange={(nextValues) => {
-                  setSelectedAccounts(nextValues);
-                  table.setPageIndex(0);
-                }}
-                disabled={accountOptions.length === 0}
-                hideOptionIcons={true}
-              />
-
-              <FilterPopover
-                label={t('inventoryScanner.status')}
-                options={statusOptions}
-                selectedValues={selectedStatuses}
-                onChange={(nextValues) => {
-                  setSelectedStatuses(nextValues);
-                  table.setPageIndex(0);
-                }}
-              />
-
-              <FilterPopover
-                label={t('portfolio.filterPricing', 'Pricing')}
-                options={priceSourceOptions}
-                selectedValues={selectedPriceSourceFilters}
-                onChange={(nextValues) => {
-                  setSelectedPriceSourceFilters(nextValues);
-                  table.setPageIndex(0);
-                }}
-                hideOptionIcons={true}
-              />
-            </div>
-          </div>
-
-          <div className="flex items-center justify-between gap-3 lg:shrink-0">
-            <ResetButton isVisible={hasActiveFilters} onReset={clearAllFilters} />
-            <ViewButton table={table} />
-          </div>
-        </div>
-      )}
-
-      {/* Mobile Horizontal Filter Chips */}
-      {isMobile && (
-        <div className="flex flex-col gap-2 border-b border-stone-800 bg-stone-900/60 py-2.5">
-          {/* Row 1: Source + Item Type */}
-          <div className="no-scrollbar flex gap-2 overflow-x-auto px-3">
-            {sourceOptions.map((option) => (
-              <ChipButton
-                key={option.value}
-                label={option.label}
-                active={selectedSourceFilters.includes(option.value)}
-                onClick={() => {
-                  setSelectedSourceFilters(toggleValue(selectedSourceFilters, option.value));
-                  table.setPageIndex(0);
-                }}
-              />
-            ))}
-            {itemTypeOptions.map((option) => (
-              <ChipButton
-                key={option.value}
-                label={option.label}
-                active={selectedTypes.has(option.value)}
-                onClick={() => {
-                  toggleTypeFilter(option.value);
-                  table.setPageIndex(0);
-                }}
-              />
-            ))}
-          </div>
-
-          {/* Row 2: Status + Pricing */}
-          <div className="no-scrollbar flex gap-2 overflow-x-auto px-3">
-            {statusOptions.map((option) => (
-              <ChipButton
-                key={option.value}
-                label={option.label}
-                colorClass={option.colorClass}
-                active={selectedStatuses.includes(option.value)}
-                onClick={() => {
-                  setSelectedStatuses(toggleValue(selectedStatuses, option.value));
-                  table.setPageIndex(0);
-                }}
-              />
-            ))}
-            {priceSourceOptions.map((option) => (
-              <ChipButton
-                key={option.value}
-                label={option.label}
-                active={selectedPriceSourceFilters.includes(option.value)}
-                onClick={() => {
-                  setSelectedPriceSourceFilters(
-                    toggleValue(selectedPriceSourceFilters, option.value)
-                  );
-                  table.setPageIndex(0);
-                }}
-              />
-            ))}
-          </div>
-
-          {/* Row 3: Account */}
-          {accountOptions.length > 0 && (
-            <div className="no-scrollbar flex gap-2 overflow-x-auto px-3">
-              {accountOptions.map((account) => (
-                <ChipButton
-                  key={account.steamId64}
-                  label={account.name}
-                  active={selectedAccounts.includes(account.steamId64)}
-                  onClick={() => {
-                    setSelectedAccounts(toggleValue(selectedAccounts, account.steamId64));
-                    table.setPageIndex(0);
-                  }}
-                />
-              ))}
-            </div>
-          )}
-
-          {/* Clear Filters Button (If any active) */}
-          {hasActiveFilters && (
-            <div className="px-3 pt-1">
-              <button
-                type="button"
-                onClick={clearAllFilters}
-                className="inline-flex h-8 w-full cursor-pointer items-center justify-center rounded-lg border border-red-500/30 bg-red-500/5 text-xs font-semibold text-red-400 transition-all hover:bg-red-500/10"
-              >
-                {t('common.clearAll', 'Clear all')}
-              </button>
-            </div>
-          )}
-        </div>
-      )}
-
-      {/* Bulk Action Banner */}
-      {selectedIds.length > 0 && (
-        <div className="border-stone-850 animate-fade-slide-in flex flex-col gap-3 border-b bg-stone-900/90 p-3 md:flex-row md:items-center md:justify-between md:px-4 md:py-2.5">
-          <div className="flex items-center gap-2">
-            <span className="inline-flex size-5 shrink-0 items-center justify-center rounded-full bg-blue-500/10 text-xs font-bold text-blue-400">
-              {selectedIds.length}
-            </span>
-            <span className="text-xs font-semibold whitespace-nowrap text-stone-300">
-              Đã chọn {selectedIds.length} vật phẩm
-            </span>
-          </div>
-          <div className="flex w-full flex-wrap items-center gap-2 md:w-auto">
-            {canSelectMoreFiltered && (
-              <button
-                type="button"
-                onClick={handleSelectAllFiltered}
-                className="hover:bg-stone-850 inline-flex h-8 flex-grow cursor-pointer items-center justify-center gap-1.5 rounded-md border border-blue-500/25 bg-blue-500/10 px-3 text-xs font-semibold whitespace-nowrap text-blue-300 transition-all hover:border-blue-500/40 hover:text-blue-200 md:flex-grow-0"
-                title={t(
-                  'portfolio.selectAllFilteredTooltip',
-                  'Select all items matching the current filters'
-                )}
-              >
-                <ListChecks className="size-3.5" />
-                {t('portfolio.selectAllRows', 'Chọn tất cả')}
-              </button>
-            )}
-            <button
-              type="button"
-              onClick={() => setRowSelection({})}
-              className="hover:bg-stone-850 inline-flex h-8 flex-grow cursor-pointer items-center justify-center rounded-md border border-stone-800 bg-stone-900/60 px-3 text-xs font-semibold whitespace-nowrap text-stone-400 transition-all hover:border-stone-700 hover:text-stone-200 md:flex-grow-0"
-            >
-              Hủy chọn
-            </button>
-            <button
-              type="button"
-              onClick={() => setSellDialogOpen(true)}
-              className="inline-flex h-8 flex-grow cursor-pointer items-center justify-center gap-1.5 rounded-md bg-blue-500 px-3.5 text-xs font-bold whitespace-nowrap text-white shadow-md shadow-blue-500/25 transition-all hover:bg-blue-600 active:scale-95 md:flex-grow-0"
-            >
-              <FaBoxOpen className="size-3.5" />
-              <span>Bán ({selectedIds.length})</span>
-            </button>
-            <button
-              type="button"
-              onClick={handleDeleteSelected}
-              className="inline-flex h-8 flex-grow cursor-pointer items-center justify-center gap-1.5 rounded-md border border-red-500/20 bg-red-500/5 px-3.5 text-xs font-bold whitespace-nowrap text-red-400 shadow-sm transition-all hover:border-red-500/30 hover:bg-red-500/15 hover:text-red-300 active:scale-95 md:flex-grow-0"
-            >
-              <FaTrashAlt className="size-3" />
-              <span>Xóa ({selectedIds.length})</span>
-            </button>
-          </div>
-        </div>
-      )}
+      <ResultsTableToolbar
+        mode={mode}
+        setMode={setMode}
+        table={table}
+        localQuery={localQuery}
+        setLocalQuery={setLocalQuery}
+        setGlobalFilter={setGlobalFilter}
+        selectedTypes={selectedTypes}
+        clearTypeFilters={clearTypeFilters}
+        toggleTypeFilter={toggleTypeFilter}
+        selectedStatuses={selectedStatuses}
+        setSelectedStatuses={setSelectedStatuses}
+        selectedAccounts={selectedAccounts}
+        setSelectedAccounts={setSelectedAccounts}
+        selectedSourceFilters={selectedSourceFilters}
+        setSelectedSourceFilters={setSelectedSourceFilters}
+        selectedPriceSourceFilters={selectedPriceSourceFilters}
+        setSelectedPriceSourceFilters={setSelectedPriceSourceFilters}
+        accountOptions={accountOptions}
+        onRefreshPrices={onRefreshPrices}
+        isRefreshingPrices={isRefreshingPrices}
+        isMobile={isMobile}
+        hasActiveFilters={hasActiveFilters}
+      />
+      <ResultsTableBulkActions
+        selectedCount={selectedIds.length}
+        canSelectMoreFiltered={canSelectMoreFiltered}
+        onSelectAllFiltered={handleSelectAllFiltered}
+        onClearSelection={() => setRowSelection({})}
+        onSellSelected={() => setSellDialogOpen(true)}
+        onDeleteSelected={handleDeleteSelected}
+      />
 
       <div className="overflow-x-auto">
         <table className="w-full text-left text-sm text-stone-300 max-md:min-w-[450px]">
@@ -660,7 +279,7 @@ export function ResultsTable({
           {isLoadingMore ? (
             <div className="flex items-center gap-2 text-stone-400">
               <Loader2 className="size-5 animate-spin text-blue-500" />
-              <span className="text-xs font-medium">Đang tải thêm...</span>
+              <span className="text-xs font-medium">Äang táº£i thÃªm...</span>
             </div>
           ) : (
             <div className="h-5" />
@@ -669,7 +288,7 @@ export function ResultsTable({
       )}
 
       {!isMobile && (
-        <TablePagination table={table} unit={t('inventoryScanner.itemUnit', 'vật phẩm')} />
+        <TablePagination table={table} unit={t('inventoryScanner.itemUnit', 'váº­t pháº©m')} />
       )}
     </div>
   );

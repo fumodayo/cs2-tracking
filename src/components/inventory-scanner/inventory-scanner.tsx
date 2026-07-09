@@ -2,28 +2,18 @@
 
 import React, { useMemo, useState, useEffect, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
-import {
-  getCoreRowModel,
-  getFilteredRowModel,
-  getPaginationRowModel,
-  getSortedRowModel,
-  useReactTable,
-  type ColumnDef,
-} from '@tanstack/react-table';
 
 import { useInventoryScanner } from './use-inventory-scanner';
-import { usePatternInspect } from './hooks/use-pattern-inspect';
 
 import { AddCaseSearch } from './add-case-search';
 import { CookieGuideModal } from '@/components/shared/cookie-guide-modal';
 import { ScanResultItem } from './types';
-import { buildInventoryColumns } from './inventory-scanner-columns';
 import { groupItemsForSummary } from './hooks/use-scanner-data-merged';
 
 import { AccountsSection } from './components/accounts-section';
 import { AddAccountDialog } from '@/components/steam-accounts/components/add-account-dialog';
 import { parseSteamCookies } from '@/utils/steam-cookies';
-import { extractSteamKey, findScannedItemByRowId, getScanResultItemRowId } from './utils';
+import { extractSteamKey } from './utils';
 import {
   findScannerRowByRowId,
   getScannerGroupRows,
@@ -31,13 +21,10 @@ import {
   getSelectedScannerRows,
   remapScannerRowSelection,
 } from './scanner-selection';
-import {
-  createScannerManualReplacement,
-  type ManualItemReplacement,
-} from './scanner-manual-replacements';
 import { useScannerAccountOptions, useScannerDisplayData } from './use-scanner-display-data';
-import { useScannerColumnVisibility } from './use-scanner-column-visibility';
 import { useScannerUrlTableState } from './use-scanner-url-table-state';
+import { useScannerPortfolioItemActions } from './use-scanner-portfolio-item-actions';
+import { useScannerResultsTable } from './use-scanner-results-table';
 import { toast } from '@/stores';
 import { CS2CapModal } from '@/components/auth/cs2cap-modal';
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
@@ -59,6 +46,8 @@ export function InventoryScanner() {
   const { t } = useTranslation();
   const [showGuestKeyModal, setShowGuestKeyModal] = useState(false);
   const [selectedItemForPanel, setSelectedItemForPanel] = useState<ScanResultItem | null>(null);
+  const [showCookieGuide, setShowCookieGuide] = useState<boolean>(false);
+  const [showAddAccountModal, setShowAddAccountModal] = useState<boolean>(false);
 
   const isMobile = useIsMobile();
 
@@ -111,9 +100,7 @@ export function InventoryScanner() {
 
   const activeMode = isMobile ? 'transactions' : mode;
 
-  const { inspectingKeys, patternResults, inspectPattern } = usePatternInspect();
-
-  // Trigger automatic portfolio import after Gmail login redirect
+  // Kích hoạt import portfolio tự động sau redirect đăng nhập Gmail
   useEffect(() => {
     if (
       isLoaded &&
@@ -132,7 +119,7 @@ export function InventoryScanner() {
     }
   }, [isLoaded, user, mergedRaw, importInventoryToPortfolio]);
 
-  // Monitor auto-import result and redirect on success
+  // Theo dõi kết quả auto-import và redirect khi thành công
   useEffect(() => {
     if (
       state.portfolioImportMessage &&
@@ -144,7 +131,7 @@ export function InventoryScanner() {
     }
   }, [state.portfolioImportMessage]);
 
-  // Clear pending redirect flag on import error
+  // Xóa cờ redirect đang chờ khi import lỗi
   useEffect(() => {
     if (
       state.portfolioImportError &&
@@ -155,7 +142,7 @@ export function InventoryScanner() {
     }
   }, [state.portfolioImportError]);
 
-  // Listen for global cookie guide event from the add account dialog
+  // Lắng nghe sự kiện cookie guide toàn cục từ dialog thêm tài khoản
   useEffect(() => {
     const handleShowGuide = () => setShowCookieGuide(true);
     window.addEventListener('show-cookie-guide', handleShowGuide);
@@ -176,9 +163,6 @@ export function InventoryScanner() {
     pagination,
     setPagination,
   } = useScannerUrlTableState({ urlState, setters });
-  const [showCookieGuide, setShowCookieGuide] = useState<boolean>(false);
-  const [showAddAccountModal, setShowAddAccountModal] = useState<boolean>(false);
-
   const accountOptions = useScannerAccountOptions(state.accounts);
   const { filteredScannedItems, visibleManualItems, sellDialogSourceItems, tableData } =
     useScannerDisplayData({
@@ -277,188 +261,25 @@ export function InventoryScanner() {
     return sellDialogSourceItems.map((item) => createPortfolioReportRowFromScannerItem(item, t));
   }, [sellDialogSourceItems, t]);
 
-  const handleSellDelete = useCallback(
-    (id: string) => {
-      if (id.startsWith('manual-')) {
-        removeItem('', true, id);
-      } else {
-        removeItem('', false, id);
-      }
-    },
-    [removeItem]
-  );
-
-  const replaceScannedItemWithManualItem = useCallback(
-    (idToRemove: string, scannedItem: ScanResultItem, replacement: ManualItemReplacement) => {
-      removeItem('', false, idToRemove);
-      addManualItem(
-        scannedItem.caseItem,
-        scannedItem.price,
-        replacement.quantity,
-        replacement.buyPrice,
-        replacement.buyDate,
-        replacement.sourceAccounts,
-        replacement.storageUnitId,
-        scannedItem.buffPriceManual,
-        scannedItem.buffRateManual,
-        scannedItem.storageUnitName,
-        replacement.stickerPriceRate,
-        replacement.stickerBuyPriceRate,
-        replacement.id,
-        replacement.note
-      );
-    },
-    [addManualItem, removeItem]
-  );
-
-  const handleSellUpdateQuantity = useCallback(
-    (id: string, newQty: number) => {
-      if (id.startsWith('manual-')) {
-        updateManualItemQty(id, newQty);
-      } else {
-        const scannedItem = findScannedItemByRowId(sellDialogSourceItems, id);
-        if (scannedItem) {
-          replaceScannedItemWithManualItem(
-            id,
-            scannedItem,
-            createScannerManualReplacement(scannedItem, { quantity: newQty })
-          );
-        }
-      }
-    },
-    [updateManualItemQty, replaceScannedItemWithManualItem, sellDialogSourceItems]
-  );
-
-  const handleUpdateLot = useCallback(
-    async (
-      id: string,
-      payload: {
-        quantity?: number;
-        buyPrice?: number;
-        note?: string;
-        sourceAccounts?: Array<{ steamId64: string; name: string }>;
-        storageUnitId?: string;
-        stickerPriceRate?: number;
-        stickerBuyPriceRate?: number;
-        dopplerPhase?: string;
-        patternInfo?: PortfolioTableRow['patternInfo'];
-        inspectLink?: string;
-      }
-    ) => {
-      if (id.startsWith('manual-')) {
-        updateManualItem(id, {
-          quantity: payload.quantity,
-          buyPrice: payload.buyPrice,
-          note: payload.note,
-          sourceAccounts: payload.sourceAccounts,
-          storageUnitId: payload.storageUnitId,
-          stickerPriceRate: payload.stickerPriceRate,
-          stickerBuyPriceRate: payload.stickerBuyPriceRate,
-          dopplerPhase: payload.dopplerPhase,
-          patternInfo: payload.patternInfo,
-          inspectLink: payload.inspectLink,
-        });
-      } else {
-        const scannedItem = findScannedItemByRowId(tableData, id);
-        if (scannedItem) {
-          replaceScannedItemWithManualItem(
-            id,
-            scannedItem,
-            createScannerManualReplacement(
-              scannedItem,
-              {
-                quantity: payload.quantity ?? scannedItem.quantity,
-                buyPrice: payload.buyPrice ?? scannedItem.buyPrice,
-                sourceAccounts: payload.sourceAccounts ?? scannedItem.sourceAccounts,
-                storageUnitId: payload.storageUnitId ?? scannedItem.storageUnitId,
-                stickerPriceRate: payload.stickerPriceRate ?? scannedItem.buffRateManual,
-                stickerBuyPriceRate: payload.stickerBuyPriceRate ?? scannedItem.buffRateManual,
-                note: payload.note ?? scannedItem.note,
-              },
-              { preserveEditableFields: true, id }
-            )
-          );
-        }
-      }
-    },
-    [replaceScannedItemWithManualItem, updateManualItem, tableData]
-  );
-
-  const handleUpdateQuantity = useCallback(
-    (id: string, newQty: number) => {
-      if (id.startsWith('manual-')) {
-        updateManualItemQty(id, newQty);
-      } else {
-        const scannedItem = findScannedItemByRowId(tableData, id);
-        if (scannedItem) {
-          replaceScannedItemWithManualItem(
-            id,
-            scannedItem,
-            createScannerManualReplacement(
-              scannedItem,
-              { quantity: newQty },
-              { preserveEditableFields: true, id }
-            )
-          );
-        }
-      }
-    },
-    [updateManualItemQty, replaceScannedItemWithManualItem, tableData]
-  );
-
-  const handleUpdateBuyPrice = useCallback(
-    (id: string, newBuyPrice: number) => {
-      if (id.startsWith('manual-')) {
-        updateManualItem(id, { buyPrice: newBuyPrice });
-      } else {
-        const scannedItem = findScannedItemByRowId(tableData, id);
-        if (scannedItem) {
-          replaceScannedItemWithManualItem(
-            id,
-            scannedItem,
-            createScannerManualReplacement(
-              scannedItem,
-              { buyPrice: newBuyPrice },
-              { preserveEditableFields: true, id }
-            )
-          );
-        }
-      }
-    },
-    [updateManualItem, replaceScannedItemWithManualItem, tableData]
-  );
-
-  const handleUpdateNote = useCallback(
-    (id: string, newNote: string) => {
-      if (id.startsWith('manual-')) {
-        updateManualItem(id, { note: newNote });
-      } else {
-        const scannedItem = findScannedItemByRowId(tableData, id);
-        if (scannedItem) {
-          replaceScannedItemWithManualItem(
-            id,
-            scannedItem,
-            createScannerManualReplacement(
-              scannedItem,
-              { note: newNote },
-              { preserveEditableFields: true, id }
-            )
-          );
-        }
-      }
-    },
-    [updateManualItem, replaceScannedItemWithManualItem, tableData]
-  );
-
-  const handleDelete = useCallback(
-    (id: string) => {
-      handleSellDelete(id);
-      if (relatedPortfolioRowsForPanel.length <= 1 || mode === 'transactions') {
-        setSelectedItemForPanel(null);
-      }
-    },
-    [handleSellDelete, relatedPortfolioRowsForPanel.length, mode]
-  );
+  const {
+    handleDelete,
+    handleSellDelete,
+    handleSellUpdateQuantity,
+    handleUpdateBuyPrice,
+    handleUpdateLot,
+    handleUpdateNote,
+    handleUpdateQuantity,
+  } = useScannerPortfolioItemActions({
+    tableData,
+    sellDialogSourceItems,
+    relatedPortfolioRowsForPanelLength: relatedPortfolioRowsForPanel.length,
+    mode,
+    addManualItem,
+    updateManualItem,
+    updateManualItemQty,
+    removeItem,
+    setSelectedItemForPanel,
+  });
 
   const handleDeleteSelected = useCallback(() => {
     if (selectedRows.length === 0) return;
@@ -524,89 +345,26 @@ export function InventoryScanner() {
     }, 0);
   }, [state.accounts]);
 
-  /**
-   * Defines TanStack Table columns, linking custom cells with action callbacks
-   * and complex multi-source Buff & Steam pricing models.
-   */
-  const columns = useMemo<ColumnDef<ScanResultItem>[]>(
-    () =>
-      buildInventoryColumns({
-        t,
-        buffLoadingKeys: state.buffLoadingKeys,
-        buffPricesCny: state.buffPricesCny,
-        buffPriceErrors: state.buffPriceErrors,
-        fetchBuffPrice,
-        updateBuffPriceCny,
-        buffCnyToVndRate,
-        rateAll,
-        rateLe,
-        updateManualItemQty,
-        mergedRawItems: mergedRaw?.items,
-        inspectingKeys,
-        patternResults,
-        inspectPattern,
-        mode: activeMode,
-        onSelectItem: setSelectedItemForPanel,
-        isMobile,
-      }),
-    [
-      t,
-      buffCnyToVndRate,
-      state.buffLoadingKeys,
-      state.buffPriceErrors,
-      state.buffPricesCny,
-      fetchBuffPrice,
-      updateBuffPriceCny,
-      rateAll,
-      rateLe,
-      updateManualItemQty,
-      mergedRaw,
-      inspectingKeys,
-      patternResults,
-      inspectPattern,
-      activeMode,
-      setSelectedItemForPanel,
-      isMobile,
-    ]
-  );
-
-  const { columnVisibility, setColumnVisibility } = useScannerColumnVisibility();
-
-  // eslint-disable-next-line react-hooks/incompatible-library
-  const table = useReactTable({
-    data: tableData,
-    columns,
-    state: {
-      globalFilter: debouncedUrlState.q,
-      columnVisibility,
-      pagination,
-      rowSelection,
-    },
-    onColumnVisibilityChange: setColumnVisibility,
-    onPaginationChange: setPagination,
-    onRowSelectionChange: setRowSelection,
-    getRowId: getScanResultItemRowId,
-    enableRowSelection: true,
-    initialState: {
-      sorting: [{ id: 'total', desc: true }],
-    },
-    onGlobalFilterChange: setGlobalFilter,
-    globalFilterFn: (row, _columnId, filterValue) => {
-      const query = String(filterValue).trim().toLowerCase();
-      if (!query) return true;
-      return [
-        row.original.caseItem.name,
-        row.original.caseItem.marketHashName,
-        row.original.type,
-        ...(row.original.sourceAccounts ?? []).map((account) => account.name),
-      ]
-        .filter(Boolean)
-        .some((value) => String(value).toLowerCase().includes(query));
-    },
-    getCoreRowModel: getCoreRowModel(),
-    getFilteredRowModel: getFilteredRowModel(),
-    getSortedRowModel: getSortedRowModel(),
-    getPaginationRowModel: getPaginationRowModel(),
+  const table = useScannerResultsTable({
+    t,
+    tableData,
+    debouncedGlobalFilter: debouncedUrlState.q,
+    pagination,
+    setPagination,
+    rowSelection,
+    setRowSelection,
+    setGlobalFilter,
+    scannerState: state,
+    fetchBuffPrice,
+    updateBuffPriceCny,
+    buffCnyToVndRate,
+    rateAll,
+    rateLe,
+    updateManualItemQty,
+    mergedRawItems: mergedRaw?.items,
+    activeMode,
+    onSelectItem: setSelectedItemForPanel,
+    isMobile,
   });
 
   return (

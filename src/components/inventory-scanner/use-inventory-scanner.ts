@@ -3,10 +3,16 @@
 import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from 'react';
 import { useLocalStorage } from '@/hooks/use-local-storage';
 import { useSession } from '@/components/auth/use-session';
+import { fetchUserBuffPrices, mergeUserBuffPrices } from '@/lib/api-client/user-buff-prices-api';
+import {
+  clearLocalBuffPrices,
+  hasBuffPrices,
+  readLocalBuffPrices,
+  writeLocalBuffPrices,
+} from '@/utils/buff-prices';
 import { AccountEntry, ScanResultItem } from './types';
 import {
   LS_ACCOUNTS,
-  LS_BUFF_PRICES_CNY,
   LS_MANUAL_ITEMS,
   createAccount,
   LS_RATE_ALL,
@@ -82,7 +88,7 @@ export function useInventoryScanner() {
   const [state, dispatch] = useReducer(scannerReducer, null, initScannerState);
   const [urlState, setters, debouncedUrlState] = useQueryParamsState(scannerQueryConfig);
 
-  // Synchronize URL parameters -> Reducer state (one-way source of truth)
+  // Đồng bộ tham số URL -> state reducer (nguồn sự thật một chiều)
   useEffect(() => {
     if (urlState.q !== state.globalFilter) {
       dispatch({ type: 'SET_GLOBAL_FILTER', filter: urlState.q });
@@ -102,7 +108,7 @@ export function useInventoryScanner() {
     }
   }, [urlState.type, state.selectedTypes]);
 
-  // Reset URL params when import succeeds
+  // Reset tham số URL khi import thành công
   useEffect(() => {
     if (state.portfolioImportMessage) {
       setters.q('');
@@ -113,7 +119,7 @@ export function useInventoryScanner() {
     }
   }, [state.portfolioImportMessage, setters]);
 
-  // Separate non-reducer rates state using useLocalStorage
+  // Tách state rate ngoài reducer bằng useLocalStorage
   const [rateAll, setRateAll] = useLocalStorage<number>(LS_RATE_ALL, 60);
   const [rateLe, setRateLe] = useLocalStorage<number>(LS_RATE_LE, 65);
   const [buffCnyToVndRate, setBuffCnyToVndRate] = useLocalStorage<number>(
@@ -128,47 +134,40 @@ export function useInventoryScanner() {
   const [isLoaded, setIsLoaded] = useState(false);
   const [isRefreshingPrices, setIsRefreshingPrices] = useState(false);
 
-  const { user, googleConfigured } = useSession();
+  const { user, googleConfigured, loading: sessionLoading } = useSession();
+  const userId = user?.id ?? null;
 
   const scanAbortControllerRef = useRef<AbortController | null>(null);
 
-  // Load persisted state from localStorage after mount (avoids hydration mismatch)
+  // Nạp state đã lưu từ localStorage sau khi mount để tránh lệch hydration
   useEffect(() => {
     let savedAccs: AccountEntry[] | null = null;
     let savedManual: ScanResultItem[] | null = null;
-    let savedBuffPrices: Record<string, number> | null = null;
 
     try {
       const raw = localStorage.getItem(LS_ACCOUNTS);
       if (raw) savedAccs = JSON.parse(raw);
     } catch {
-      /* ignore */
+      /* bỏ qua */
     }
 
     try {
       const raw = localStorage.getItem(LS_MANUAL_ITEMS);
       if (raw) savedManual = JSON.parse(raw);
     } catch {
-      /* ignore */
-    }
-
-    try {
-      const raw = localStorage.getItem(LS_BUFF_PRICES_CNY);
-      if (raw) savedBuffPrices = JSON.parse(raw);
-    } catch {
-      /* ignore */
+      /* bỏ qua */
     }
 
     dispatch({
       type: 'INIT_LOAD',
       accounts: savedAccs ?? [createAccount('')],
       manualItems: savedManual ?? [],
-      buffPricesCny: savedBuffPrices ?? {},
+      buffPricesCny: readLocalBuffPrices(),
     });
     setIsLoaded(true);
   }, []);
 
-  // Sync to LocalStorage on updates (only after initial load to avoid overwriting)
+  // Đồng bộ vào LocalStorage khi cập nhật, chỉ sau lần nạp đầu để tránh ghi đè
   useEffect(() => {
     if (!isLoaded) return;
     localStorage.setItem(LS_ACCOUNTS, JSON.stringify(state.accounts));
@@ -180,11 +179,44 @@ export function useInventoryScanner() {
   }, [state.manualItems, isLoaded]);
 
   useEffect(() => {
-    if (!isLoaded) return;
-    localStorage.setItem(LS_BUFF_PRICES_CNY, JSON.stringify(state.buffPricesCny));
-  }, [state.buffPricesCny, isLoaded]);
+    if (!isLoaded || sessionLoading || userId) return;
+    writeLocalBuffPrices(state.buffPricesCny);
+  }, [state.buffPricesCny, isLoaded, sessionLoading, userId]);
 
-  // For faceted filter toggling (synchronized via URL state)
+  useEffect(() => {
+    if (!isLoaded || sessionLoading) return;
+
+    let cancelled = false;
+
+    async function loadPersistedBuffPrices() {
+      if (!userId) {
+        dispatch({ type: 'SET_BUFF_PRICES_CNY', buffPricesCny: readLocalBuffPrices() });
+        return;
+      }
+
+      try {
+        const localPrices = readLocalBuffPrices();
+        const pricesCny = hasBuffPrices(localPrices)
+          ? await mergeUserBuffPrices(localPrices)
+          : await fetchUserBuffPrices();
+
+        if (!cancelled) {
+          clearLocalBuffPrices();
+          dispatch({ type: 'SET_BUFF_PRICES_CNY', buffPricesCny: pricesCny });
+        }
+      } catch (error) {
+        console.error('Failed to load user BUFF prices:', error);
+      }
+    }
+
+    void loadPersistedBuffPrices();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [isLoaded, sessionLoading, userId]);
+
+  // Cho thao tác bật/tắt faceted filter, được đồng bộ qua state URL
   const toggleTypeFilter = useCallback(
     (itemType: string) => {
       setters.type((prev) => {
@@ -213,7 +245,7 @@ export function useInventoryScanner() {
 
   const selectedTypesSet = useMemo(() => new Set(urlState.type), [urlState.type]);
 
-  // Integration of specialized modular sub-hooks
+  // Tích hợp các sub-hook module chuyên biệt
   const {
     mergedRaw,
     merged,
@@ -254,7 +286,7 @@ export function useInventoryScanner() {
     applyBuffPricing,
   });
 
-  // Call our three new sub-hooks
+  // Gọi ba sub-hook mới
   const {
     updateAccountUrl,
     updateAccountCookie,
@@ -284,6 +316,7 @@ export function useInventoryScanner() {
     isAnyScanPending,
     filteredManualItems,
     scannedItems: merged?.scannedItems ?? [],
+    isUserAuthenticated: Boolean(userId),
   });
 
   return {

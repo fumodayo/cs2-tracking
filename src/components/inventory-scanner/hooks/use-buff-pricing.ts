@@ -6,6 +6,7 @@ import { toast } from '@/stores';
 import { ScanResultItem } from '../types';
 import { getLocalApiKey } from '../utils';
 import { ScannerState, ScannerAction } from '../scanner-reducer';
+import { updateUserBuffPrice } from '@/lib/api-client/user-buff-prices-api';
 
 interface UseBuffPricingProps {
   state: ScannerState;
@@ -16,6 +17,7 @@ interface UseBuffPricingProps {
   isAnyScanPending: boolean;
   filteredManualItems: ScanResultItem[];
   scannedItems: ScanResultItem[];
+  isUserAuthenticated: boolean;
 }
 
 export function useBuffPricing({
@@ -26,17 +28,31 @@ export function useBuffPricing({
   isAnyScanPending,
   filteredManualItems,
   scannedItems,
+  isUserAuthenticated,
 }: UseBuffPricingProps) {
   const { t } = useTranslation();
+  const persistUserBuffPrice = useCallback(
+    (marketHashName: string, priceCny: number | null) => {
+      if (!isUserAuthenticated) return;
+      void updateUserBuffPrice(marketHashName, priceCny).catch((error) => {
+        console.error(`Failed to persist BUFF price for ${marketHashName}:`, error);
+      });
+    },
+    [isUserAuthenticated]
+  );
+
   const updateBuffPriceCny = useCallback(
     (marketHashName: string, rawValue: string) => {
       dispatch({ type: 'UPDATE_BUFF_PRICE_CNY', marketHashName, rawValue });
+      const nextPrice = Number(rawValue.replace(',', '.'));
+      const priceCny = rawValue && Number.isFinite(nextPrice) && nextPrice > 0 ? nextPrice : null;
+      persistUserBuffPrice(marketHashName, priceCny);
     },
-    [dispatch]
+    [dispatch, persistUserBuffPrice]
   );
 
   /**
-   * Fetches latest BUFF163 price for a specific skin market hash name.
+   * Lấy giá BUFF163 mới nhất cho một market hash name skin cụ thể.
    */
   const fetchBuffPrice = useCallback(
     async (marketHashName: string, forceRefresh = false) => {
@@ -94,6 +110,7 @@ export function useBuffPricing({
         }
 
         dispatch({ type: 'BUFF_FETCH_SUCCESS', marketHashName, priceCny });
+        persistUserBuffPrice(marketHashName, priceCny);
       } catch (error) {
         dispatch({
           type: 'BUFF_FETCH_FAILURE',
@@ -105,7 +122,7 @@ export function useBuffPricing({
         });
       }
     },
-    [buffCnyToVndRate, dispatch, t]
+    [buffCnyToVndRate, dispatch, persistUserBuffPrice, t]
   );
 
   const refreshPrices = useCallback(async () => {

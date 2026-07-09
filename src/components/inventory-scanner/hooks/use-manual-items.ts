@@ -1,8 +1,8 @@
-"use client";
+'use client';
 
-import { useCallback } from "react";
-import { CaseItemData, ScanResultItem } from "../types";
-import { ScannerAction } from "../scanner-reducer";
+import { useCallback } from 'react';
+import { CaseItemData, ScanResultItem } from '../types';
+import { ScannerAction } from '../scanner-reducer';
 
 interface UseManualItemsProps {
   dispatch: React.Dispatch<ScannerAction>;
@@ -21,14 +21,14 @@ export function useManualItems({ dispatch }: UseManualItemsProps) {
       buffPriceManual?: number,
       buffRateManual?: number,
       storageUnitName?: string,
-      // Add new optional parameters
+      // Thêm tham số tùy chọn mới
       stickerPriceRate?: number,
       stickerBuyPriceRate?: number,
       id?: string,
-      note?: string,
+      note?: string
     ) => {
       dispatch({
-        type: "ADD_MANUAL_ITEM",
+        type: 'ADD_MANUAL_ITEM',
         caseItem,
         price,
         quantity,
@@ -45,25 +45,28 @@ export function useManualItems({ dispatch }: UseManualItemsProps) {
         stickerBuyPriceRate,
       });
     },
-    [dispatch],
+    [dispatch]
   );
 
-  const updateManualItemQty = useCallback((idOrName: string, qty: number) => {
-    dispatch({ type: "UPDATE_MANUAL_QTY", idOrName, qty });
-  }, [dispatch]);
+  const updateManualItemQty = useCallback(
+    (idOrName: string, qty: number) => {
+      dispatch({ type: 'UPDATE_MANUAL_QTY', idOrName, qty });
+    },
+    [dispatch]
+  );
 
   const updateManualItem = useCallback(
     (id: string, payload: Partial<ScanResultItem>) => {
-      dispatch({ type: "UPDATE_MANUAL_ITEM", id, payload });
+      dispatch({ type: 'UPDATE_MANUAL_ITEM', id, payload });
     },
-    [dispatch],
+    [dispatch]
   );
 
   const removeItem = useCallback(
     (marketHashName: string, isManual?: boolean, id?: string) => {
-      dispatch({ type: "REMOVE_ITEM", marketHashName, isManual, id });
+      dispatch({ type: 'REMOVE_ITEM', marketHashName, isManual, id });
     },
-    [dispatch],
+    [dispatch]
   );
 
   return {

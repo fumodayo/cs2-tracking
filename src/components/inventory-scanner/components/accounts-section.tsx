@@ -96,7 +96,7 @@ export function AccountsSection({
 
   return (
     <div className="mb-8 overflow-hidden rounded-xl border border-stone-800 bg-stone-900/50 transition-all duration-200">
-      {/* Header Row */}
+      {/* Hàng tiêu đề */}
       <div className="flex items-center justify-between p-4 select-none">
         <button
           type="button"
@@ -225,7 +225,7 @@ export function AccountsSection({
                       />
                     ))}
 
-                    {/* Add Account Dashed Card inside grid */}
+                    {/* Card nét đứt thêm tài khoản trong lưới */}
                     <button
                       type="button"
                       onClick={addAccount}

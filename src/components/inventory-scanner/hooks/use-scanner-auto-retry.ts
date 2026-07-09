@@ -27,7 +27,7 @@ export function useScannerAutoRetry({
   const hasScanCompletedRef = useRef(false);
   const prevScanPendingRef = useRef(false);
 
-  // Transition monitoring to auto-trigger background price retrieval loops
+  // Theo dõi chuyển trạng thái để tự kích hoạt vòng lấy giá nền
   useEffect(() => {
     if (prevScanPendingRef.current && !isAnyScanPending) {
       hasScanCompletedRef.current = true;
@@ -37,7 +37,7 @@ export function useScannerAutoRetry({
     prevScanPendingRef.current = isAnyScanPending;
   }, [isAnyScanPending, dispatch]);
 
-  // Automatic retry loops for items returned with 0 VND values
+  // Vòng retry tự động cho vật phẩm trả về giá trị 0 VND
   const MAX_AUTO_RETRY_ROUNDS = 15;
   const AUTO_RETRY_COOLDOWN_MS = 5_000;
 
@@ -113,7 +113,7 @@ export function useScannerAutoRetry({
         try {
           data = JSON.parse(resText) as PriceRetryResponse;
         } catch {
-          // ignore
+          // bỏ qua
         }
 
         if (res.ok && data && Array.isArray(data.results)) {

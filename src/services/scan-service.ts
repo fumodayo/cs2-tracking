@@ -1,8 +1,6 @@
-import { getDatabase } from '@/infrastructure/db/mongo-client';
 import { createServices } from '@/infrastructure/container';
 import { getSteamCaseImageUrl } from '@/infrastructure/cases/steam-case-image-provider';
-import { resolveSteamId, fetchSteamWalletBalance } from '@/infrastructure/steam';
-import type { StorageUnitInfo } from '@/domain/storage-unit';
+import { resolveSteamId } from '@/infrastructure/steam';
 
 import { updateScanJob } from '@/services/scan-job-store';
 import {
@@ -14,7 +12,13 @@ import {
   saveScanToCache,
   getNextExpiry,
 } from '@/services/scan-cache';
-import { analyzeItemStatus } from '@/services/scan-steam-fetcher';
+import { buildCachedScanJobResult } from '@/services/scan-cached-result';
+import {
+  fetchScanWalletBalance,
+  persistScanAccountCookieError,
+  persistSuccessfulScanAccountState,
+} from '@/services/scan-service-account-state';
+import { analyzeSteamInventoryItems } from '@/services/scan-service-inventory-analysis';
 import {
   buildSteamCookieHeader,
   buildSteamInventoryHeaders,
@@ -22,25 +26,9 @@ import {
   validateSteamCookieSession,
 } from '@/services/scan-steam-auth';
 import { fetchSteamInventorySnapshot } from '@/services/scan-steam-inventory';
-import { decodeInspectLink } from '@/services/pattern/inspect-link-decoder';
-import { analyzePattern } from '@/services/pattern/pattern-analyzer';
-import { buildInspectLink } from '@/services/pattern/inspect-link-builder';
 import { mapWithConcurrency } from '@/services/parser/utils';
-import {
-  STEAM_IMAGE_CDN,
-  enrichPatternInfoWithSteamStickerDescriptions,
-  getMarketHashNameLookupKey,
-  parseAccessoryDescriptions,
-} from '@/services/scan-accessories';
-import {
-  getDopplerPhaseFromDescription,
-  getRarityFromDescription,
-  isStorageUnitDescription,
-  shouldIncludeSteamDescription,
-} from '@/services/scan-item-metadata';
+import { STEAM_IMAGE_CDN, getMarketHashNameLookupKey } from '@/services/scan-accessories';
 import type { CaseItem } from '@/domain/case-item';
-import type { PatternInfo } from '@/domain/pattern-info';
-import { inferInventoryItemType, type Cs2InventoryItemType } from '@/utils/cs2-item-type';
 
 const INVENTORY_PRICE_CONCURRENCY = 4;
 
@@ -69,7 +57,7 @@ export async function runScanJob(
       message: 'formattingSteamLink',
     });
 
-    // Step 1: Resolve to SteamID64 + profile info
+    // Bước 1: Resolve thành SteamID64 và thông tin hồ sơ
     let profile: SteamProfile;
     try {
       const resolved = await resolveSteamId(steamUrl);
@@ -81,7 +69,7 @@ export async function runScanJob(
 
     updateScanJob(jobId, { percent: 15, message: 'checkingCache' });
 
-    // Step 2: Check cache (unless force refresh)
+    // Bước 2: Kiểm tra cache trừ khi ép refresh
     await ensureCacheIndexes();
     requestHasCookie = !!steamCookie && steamCookie.trim().length > 0;
     const cacheScope = { steamId64, ownerId, hasCookie: requestHasCookie };
@@ -104,7 +92,7 @@ export async function runScanJob(
       }
     }
 
-    // Step 2.5: Validate Cookie if provided
+    // Bước 2.5: Validate cookie nếu được cung cấp
     let hasCookie = false;
     let cookieHeader: string | undefined;
     if (steamCookie && steamCookie.trim()) {
@@ -144,274 +132,13 @@ export async function runScanJob(
       message: 'analyzingItems',
     });
 
-    const itemCounts: Record<string, { count: number; onMarket: boolean }> = {};
-    const assetsByDescKey = new Map<string, Array<(typeof allAssets)[number]>>();
-    const assetsByDescStatusKey = new Map<string, Array<(typeof allAssets)[number]>>();
-    for (const [assetIndex, asset] of allAssets.entries()) {
-      const statusSuffix = asset.onMarket ? '_onMarket' : '_normal';
-      const descKey = `${asset.classid}_${asset.instanceid}`;
-      const key = `${asset.classid}_${asset.instanceid}${statusSuffix}`;
-      const amount = parseInt(asset.amount, 10) || 1;
-
-      const descAssets = assetsByDescKey.get(descKey);
-      if (descAssets) {
-        descAssets.push(asset);
-      } else {
-        assetsByDescKey.set(descKey, [asset]);
-      }
-
-      const statusAssets = assetsByDescStatusKey.get(key);
-      if (statusAssets) {
-        statusAssets.push(asset);
-      } else {
-        assetsByDescStatusKey.set(key, [asset]);
-      }
-
-      if (!itemCounts[key]) {
-        itemCounts[key] = { count: 0, onMarket: !!asset.onMarket };
-      }
-      itemCounts[key].count += amount;
-
-      if ((assetIndex + 1) % 1000 === 0) {
-        updateScanJob(jobId, {
-          percent: 56,
-          message: 'analyzingItems',
-          detail: { count: assetIndex + 1, total: allAssets.length },
-        });
-      }
-    }
-
-    const descMap = new Map<string, (typeof allDescriptions)[0]>();
-    for (const desc of allDescriptions) {
-      const key = `${desc.classid}_${desc.instanceid}`;
-      if (!descMap.has(key)) descMap.set(key, desc);
-    }
-
-    const assetPropertiesMap = new Map<
-      string,
-      Array<{
-        propertyid: number;
-        int_value?: string;
-        float_value?: string;
-        string_value?: string;
-        name?: string;
-      }>
-    >();
-    for (const ap of allAssetProperties) {
-      if (ap.assetid && ap.asset_properties) {
-        assetPropertiesMap.set(ap.assetid, ap.asset_properties);
-      }
-    }
-
-    const cs2Items: Record<
-      string,
-      {
-        marketHashName: string;
-        count: number;
-        itemType: Cs2InventoryItemType;
-        iconUrl: string | null;
-        rarity?: { name: string; color: string };
-        holdDays: number;
-        tradeHoldUntil?: string;
-        tradeProtected: boolean;
-        onMarket: boolean;
-        dopplerPhase?: string;
-        inspectLink?: string;
-        patternInfo?: PatternInfo;
-      }
-    > = {};
-
-    const storageUnits: StorageUnitInfo[] = [];
-    const itemCountEntries = Object.entries(itemCounts);
-    let analyzedGroupCount = 0;
-    let analyzedTargetCount = 0;
-    const updateAnalyzeProgress = () => {
-      updateScanJob(jobId, {
-        percent: 56 + Math.round((analyzedGroupCount / Math.max(itemCountEntries.length, 1)) * 8),
-        message: 'analyzingItems',
-        detail: {
-          count: analyzedGroupCount,
-          total: itemCountEntries.length,
-          assets: analyzedTargetCount,
-        },
-      });
-    };
-
-    for (const [key, info] of itemCountEntries) {
-      analyzedGroupCount += 1;
-      if (analyzedGroupCount === 1 || analyzedGroupCount % 25 === 0) {
-        updateAnalyzeProgress();
-      }
-
-      const parts = key.split('_');
-      const classid = parts[0];
-      const instanceid = parts[1];
-      const descKey = `${classid}_${instanceid}`;
-
-      const desc = descMap.get(descKey);
-      if (!desc) continue;
-
-      const isStorageUnit = isStorageUnitDescription(desc);
-
-      if (isStorageUnit) {
-        const relatedAssets = assetsByDescKey.get(descKey) ?? [];
-        for (const asset of relatedAssets) {
-          storageUnits.push({
-            assetId: asset.assetid,
-            name: desc.name || 'Storage Unit',
-            iconUrl: desc.icon_url ? `${STEAM_IMAGE_CDN}/${desc.icon_url}/360fx360f` : null,
-          });
-        }
-        continue;
-      }
-
-      const { holdDays, tradeProtected, tradeHoldUntil } = analyzeItemStatus(desc);
-      const isTradeLocked = holdDays > 0;
-      const isSpecialState = isTradeLocked || tradeProtected || info.onMarket;
-
-      if (!shouldIncludeSteamDescription(desc, isSpecialState)) continue;
-
-      const itemType = inferInventoryItemType({
-        name: desc.name,
-        marketHashName: desc.market_hash_name,
-        steamType: desc.type,
-        tags: desc.tags,
-      });
-
-      const rarity = getRarityFromDescription(desc);
-      const dopplerPhase = getDopplerPhaseFromDescription(desc);
-
-      const relatedAssets = assetsByDescStatusKey.get(key) ?? [];
-      const firstAsset = relatedAssets[0];
-      const inspectAction = desc.actions?.find((a) => a.link?.includes('csgo_econ_action_preview'));
-      const accessoryDescriptions = parseAccessoryDescriptions([
-        ...(desc.descriptions ?? []),
-        ...(desc.owner_descriptions ?? []),
-      ]);
-      const scanTargets =
-        itemType === 'Skin'
-          ? relatedAssets.map((asset) => ({
-              asset,
-              count: parseInt(asset.amount, 10) || 1,
-            }))
-          : [{ asset: firstAsset, count: info.count }];
-
-      for (const [targetIndex, target] of scanTargets.entries()) {
-        analyzedTargetCount += 1;
-        if (analyzedTargetCount % 100 === 0) {
-          updateAnalyzeProgress();
-        }
-
-        const targetAsset = target.asset;
-        const props = targetAsset ? assetPropertiesMap.get(targetAsset.assetid) : undefined;
-        const itemCert = props?.find((p) => p.propertyid === 6)?.string_value;
-        let inspectLink: string | undefined;
-        if (inspectAction?.link && targetAsset) {
-          inspectLink = buildInspectLink(
-            inspectAction.link,
-            steamId64,
-            targetAsset.assetid,
-            itemCert
-          );
-        }
-
-        let patternInfo: PatternInfo | undefined;
-        if (itemType === 'Skin') {
-          const decodedInspect = inspectLink ? decodeInspectLink(inspectLink) : null;
-          const propPaintSeed = props?.find((p) => p.propertyid === 1)?.int_value;
-          const propFloatValue = props?.find((p) => p.propertyid === 2)?.float_value;
-
-          if (propPaintSeed) {
-            try {
-              const paintSeed = parseInt(propPaintSeed, 10);
-              const floatValue = propFloatValue ? parseFloat(propFloatValue) : undefined;
-              const paintIndex = decodedInspect?.paintIndex;
-
-              patternInfo = await analyzePattern(
-                desc.market_hash_name,
-                paintSeed,
-                floatValue,
-                paintIndex,
-                dopplerPhase,
-                {
-                  stickers: decodedInspect?.stickers,
-                  keychains: decodedInspect?.keychains,
-                }
-              );
-              patternInfo = enrichPatternInfoWithSteamStickerDescriptions(
-                patternInfo,
-                accessoryDescriptions.stickers,
-                accessoryDescriptions.charms
-              );
-            } catch (err) {
-              console.debug('[scan-service] Failed to analyze pattern from asset properties:', err);
-            }
-          }
-
-          if (!patternInfo && decodedInspect) {
-            try {
-              patternInfo = await analyzePattern(
-                desc.market_hash_name,
-                decodedInspect.paintSeed,
-                decodedInspect.floatValue,
-                decodedInspect.paintIndex,
-                dopplerPhase,
-                {
-                  stickers: decodedInspect.stickers,
-                  keychains: decodedInspect.keychains,
-                }
-              );
-              patternInfo = enrichPatternInfoWithSteamStickerDescriptions(
-                patternInfo,
-                accessoryDescriptions.stickers,
-                accessoryDescriptions.charms
-              );
-            } catch (err) {
-              console.debug('[scan-service] Failed to decode/analyze pattern during scan:', err);
-            }
-          }
-        }
-
-        const stateKey = info.onMarket
-          ? 'onMarket'
-          : tradeProtected
-            ? 'tradeProtected'
-            : holdDays > 0
-              ? 'hold'
-              : 'normal';
-        const assetKey =
-          itemType === 'Skin'
-            ? (targetAsset?.assetid ?? inspectLink ?? `skin-${targetIndex}`)
-            : 'stack';
-        const cs2Key = `${desc.market_hash_name}_${dopplerPhase || ''}_${stateKey}_${assetKey}`;
-
-        if (!cs2Items[cs2Key]) {
-          cs2Items[cs2Key] = {
-            marketHashName: desc.market_hash_name,
-            count: 0,
-            itemType,
-            iconUrl: desc.icon_url ?? null,
-            rarity,
-            holdDays,
-            tradeHoldUntil,
-            tradeProtected,
-            onMarket: info.onMarket,
-            dopplerPhase,
-            inspectLink,
-            patternInfo,
-          };
-        } else {
-          cs2Items[cs2Key].holdDays = Math.max(cs2Items[cs2Key].holdDays, holdDays);
-          if (tradeHoldUntil) {
-            const curVal = cs2Items[cs2Key].tradeHoldUntil;
-            if (!curVal || new Date(tradeHoldUntil).getTime() > new Date(curVal).getTime()) {
-              cs2Items[cs2Key].tradeHoldUntil = tradeHoldUntil;
-            }
-          }
-        }
-        cs2Items[cs2Key].count += target.count;
-      }
-    }
+    const { cs2Items, storageUnits } = await analyzeSteamInventoryItems({
+      jobId,
+      steamId64,
+      assets: allAssets,
+      descriptions: allDescriptions,
+      assetProperties: allAssetProperties,
+    });
 
     updateScanJob(jobId, { percent: 65, message: 'fetchingPriceInfo' });
 
@@ -425,6 +152,7 @@ export async function runScanJob(
       new Set(cs2Keys.map((key) => cs2Items[key].marketHashName))
     );
     const iconUrlByMarketHashName = new Map<string, string>();
+    // Giữ URL icon Steam cho vật phẩm ngoài chưa rõ để UI vẫn render được thumbnail.
     for (const key of cs2Keys) {
       const item = cs2Items[key];
       if (item.iconUrl && !iconUrlByMarketHashName.has(item.marketHashName)) {
@@ -475,6 +203,7 @@ export async function runScanJob(
         let imageUrl: string | null = caseItem?.imageUrl ?? null;
 
         if (!caseItem) {
+          // Vật phẩm inventory chưa rõ được định giá qua lookup fallback và nhận ảnh best-effort.
           const itemIconUrl = iconUrlByMarketHashName.get(marketHashName);
           if (itemIconUrl) {
             imageUrl = `${STEAM_IMAGE_CDN}/${itemIconUrl}/360fx360f`;
@@ -549,22 +278,7 @@ export async function runScanJob(
 
     updateScanJob(jobId, { percent: 98, message: 'savingScanResult' });
 
-    let walletRaw: string | null = null;
-    let walletVnd: number | null = null;
-    if (hasCookie && cookieHeader) {
-      try {
-        const walletResult = await fetchSteamWalletBalance(cookieHeader);
-        if (walletResult) {
-          walletRaw = walletResult.raw;
-          walletVnd = walletResult.vnd;
-        } else {
-          walletRaw = 'walletBalanceNotFound';
-        }
-      } catch (walletErr) {
-        console.error('Failed to fetch steam wallet balance:', walletErr);
-        walletRaw = `walletBalanceError:message=${walletErr instanceof Error ? walletErr.message : String(walletErr)}`;
-      }
-    }
+    const { walletRaw, walletVnd } = await fetchScanWalletBalance({ hasCookie, cookieHeader });
 
     const scanResult: CachedScanResult = {
       steamId64,
@@ -586,23 +300,16 @@ export async function runScanJob(
         : {}),
     };
 
+    // Cache toàn bộ kết quả private, nhưng sau đó chỉ lộ trường private cho request có cookie.
     await saveScanToCache({ steamId64, ownerId, hasCookie }, scanResult);
 
-    if (hasCookie && ownerId && ownerId !== 'guest') {
-      try {
-        const db = await getDatabase();
-        const updateDoc: Record<string, unknown> = { cookieError: null };
-        if (walletRaw !== null) {
-          updateDoc.walletBalance = walletRaw;
-          updateDoc.walletBalanceVnd = walletVnd;
-        }
-        await db
-          .collection('portfolio_accounts')
-          .updateOne({ steamId64, ownerId }, { $set: updateDoc });
-      } catch {
-        /* ignore */
-      }
-    }
+    await persistSuccessfulScanAccountState({
+      hasCookie,
+      ownerId,
+      steamId64,
+      walletRaw,
+      walletVnd,
+    });
 
     updateScanJob(jobId, {
       status: 'done',
@@ -630,28 +337,11 @@ export async function runScanJob(
     });
   } catch (err) {
     console.error('Scan job error:', err);
-    if (ownerId && steamId64 && ownerId !== 'guest') {
-      const isCookieError =
-        err instanceof Error &&
-        (err.message.includes('Cookie') ||
-          err.message.includes('cookie') ||
-          err.message.includes('privateInventory') ||
-          err.message.includes('Family View') ||
-          err.message.includes('familyView'));
-      if (isCookieError) {
-        try {
-          const db = await getDatabase();
-          await db
-            .collection('portfolio_accounts')
-            .updateOne({ steamId64, ownerId }, { $set: { cookieError: err.message } });
-        } catch {
-          /* ignore */
-        }
-      }
-    }
+    await persistScanAccountCookieError({ ownerId, steamId64, error: err });
 
     if (steamId64) {
       try {
+        // Nếu fetch Steam trực tiếp fail, trả cache hết hạn gần nhất để UI vẫn dùng được.
         const expiredCache = await getCachedScan(
           { steamId64, ownerId, hasCookie: requestHasCookie },
           { ignoreExpiry: true }
@@ -684,49 +374,4 @@ export async function runScanJob(
       error: err instanceof Error ? err.message : 'errScanInventory',
     });
   }
-}
-
-function buildCachedScanJobResult({
-  cached,
-  includePrivateFields,
-  profile,
-  normalizeItems = false,
-}: {
-  cached: CachedScanResult;
-  includePrivateFields: boolean;
-  profile?: SteamProfile;
-  normalizeItems?: boolean;
-}) {
-  const items = normalizeItems ? normalizeScanItemTypes(cached.items) : cached.items;
-
-  return {
-    steamId64: cached.steamId64,
-    profile: cached.profile ?? profile,
-    items,
-    totalPrice: cached.totalPrice,
-    totalQuantity: cached.totalQuantity,
-    totalInventoryCount: cached.totalInventoryCount,
-    cached: true,
-    scannedAt: cached.scannedAt,
-    expiresAt: cached.expiresAt,
-    marketScanWarning: cached.marketScanWarning,
-    storageUnits: includePrivateFields ? (cached.storageUnits ?? []) : [],
-    ...(includePrivateFields
-      ? {
-          walletBalance: cached.walletBalance,
-          walletBalanceVnd: cached.walletBalanceVnd,
-        }
-      : {}),
-  };
-}
-
-function normalizeScanItemTypes(items: ScanItem[]): ScanItem[] {
-  return items.map((item) => {
-    const inferredType = inferInventoryItemType({
-      name: item.caseItem.name,
-      marketHashName: item.caseItem.marketHashName,
-    });
-
-    return item.type === inferredType ? item : { ...item, type: inferredType };
-  });
 }

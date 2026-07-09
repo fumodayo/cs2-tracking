@@ -54,7 +54,7 @@ export const RateCard: React.FC<RateCardProps> = ({
   const displayTotal =
     customCalculatedTotal !== undefined ? customCalculatedTotal : (total * value) / 100;
 
-  // Auto-assign icons
+  // Tự gán icon
   const getIcon = () => {
     if (icon) return icon;
     return color === 'blue' ? <Percent className="size-5" /> : <ShoppingBag className="size-5" />;

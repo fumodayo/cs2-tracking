@@ -51,7 +51,7 @@ export function groupItemsForSummary(items: ScanResultItem[]): ScanResultItem[] 
       return sum + itemStorageQty;
     }, 0);
 
-    // Merge source accounts
+    // Gộp tài khoản nguồn
     const sourceAccountsMap = new Map<string, SourceAccount>();
     for (const item of group) {
       if (item.sourceAccounts) {
@@ -90,7 +90,7 @@ export function groupItemsForSummary(items: ScanResultItem[]): ScanResultItem[] 
       }
     }
 
-    // Determine variant count
+    // Xác định số lượng biến thể
     const variantKeys = new Set(
       group.map((item) =>
         buildItemVariantKey({
@@ -150,7 +150,7 @@ export function useScannerDataMerged({
   rateLe,
 }: UseScannerDataMergedProps) {
   /**
-   * Applies third-party BUFF163 exchange calculations to a scanned item.
+   * Áp dụng phép tính tỷ giá BUFF163 bên thứ ba cho vật phẩm đã quét.
    */
   const applyBuffPricing = useCallback(
     (item: ScanResultItem): ScanResultItem => {
@@ -175,7 +175,7 @@ export function useScannerDataMerged({
     [buffCnyToVndRate, buffPricesCny]
   );
 
-  // Aggregated data derivation using useMemo
+  // Suy ra dữ liệu tổng hợp bằng useMemo
   const mergedRaw = useMemo(() => {
     const done = accounts.filter((a) => a.result).map((a) => a.result!);
     const hasScanned = done.length > 0;

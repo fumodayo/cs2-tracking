@@ -143,7 +143,7 @@ export function AccountCard({
 
   return (
     <div className="group hover:border-stone-750 flex flex-col gap-3 rounded-md border border-stone-800 bg-stone-950/40 p-3.5 transition-all duration-200">
-      {/* Header Row */}
+      {/* Hàng tiêu đề */}
       <div className="flex min-w-0 flex-col gap-3 sm:flex-row sm:items-center sm:justify-between md:flex-col md:items-stretch lg:flex-row lg:items-center lg:justify-between">
         <div className="flex min-w-0 items-center gap-2.5">
           <div className="relative flex size-9 shrink-0 items-center justify-center overflow-hidden rounded-full border border-stone-800 bg-stone-900 text-xs font-semibold text-stone-400 shadow-inner ring-1 ring-white/5">
