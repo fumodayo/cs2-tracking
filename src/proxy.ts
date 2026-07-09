@@ -4,7 +4,7 @@ import type { NextRequest } from 'next/server';
 export function proxy(request: NextRequest) {
   const method = request.method;
 
-  // Only apply CSRF protection to state-changing API requests
+  // Chỉ áp dụng bảo vệ CSRF cho API request làm thay đổi trạng thái
   if (['POST', 'PUT', 'PATCH', 'DELETE'].includes(method)) {
     const origin = request.headers.get('origin');
     const referer = request.headers.get('referer');
@@ -41,7 +41,7 @@ export function proxy(request: NextRequest) {
         );
       }
     } else {
-      // Require either Origin or Referer for state-changing API endpoints
+      // Yêu cầu Origin hoặc Referer cho endpoint API làm thay đổi trạng thái
       return new NextResponse(
         JSON.stringify({ message: 'CSRF check failed: Missing Origin/Referer headers' }),
         { status: 403, headers: { 'Content-Type': 'application/json' } }

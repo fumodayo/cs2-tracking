@@ -1,11 +1,15 @@
 /**
- * Standard HTTP fetch wrapper with a timeout mechanism.
- * Supported in both Browser and Node.js environments.
  *
- * @param input The request target URL or Request object
- * @param init Standard Fetch options
- * @param timeoutMs Timeout in milliseconds (defaults to 8000ms)
- * @param customErrorMessage Custom error message thrown when the request times out
+ *
+ * Hàm bọc fetch HTTP chuẩn có cơ chế timeout.
+ * Hỗ trợ cả môi trường trình duyệt và Node.js.
+ *
+ * @param input URL mục tiêu hoặc đối tượng Request của request
+ * @param init Tùy chọn Fetch chuẩn
+ * @param timeoutMs Timeout theo mili giây, mặc định 8000ms
+ * @param customErrorMessage Message lỗi tùy chỉnh được ném khi request timeout
+ *
+ *
  */
 export async function fetchWithTimeout(
   input: RequestInfo | URL,

@@ -12,14 +12,14 @@ import type { PriceRange } from '@/domain/price';
 import i18n from 'i18next';
 
 /**
- * Get current date-fns locale based on i18n active language
+ * Lấy locale date-fns hiện tại theo ngôn ngữ active của i18n
  */
 function getLocale() {
   return i18n.language === 'en' ? enUS : vi;
 }
 
 /**
- * Format a date for display: "08/06/2026 14:30"
+ * Định dạng ngày giờ để hiển thị: "08/06/2026 14:30"
  */
 export function formatDateTimeVi(value: string | Date | null | undefined): string {
   if (!value) return i18n.t('common.notUpdated') || 'Not updated';
@@ -29,7 +29,7 @@ export function formatDateTimeVi(value: string | Date | null | undefined): strin
 }
 
 /**
- * Format a date for display (date only): "08/06/2026"
+ * Định dạng ngày để hiển thị, chỉ ngày: "08/06/2026"
  */
 export function formatDateVi(value: string | Date | null | undefined): string {
   if (!value) return i18n.t('common.unknownDate') || 'Unknown date';
@@ -39,7 +39,7 @@ export function formatDateVi(value: string | Date | null | undefined): string {
 }
 
 /**
- * Short date + time: "08/06 14:30"
+ * Ngày giờ dạng ngắn: "08/06 14:30"
  */
 export function formatShortDateTimeVi(value: string | Date | null | undefined): string {
   if (!value) return '';
@@ -49,7 +49,7 @@ export function formatShortDateTimeVi(value: string | Date | null | undefined): 
 }
 
 /**
- * Relative time: "3 phút trước", "2 ngày trước"
+ * Thời gian tương đối: "3 phút trước", "2 ngày trước"
  */
 export function formatRelative(value: string | Date | null | undefined): string {
   if (!value) return i18n.t('common.notUpdated');
@@ -59,15 +59,17 @@ export function formatRelative(value: string | Date | null | undefined): string 
 }
 
 /**
- * Format a date for HTML <input type="date">: "2026-06-08"
+ * Định dạng ngày cho HTML <input type="date">: "2026-06-08"
  */
 export function formatInputDate(value: Date): string {
   return format(value, 'yyyy-MM-dd');
 }
 
 /**
- * Calculate remaining hold days from a hold-until date.
- * Returns 0 if the hold has expired.
+ *
+ * Tính số ngày hold còn lại từ ngày hold-until.
+ * Trả về 0 nếu hold đã hết hạn.
+ *
  */
 export function getHoldDaysRemaining(holdUntil: string | Date): number {
   const target = typeof holdUntil === 'string' ? new Date(holdUntil) : holdUntil;
@@ -77,8 +79,10 @@ export function getHoldDaysRemaining(holdUntil: string | Date): number {
 }
 
 /**
- * Calculate remaining hold days with partial days rounded up for UI status.
- * Returns 0 when the value is empty, invalid, or already expired.
+ *
+ * Tính số ngày hold còn lại, làm tròn lên ngày lẻ cho trạng thái UI.
+ * Trả về 0 khi giá trị rỗng, không hợp lệ hoặc đã hết hạn.
+ *
  */
 export function getRemainingHoldDays(value: string | Date | null | undefined): number {
   if (!value) return 0;
@@ -90,14 +94,14 @@ export function getRemainingHoldDays(value: string | Date | null | undefined): n
 }
 
 /**
- * Create a Date that is `days` days from now.
+ * Tạo Date cách hiện tại `days` ngày.
  */
 export function addDaysFromNow(days: number): Date {
   return addDays(new Date(), days);
 }
 
 /**
- * Get the start date for a price range period.
+ * Lấy ngày bắt đầu cho một khoảng thời gian giá.
  */
 export function getRangeStartDate(range: PriceRange, now = new Date()): Date {
   switch (range) {
@@ -115,10 +119,12 @@ export function getRangeStartDate(range: PriceRange, now = new Date()): Date {
 }
 
 /**
- * Get Steam reset hour in Vietnam time (UTC+7) for a given date.
- * Midnight Seattle time is:
- * - 14:00 VN time during Daylight Saving Time (PDT)
- * - 15:00 VN time during Standard Time (PST)
+ *
+ * Lấy giờ reset Steam theo giờ Việt Nam (UTC+7) cho một ngày cụ thể.
+ * Nửa đêm giờ Seattle tương ứng:
+ * - 14:00 giờ VN khi Seattle dùng giờ mùa hè (PDT)
+ * - 15:00 giờ VN khi Seattle dùng giờ tiêu chuẩn (PST)
+ *
  */
 export function getSteamResetHour(date: Date): number {
   try {
@@ -160,14 +166,16 @@ export function getSteamResetHour(date: Date): number {
 }
 
 /**
- * Calculate the exact unlock timestamp for a trade hold based on buyDate and holdDays,
- * rounding to the next Seattle daily reset if the duration runs past the reset time.
+ *
+ * Tính timestamp mở khóa chính xác cho trade hold dựa trên buyDate và holdDays,
+ * làm tròn tới lần reset hằng ngày kế tiếp theo giờ Seattle nếu thời lượng vượt qua giờ reset.
+ *
  */
 export function calculateTradeHoldUntil(buyDate: Date, holdDays: number): Date {
   const baseUnlockDate = new Date(buyDate.getTime() + holdDays * 24 * 60 * 60 * 1000);
   const resetHour = getSteamResetHour(baseUnlockDate);
 
-  // Create candidate unlock date on the base unlock day at resetHour:00 VN time (UTC+7)
+  // Tạo ngày mở khóa ứng viên vào ngày mở khóa gốc tại resetHour:00 giờ VN (UTC+7)
   const unlockTimeVN = new Date(baseUnlockDate);
   unlockTimeVN.setUTCHours(resetHour - 7, 0, 0, 0);
 

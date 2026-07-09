@@ -1,11 +1,11 @@
-import { formatDateTime } from "@/utils/format";
-import { formatRelative } from "@/utils/date";
-import i18n from "i18next";
+import { formatDateTime } from '@/utils/format';
+import { formatRelative } from '@/utils/date';
+import i18n from 'i18next';
 import {
   isLikelyAvatarOrRedundant,
   cleanFbcdnUrl,
   extractPostImagesFromHtml,
-} from "./facebook-image-extractor";
+} from './facebook-image-extractor';
 
 export interface FacebookExtractedData {
   text: string;
@@ -19,13 +19,13 @@ export interface FacebookExtractedData {
 
 export function extractSteamUrl(text: string): string | null {
   const fullLinkMatch = text.match(
-    /https?:\/\/steamcommunity\.com\/(?:id|profiles)\/[a-zA-Z0-9_-]+/i,
+    /https?:\/\/steamcommunity\.com\/(?:id|profiles)\/[a-zA-Z0-9_-]+/i
   );
   if (fullLinkMatch) {
     const base = fullLinkMatch[0];
-    return base.endsWith("/inventory") || base.endsWith("/inventory/")
+    return base.endsWith('/inventory') || base.endsWith('/inventory/')
       ? base
-      : `${base.replace(/\/$/, "")}/inventory/`;
+      : `${base.replace(/\/$/, '')}/inventory/`;
   }
 
   const idMatch = text.match(/(?:\/id\/|id\/)([a-zA-Z0-9_-]+)/i);
@@ -42,18 +42,18 @@ export function extractSteamUrl(text: string): string | null {
 }
 
 export function unescapeHtmlEntities(str: string): string {
-  if (!str) return "";
+  if (!str) return '';
   return str
-    .replace(/&amp;/g, "&")
-    .replace(/&lt;/g, "<")
-    .replace(/&gt;/g, ">")
+    .replace(/&amp;/g, '&')
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
     .replace(/&quot;/g, '"')
     .replace(/&#039;/g, "'")
     .replace(/&apos;/g, "'")
-    .replace(/&#x2F;/g, "/")
-    .replace(/\\u003C/g, "<")
-    .replace(/\\u003E/g, ">")
-    .replace(/\\u0026/g, "&")
+    .replace(/&#x2F;/g, '/')
+    .replace(/\\u003C/g, '<')
+    .replace(/\\u003E/g, '>')
+    .replace(/\\u0026/g, '&')
     .replace(/\\u0022/g, '"')
     .replace(/\\u0027/g, "'");
 }
@@ -63,16 +63,16 @@ export function buildChatGptPrompt(text: string, imageUrls: string[]): string {
     imageUrls.length > 0
       ? imageUrls
           .map((url, i) =>
-            i18n.t("facebookParser.imageNumber", {
+            i18n.t('facebookParser.imageNumber', {
               index: i + 1,
               url,
               interpolation: { escapeValue: false },
-            }),
+            })
           )
-          .join("\n")
-      : i18n.t("facebookParser.noDirectImageLink");
+          .join('\n')
+      : i18n.t('facebookParser.noDirectImageLink');
 
-  return i18n.t("facebookParser.chatGptPrompt", {
+  return i18n.t('facebookParser.chatGptPrompt', {
     text,
     imagesSection,
     interpolation: { escapeValue: false },
@@ -81,32 +81,32 @@ export function buildChatGptPrompt(text: string, imageUrls: string[]): string {
 
 export function parseFacebookHtmlSource(htmlSource: string): FacebookExtractedData {
   const normalizedHtml = htmlSource
-    .replace(/\\u0026/gi, "&")
-    .replace(/\\u003d/gi, "=")
-    .replace(/\\u003f/gi, "?")
-    .replace(/\\\//g, "/");
+    .replace(/\\u0026/gi, '&')
+    .replace(/\\u003d/gi, '=')
+    .replace(/\\u003f/gi, '?')
+    .replace(/\\\//g, '/');
 
   const parser = new DOMParser();
-  const doc = parser.parseFromString(normalizedHtml, "text/html");
+  const doc = parser.parseFromString(normalizedHtml, 'text/html');
 
-  // DOM-based extraction (client-only, finds <img> tags linked to post photos)
+  // Trích xuất theo DOM (chỉ client, tìm tag <img> liên kết tới ảnh bài viết)
   const domImages: string[] = [];
-  const imageElements = doc.querySelectorAll("img");
+  const imageElements = doc.querySelectorAll('img');
   imageElements.forEach((img) => {
-    const src = img.getAttribute("src");
-    if (!src || !src.includes("fbcdn.net")) return;
+    const src = img.getAttribute('src');
+    if (!src || !src.includes('fbcdn.net')) return;
     if (isLikelyAvatarOrRedundant(src)) return;
 
     let parent = img.parentElement;
     let isPostImage = false;
-    while (parent && parent.tagName !== "BODY") {
-      if (parent.tagName === "A") {
-        const href = parent.getAttribute("href") || "";
+    while (parent && parent.tagName !== 'BODY') {
+      if (parent.tagName === 'A') {
+        const href = parent.getAttribute('href') || '';
         if (
-          href.includes("/photo") ||
-          href.includes("fbid=") ||
-          href.includes("/permalink/") ||
-          href.includes("/posts/")
+          href.includes('/photo') ||
+          href.includes('fbid=') ||
+          href.includes('/permalink/') ||
+          href.includes('/posts/')
         ) {
           isPostImage = true;
         }
@@ -120,16 +120,15 @@ export function parseFacebookHtmlSource(htmlSource: string): FacebookExtractedDa
     }
   });
 
-  // Regex-based extraction + dedup + fallback (shared with server-side extract route)
+  // Trích xuất bằng regex + khử trùng + fallback, dùng chung với route extract phía server
   const uniqueImages = extractPostImagesFromHtml(normalizedHtml, domImages);
 
-
   const decodeUnicode = (str: string): string => {
-    if (!str) return "";
+    if (!str) return '';
     try {
       return str
         .replace(/\\u([0-9a-fA-F]{4})/g, (_, grp) => String.fromCharCode(parseInt(grp, 16)))
-        .replace(/\\n/g, "\n")
+        .replace(/\\n/g, '\n')
         .replace(/\\"/g, '"');
     } catch {
       return str;
@@ -151,9 +150,9 @@ export function parseFacebookHtmlSource(htmlSource: string): FacebookExtractedDa
   const descMeta =
     doc.querySelector('meta[property="og:description"]') ||
     doc.querySelector('meta[name="description"]');
-  let extractedText = "";
+  let extractedText = '';
   if (descMeta) {
-    extractedText = descMeta.getAttribute("content") || "";
+    extractedText = descMeta.getAttribute('content') || '';
   }
   extractedText = unescapeHtmlEntities(extractedText);
 
@@ -167,7 +166,7 @@ export function parseFacebookHtmlSource(htmlSource: string): FacebookExtractedDa
   }
   extractedText = decodeUnicode(extractedText);
 
-  let author = "";
+  let author = '';
   const actorRegexes = [
     /\\?"actors\\?":\s*\[\s*\{\s*\\?"__typename\\?":\s*\\?"User\\?",\s*\\?"id\\?":\s*\\?"\d+\\?",\s*\\?"name\\?":\s*\\?"([^"]+)\\?"/i,
     /\\?"actor\\?":\s*\{\s*\\?"__typename\\?":\s*\\?"User\\?",\s*\\?"id\\?":\s*\\?"\d+\\?",\s*\\?"name\\?":\s*\\?"([^"]+)\\?"/i,
@@ -187,28 +186,32 @@ export function parseFacebookHtmlSource(htmlSource: string): FacebookExtractedDa
     const titleMeta =
       doc.querySelector('meta[property="og:title"]') ||
       doc.querySelector('meta[name="twitter:title"]') ||
-      doc.querySelector("title");
+      doc.querySelector('title');
     if (titleMeta) {
-      const rawTitle = titleMeta.getAttribute("content") || titleMeta.textContent || "";
-      const cleanTitle = rawTitle.replace(/\| Facebook/i, "").replace(/- Posts/i, "").replace(/VN-CS:GO Chợ Dời \|/i, "").trim();
-      if (cleanTitle && cleanTitle !== "Facebook") {
+      const rawTitle = titleMeta.getAttribute('content') || titleMeta.textContent || '';
+      const cleanTitle = rawTitle
+        .replace(/\| Facebook/i, '')
+        .replace(/- Posts/i, '')
+        .replace(/VN-CS:GO Chợ Dời \|/i, '')
+        .trim();
+      if (cleanTitle && cleanTitle !== 'Facebook') {
         author = decodeUnicode(cleanTitle);
       }
     }
   }
 
   if (!author) {
-    author = i18n.t("facebookParser.unknownAuthor");
+    author = i18n.t('facebookParser.unknownAuthor');
   }
 
-  let postTime = "";
+  let postTime = '';
   const timeMeta =
     doc.querySelector('meta[property="article:published_time"]') ||
     doc.querySelector('meta[property="article:modified_time"]') ||
     doc.querySelector('meta[property="og:updated_time"]') ||
     doc.querySelector('meta[itemprop="datePublished"]');
   if (timeMeta) {
-    const content = timeMeta.getAttribute("content");
+    const content = timeMeta.getAttribute('content');
     if (content) {
       postTime = formatExtractedDate(content);
     }
@@ -218,7 +221,7 @@ export function parseFacebookHtmlSource(htmlSource: string): FacebookExtractedDa
     const jsonLdScripts = doc.querySelectorAll('script[type="application/ld+json"]');
     for (const script of Array.from(jsonLdScripts)) {
       try {
-        const json = JSON.parse(script.textContent || "{}");
+        const json = JSON.parse(script.textContent || '{}');
         const dateString = json.datePublished || json.dateCreated || json.dateModified;
         if (dateString) {
           postTime = formatExtractedDate(dateString);
@@ -247,36 +250,41 @@ export function parseFacebookHtmlSource(htmlSource: string): FacebookExtractedDa
     }
   }
 
-  let authorUrl = "";
-  const allLinks = doc.querySelectorAll("a");
+  let authorUrl = '';
+  const allLinks = doc.querySelectorAll('a');
   for (const a of Array.from(allLinks)) {
     const textContent = a.textContent?.trim();
     if (textContent && textContent === author) {
-      const href = a.getAttribute("href") || "";
-      if (href && !href.startsWith("#")) {
-        authorUrl = href.startsWith("http") ? href : `https://www.facebook.com${href.startsWith("/") ? "" : "/"}${href}`;
+      const href = a.getAttribute('href') || '';
+      if (href && !href.startsWith('#')) {
+        authorUrl = href.startsWith('http')
+          ? href
+          : `https://www.facebook.com${href.startsWith('/') ? '' : '/'}${href}`;
         break;
       }
     }
   }
 
-  let postUrl = "";
-  const ogUrlMeta = doc.querySelector('meta[property="og:url"]') || doc.querySelector('link[rel="canonical"]');
+  let postUrl = '';
+  const ogUrlMeta =
+    doc.querySelector('meta[property="og:url"]') || doc.querySelector('link[rel="canonical"]');
   if (ogUrlMeta) {
-    postUrl = ogUrlMeta.getAttribute("content") || ogUrlMeta.getAttribute("href") || "";
+    postUrl = ogUrlMeta.getAttribute('content') || ogUrlMeta.getAttribute('href') || '';
   }
 
   if (!postUrl) {
     for (const a of Array.from(allLinks)) {
-      const href = a.getAttribute("href") || "";
-      if (href.includes("/permalink/") || href.includes("/posts/")) {
-        postUrl = href.startsWith("http") ? href : `https://www.facebook.com${href.startsWith("/") ? "" : "/"}${href}`;
+      const href = a.getAttribute('href') || '';
+      if (href.includes('/permalink/') || href.includes('/posts/')) {
+        postUrl = href.startsWith('http')
+          ? href
+          : `https://www.facebook.com${href.startsWith('/') ? '' : '/'}${href}`;
         break;
       }
     }
   }
 
-  const steamUrl = extractSteamUrl(extractedText) || "";
+  const steamUrl = extractSteamUrl(extractedText) || '';
 
   return {
     text: extractedText,

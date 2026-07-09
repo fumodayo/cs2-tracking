@@ -1,10 +1,10 @@
-import { NextResponse } from "next/server";
-import { ObjectId } from "mongodb";
-import { getDatabase } from "@/infrastructure/db/mongo-client";
-import { getPortfolioOwnerId } from "@/services/auth-service";
-import { getOwnerFilter } from "@/infrastructure/db/owner-filter";
+import { NextResponse } from 'next/server';
+import { ObjectId } from 'mongodb';
+import { getDatabase } from '@/infrastructure/db/mongo-client';
+import { getPortfolioOwnerId } from '@/services/auth-service';
+import { getOwnerFilter } from '@/infrastructure/db/owner-filter';
 
-export const dynamic = "force-dynamic";
+export const dynamic = 'force-dynamic';
 
 type DeleteStorageUnitItemInput = {
   storageUnitId: string;
@@ -20,8 +20,12 @@ type StorageUnitItem = {
 };
 
 /**
+ *
+ *
  * DELETE /api/portfolio/storage-units/items
  * Body: { items: Array<{ storageUnitId, caseId?, marketHashName? }> }
+ *
+ *
  */
 export async function DELETE(request: Request) {
   try {
@@ -31,10 +35,7 @@ export async function DELETE(request: Request) {
     const items = body.items as DeleteStorageUnitItemInput[] | undefined;
 
     if (!Array.isArray(items) || items.length === 0) {
-      return NextResponse.json(
-        { message: "missingStorageUnitItemDeletePayload" },
-        { status: 400 },
-      );
+      return NextResponse.json({ message: 'missingStorageUnitItemDeletePayload' }, { status: 400 });
     }
 
     const targetsByStorageUnit = new Map<string, DeleteStorageUnitItemInput[]>();
@@ -52,13 +53,10 @@ export async function DELETE(request: Request) {
     }
 
     if (targetsByStorageUnit.size === 0) {
-      return NextResponse.json(
-        { message: "missingStorageUnitItemDeletePayload" },
-        { status: 400 },
-      );
+      return NextResponse.json({ message: 'missingStorageUnitItemDeletePayload' }, { status: 400 });
     }
 
-    const collection = db.collection("storage_units");
+    const collection = db.collection('storage_units');
     const now = new Date();
     let removedCount = 0;
     let touchedStorageUnits = 0;
@@ -71,16 +69,13 @@ export async function DELETE(request: Request) {
 
       if (!doc) continue;
 
-      const existingItems: StorageUnitItem[] = Array.isArray(doc.items)
-        ? doc.items
-        : [];
+      const existingItems: StorageUnitItem[] = Array.isArray(doc.items) ? doc.items : [];
       const remainingItems = existingItems.filter((existingItem) => {
         const shouldRemove = targets.some((target) => {
-          const caseMatches =
-            target.caseId && String(existingItem.caseId || "") === target.caseId;
+          const caseMatches = target.caseId && String(existingItem.caseId || '') === target.caseId;
           const marketHashMatches =
             target.marketHashName &&
-            String(existingItem.marketHashName || "") === target.marketHashName;
+            String(existingItem.marketHashName || '') === target.marketHashName;
           return Boolean(caseMatches || marketHashMatches);
         });
 
@@ -94,7 +89,7 @@ export async function DELETE(request: Request) {
 
       await collection.updateOne(
         { _id: new ObjectId(storageUnitId), ...getOwnerFilter(ownerId) },
-        { $set: { items: remainingItems, updatedAt: now } },
+        { $set: { items: remainingItems, updatedAt: now } }
       );
       touchedStorageUnits++;
     }
@@ -105,10 +100,7 @@ export async function DELETE(request: Request) {
       touchedStorageUnits,
     });
   } catch (error) {
-    console.error("Error deleting storage unit items:", error);
-    return NextResponse.json(
-      { message: "cannotRemoveStorageUnitItems" },
-      { status: 500 },
-    );
+    console.error('Error deleting storage unit items:', error);
+    return NextResponse.json({ message: 'cannotRemoveStorageUnitItems' }, { status: 500 });
   }
 }

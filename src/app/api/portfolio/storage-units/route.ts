@@ -1,44 +1,41 @@
-import { NextResponse } from "next/server";
-import { getDatabase } from "@/infrastructure/db/mongo-client";
-import { getPortfolioOwnerId } from "@/services/auth-service";
-import { ObjectId } from "mongodb";
-import { STORAGE_UNIT_MAX_CAPACITY } from "@/domain/storage-unit";
-import { getOwnerFilter } from "@/infrastructure/db/owner-filter";
+import { NextResponse } from 'next/server';
+import { getDatabase } from '@/infrastructure/db/mongo-client';
+import { getPortfolioOwnerId } from '@/services/auth-service';
+import { ObjectId } from 'mongodb';
+import { STORAGE_UNIT_MAX_CAPACITY } from '@/domain/storage-unit';
+import { getOwnerFilter } from '@/infrastructure/db/owner-filter';
 
-export const dynamic = "force-dynamic";
+export const dynamic = 'force-dynamic';
 
 /**
+ *
  * GET /api/portfolio/storage-units
- * Returns all Storage Units for the current owner, optionally filtered by steamId64.
+ * Trả về toàn bộ Storage Unit của owner hiện tại, có thể lọc theo steamId64.
+ *
  */
 export async function GET(request: Request) {
   try {
     const ownerId = await getPortfolioOwnerId();
     const db = await getDatabase();
     const url = new URL(request.url);
-    const steamId64 = url.searchParams.get("steamId64");
-    const shouldAggregate = url.searchParams.get("aggregate") === "1";
+    const steamId64 = url.searchParams.get('steamId64');
+    const shouldAggregate = url.searchParams.get('aggregate') === '1';
 
     const filter: Record<string, unknown> = { ...getOwnerFilter(ownerId) };
     if (steamId64) {
       filter.steamId64 = steamId64;
     }
 
-    const docs = await db
-      .collection("storage_units")
-      .find(filter)
-      .sort({ name: 1 })
-      .toArray();
+    const docs = await db.collection('storage_units').find(filter).sort({ name: 1 }).toArray();
 
-    // Fetch cases in bulk to resolve item names and images
+    // Lấy case theo lô để resolve tên và ảnh vật phẩm
     const caseIds = new Set<string>();
     const marketHashNames = new Set<string>();
     for (const doc of docs) {
       if (Array.isArray(doc.items)) {
         for (const item of doc.items) {
           if (item.caseId) caseIds.add(String(item.caseId));
-          if (item.marketHashName)
-            marketHashNames.add(String(item.marketHashName));
+          if (item.marketHashName) marketHashNames.add(String(item.marketHashName));
         }
       }
     }
@@ -60,17 +57,16 @@ export async function GET(request: Request) {
     let casesList: Array<Record<string, unknown>> = [];
     if (orClauses.length > 0) {
       casesFilter.$or = orClauses;
-      casesList = (await db
-        .collection("cases")
-        .find(casesFilter)
-        .toArray()) as unknown as Array<Record<string, unknown>>;
+      casesList = (await db.collection('cases').find(casesFilter).toArray()) as unknown as Array<
+        Record<string, unknown>
+      >;
     }
 
     const casesById = new Map<string, Record<string, unknown>>();
     const casesByHashName = new Map<string, Record<string, unknown>>();
     for (const c of casesList) {
       casesById.set(String(c._id), c);
-      if (typeof c.marketHashName === "string" && c.marketHashName) {
+      if (typeof c.marketHashName === 'string' && c.marketHashName) {
         casesByHashName.set(c.marketHashName, c);
       }
     }
@@ -86,23 +82,20 @@ export async function GET(request: Request) {
       maxCapacity: STORAGE_UNIT_MAX_CAPACITY,
       items: Array.isArray(doc.items)
         ? doc.items.map((item: Record<string, unknown>) => {
-            const caseIdStr = String(item.caseId || "");
-            const hashName = String(item.marketHashName || "");
-            const matchedCase =
-              casesById.get(caseIdStr) || casesByHashName.get(hashName);
+            const caseIdStr = String(item.caseId || '');
+            const hashName = String(item.marketHashName || '');
+            const matchedCase = casesById.get(caseIdStr) || casesByHashName.get(hashName);
             return {
               caseId: caseIdStr,
               marketHashName: hashName,
               name:
-                matchedCase && typeof matchedCase.name === "string"
-                  ? matchedCase.name
-                  : hashName,
+                matchedCase && typeof matchedCase.name === 'string' ? matchedCase.name : hashName,
               imageUrl:
-                matchedCase && typeof matchedCase.imageUrl === "string"
+                matchedCase && typeof matchedCase.imageUrl === 'string'
                   ? matchedCase.imageUrl
                   : null,
               rarity:
-                matchedCase && typeof matchedCase.rarity === "object"
+                matchedCase && typeof matchedCase.rarity === 'object'
                   ? (matchedCase.rarity as {
                       name: string;
                       color: string;
@@ -130,18 +123,19 @@ export async function GET(request: Request) {
           : storageUnits,
     });
   } catch (error) {
-    console.error("Error fetching storage units:", error);
-    return NextResponse.json(
-      { message: "cannotLoadStorageUnits" },
-      { status: 500 },
-    );
+    console.error('Error fetching storage units:', error);
+    return NextResponse.json({ message: 'cannotLoadStorageUnits' }, { status: 500 });
   }
 }
 
 /**
+ *
+ *
  * POST /api/portfolio/storage-units
- * Upsert Storage Units from scan results.
+ * Upsert Storage Unit từ kết quả quét.
  * Body: { steamId64: string, storageUnits: Array<{ assetId, name, iconUrl }> }
+ *
+ *
  */
 export async function POST(request: Request) {
   try {
@@ -151,13 +145,10 @@ export async function POST(request: Request) {
     const { steamId64, storageUnits } = body;
 
     if (!steamId64 || !Array.isArray(storageUnits)) {
-      return NextResponse.json(
-        { message: "missingSteamIdOrStorageUnits" },
-        { status: 400 },
-      );
+      return NextResponse.json({ message: 'missingSteamIdOrStorageUnits' }, { status: 400 });
     }
 
-    const collection = db.collection("storage_units");
+    const collection = db.collection('storage_units');
     const now = new Date();
     let upserted = 0;
 
@@ -180,7 +171,7 @@ export async function POST(request: Request) {
             createdAt: now,
           },
         },
-        { upsert: true },
+        { upsert: true }
       );
       upserted++;
     }
@@ -190,11 +181,8 @@ export async function POST(request: Request) {
       upserted,
     });
   } catch (error) {
-    console.error("Error upserting storage units:", error);
-    return NextResponse.json(
-      { message: "cannotSyncStorageUnits" },
-      { status: 500 },
-    );
+    console.error('Error upserting storage units:', error);
+    return NextResponse.json({ message: 'cannotSyncStorageUnits' }, { status: 500 });
   }
 }
 
@@ -202,7 +190,7 @@ function computeCurrentCount(items: unknown): number {
   if (!Array.isArray(items)) return 0;
   return items.reduce((sum: number, item: unknown) => {
     const quantity =
-      typeof item === "object" && item !== null && "quantity" in item
+      typeof item === 'object' && item !== null && 'quantity' in item
         ? (item as Record<string, unknown>).quantity
         : 0;
     return sum + (Number(quantity) || 0);
@@ -239,7 +227,7 @@ type StorageUnitResponse = {
 
 function aggregateStorageUnits(
   storageUnits: StorageUnitResponse[],
-  steamId64: string,
+  steamId64: string
 ): StorageUnitResponse[] {
   if (storageUnits.length <= 1) return storageUnits;
 
@@ -270,12 +258,12 @@ function aggregateStorageUnits(
       id: `storage-units:${steamId64}`,
       steamId64,
       assetId: null,
-      name: "Storage Unit",
+      name: 'Storage Unit',
       iconUrl: null,
       currentCount: storageUnits.reduce((sum, su) => sum + su.currentCount, 0),
       maxCapacity: storageUnits.reduce((sum, su) => sum + su.maxCapacity, 0),
       items: Array.from(itemMap.values()).sort((firstItem, secondItem) =>
-        firstItem.name.localeCompare(secondItem.name),
+        firstItem.name.localeCompare(secondItem.name)
       ),
     },
   ];

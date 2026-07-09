@@ -1,23 +1,14 @@
-import type { CaseItem } from "@/domain/case-item";
-import type { PortfolioItem } from "@/domain/portfolio-item";
-import type {
-  PortfolioReport,
-  PortfolioReportRow,
-  PriceChange,
-} from "@/domain/portfolio-report";
-import {
-  PRICE_RANGES,
-  type PriceRange,
-  type PriceSnapshot,
-} from "@/domain/price";
+import type { CaseItem } from '@/domain/case-item';
+import type { PortfolioItem } from '@/domain/portfolio-item';
+import type { PortfolioReport, PortfolioReportRow, PriceChange } from '@/domain/portfolio-report';
+import { PRICE_RANGES, type PriceRange, type PriceSnapshot } from '@/domain/price';
 import type {
   CaseRepository,
   PortfolioRepository,
   PriceSnapshotRepository,
-} from "@/domain/repositories";
-import { PriceService } from "./price-service";
-import { getRangeStartDate } from "./date-range";
-
+} from '@/domain/repositories';
+import { PriceService } from './price-service';
+import { getRangeStartDate } from './date-range';
 
 type BuildReportOptions = {
   forceRefresh?: boolean;
@@ -32,23 +23,19 @@ export class PortfolioReportService {
     private readonly caseRepository: CaseRepository,
     private readonly priceService: PriceService,
     private readonly snapshotRepository: PriceSnapshotRepository,
-    private readonly storageUnitRepository: import("@/domain/repositories").StorageUnitRepository,
-    private readonly ownerId = "guest",
+    private readonly storageUnitRepository: import('@/domain/repositories').StorageUnitRepository,
+    private readonly ownerId = 'guest'
   ) {}
 
   async buildReport(options?: BuildReportOptions): Promise<PortfolioReport> {
     const items = await this.portfolioRepository.list();
 
-    // Fetch storage units using repository
+    // Lấy storage unit bằng repository
     const storageUnits = await this.storageUnitRepository.list();
 
-    // Map storage unit items by caseId and storageUnitId
-    const suNames = new Map(
-      storageUnits.map((su) => [su.id, su.name]),
-    );
-    const suSteamIds = new Map(
-      storageUnits.map((su) => [su.id, su.steamId64]),
-    );
+    // Map vật phẩm storage unit theo caseId và storageUnitId
+    const suNames = new Map(storageUnits.map((su) => [su.id, su.name]));
+    const suSteamIds = new Map(storageUnits.map((su) => [su.id, su.steamId64]));
     const suItemsByCaseAndSu = new Map<string, number>();
     for (const su of storageUnits) {
       if (!Array.isArray(su.items)) continue;
@@ -60,7 +47,7 @@ export class PortfolioReportService {
       }
     }
 
-    // Merge storage units into portfolio items
+    // Gộp storage unit vào vật phẩm portfolio
     const finalItems: PortfolioItem[] = [];
     for (const item of items) {
       const cloned = { ...item };
@@ -75,15 +62,14 @@ export class PortfolioReportService {
             ? [
                 {
                   storageUnitId: cloned.storageUnitId,
-                  storageUnitName:
-                    suNames.get(cloned.storageUnitId) ?? "Storage Unit",
+                  storageUnitName: suNames.get(cloned.storageUnitId) ?? 'Storage Unit',
                   quantity: matchQty,
-                  steamId64: suSteamIds.get(cloned.storageUnitId) ?? "",
+                  steamId64: suSteamIds.get(cloned.storageUnitId) ?? '',
                 },
               ]
             : [];
 
-        // Deduct from storage unit items so they don't get treated as virtual
+        // Trừ khỏi vật phẩm storage unit để không bị xem là vật phẩm ảo
         suItemsByCaseAndSu.set(key, suQtyAvailable - matchQty);
       } else {
         cloned.storageUnitQuantity = 0;
@@ -103,7 +89,7 @@ export class PortfolioReportService {
     >();
     for (const [key, qty] of suItemsByCaseAndSu.entries()) {
       if (qty <= 0) continue;
-      const [caseId, suId] = key.split("_");
+      const [caseId, suId] = key.split('_');
       let entry = remainingByCase.get(caseId);
       if (!entry) {
         entry = [];
@@ -111,9 +97,9 @@ export class PortfolioReportService {
       }
       entry.push({
         storageUnitId: suId,
-        storageUnitName: suNames.get(suId) ?? "Storage Unit",
+        storageUnitName: suNames.get(suId) ?? 'Storage Unit',
         quantity: qty,
-        steamId64: suSteamIds.get(suId) ?? "",
+        steamId64: suSteamIds.get(suId) ?? '',
       });
     }
 
@@ -125,9 +111,9 @@ export class PortfolioReportService {
         caseId,
         quantity: 0,
         buyPrice: 0, // Will be resolved to currentPrice in buildRow
-        buyCurrency: "VND",
+        buyCurrency: 'VND',
         buyDate: now,
-        note: "onlyInStorageUnit",
+        note: 'onlyInStorageUnit',
         storageUnitQuantity: total,
         storageUnitDetails: entry,
         createdAt: now,
@@ -135,15 +121,13 @@ export class PortfolioReportService {
       });
     }
 
-    const cases = await this.caseRepository.findByIds(
-      finalItems.map((item) => item.caseId),
-    );
+    const cases = await this.caseRepository.findByIds(finalItems.map((item) => item.caseId));
     const caseMap = new Map(cases.map((caseItem) => [caseItem.id, caseItem]));
     const shouldFetchLive = options?.forceRefresh || options?.refreshStalePrices;
     let latestPricesMap = new Map<string, PriceSnapshot>();
     if (!shouldFetchLive) {
       latestPricesMap = await this.snapshotRepository.findLatestMany(
-        cases.map((caseItem) => caseItem.id),
+        cases.map((caseItem) => caseItem.id)
       );
     }
 
@@ -160,29 +144,18 @@ export class PortfolioReportService {
             refreshStale: options?.refreshStalePrices,
           }),
         ];
-      }),
+      })
     );
-    const baselinesByRange = await this.loadBaselineSnapshots(
-      cases.map((caseItem) => caseItem.id),
-    );
+    const baselinesByRange = await this.loadBaselineSnapshots(cases.map((caseItem) => caseItem.id));
 
     const rows = await Promise.all(
       finalItems.flatMap((item) => {
         const caseItem = caseMap.get(item.caseId);
-        const currentPricePromise = caseItem
-          ? currentPricePromises.get(caseItem.id)
-          : null;
+        const currentPricePromise = caseItem ? currentPricePromises.get(caseItem.id) : null;
         return caseItem && currentPricePromise
-          ? [
-              this.buildRow(
-                item,
-                caseItem,
-                currentPricePromise,
-                baselinesByRange,
-              ),
-            ]
+          ? [this.buildRow(item, caseItem, currentPricePromise, baselinesByRange)]
           : [];
-      }),
+      })
     );
 
     return {
@@ -195,22 +168,19 @@ export class PortfolioReportService {
     item: PortfolioItem,
     caseItem: CaseItem,
     currentPricePromise: Promise<PriceSnapshot | null>,
-    baselinesByRange: BaselinesByRange,
+    baselinesByRange: BaselinesByRange
   ): Promise<PortfolioReportRow> {
     const currentPrice = await currentPricePromise;
     const stickerAddPrice = await this.getStickerAddPrice(item);
     const stickerBuyPriceAdd = getStickerBuyPriceAdd(item);
-    const adjustedCurrentUnitPrice = currentPrice
-      ? currentPrice.price + stickerAddPrice
-      : null;
+    const adjustedCurrentUnitPrice = currentPrice ? currentPrice.price + stickerAddPrice : null;
     const totalQuantity =
-      (item.storageUnitId ? 0 : item.quantity) +
-      (item.storageUnitQuantity ?? 0);
+      (item.storageUnitId ? 0 : item.quantity) + (item.storageUnitQuantity ?? 0);
 
-    // If virtual item, set buy price to current price so profit is neutral, or default to 1000
+    // Nếu là vật phẩm ảo, đặt giá mua bằng giá hiện tại để lợi nhuận trung tính, hoặc mặc định 1000
     let resolvedBuyPrice = item.buyPrice;
     let isTemp = item.isTemporaryPrice;
-    if (item.id.startsWith("virtual_") && item.buyPrice === 0) {
+    if (item.id.startsWith('virtual_') && item.buyPrice === 0) {
       resolvedBuyPrice = adjustedCurrentUnitPrice ?? 1000;
       isTemp = true;
     }
@@ -224,19 +194,14 @@ export class PortfolioReportService {
     };
 
     const investedValue = resolvedBuyPrice * totalQuantity;
-    const currentValue = adjustedCurrentUnitPrice
-      ? adjustedCurrentUnitPrice * totalQuantity
-      : null;
-    const profitAmount =
-      currentValue === null ? null : currentValue - investedValue;
+    const currentValue = adjustedCurrentUnitPrice ? adjustedCurrentUnitPrice * totalQuantity : null;
+    const profitAmount = currentValue === null ? null : currentValue - investedValue;
     const profitPercent =
-      profitAmount === null || investedValue === 0
-        ? null
-        : (profitAmount / investedValue) * 100;
+      profitAmount === null || investedValue === 0 ? null : (profitAmount / investedValue) * 100;
     const marketChanges = this.buildMarketChanges(
       caseItem.id,
       currentPrice?.price ?? null,
-      baselinesByRange,
+      baselinesByRange
     );
 
     return {
@@ -283,30 +248,25 @@ export class PortfolioReportService {
         } catch {
           return [marketHashName, 0] as const;
         }
-      }),
+      })
     );
     const priceMap = new Map(priceEntries);
     const total = marketHashNames.reduce(
       (sum, marketHashName) => sum + (priceMap.get(marketHashName) ?? 0),
-      0,
+      0
     );
     return Math.round((total * rate) / 100);
   }
 
-  private async loadBaselineSnapshots(
-    caseIds: string[],
-  ): Promise<BaselinesByRange> {
+  private async loadBaselineSnapshots(caseIds: string[]): Promise<BaselinesByRange> {
     const entries = await Promise.all(
       PRICE_RANGES.map(
         async (range) =>
           [
             range,
-            await this.snapshotRepository.findClosestBeforeMany(
-              caseIds,
-              getRangeStartDate(range),
-            ),
-          ] as const,
-      ),
+            await this.snapshotRepository.findClosestBeforeMany(caseIds, getRangeStartDate(range)),
+          ] as const
+      )
     );
 
     return new Map(entries);
@@ -315,7 +275,7 @@ export class PortfolioReportService {
   private buildMarketChanges(
     caseId: string,
     currentPrice: number | null,
-    baselinesByRange: BaselinesByRange,
+    baselinesByRange: BaselinesByRange
   ): Record<PriceRange, PriceChange> {
     const entries = PRICE_RANGES.map((range) => {
       if (currentPrice === null) {
@@ -353,22 +313,17 @@ function getStickerBuyPriceAdd(item: PortfolioItem): number {
 
 function buildSummary(rows: PortfolioReportRow[]) {
   const totalInvested = rows.reduce((sum, row) => sum + row.investedValue, 0);
-  const totalCurrentValue = rows.reduce(
-    (sum, row) => sum + (row.currentValue ?? 0),
-    0,
-  );
+  const totalCurrentValue = rows.reduce((sum, row) => sum + (row.currentValue ?? 0), 0);
   const totalProfit = totalCurrentValue - totalInvested;
 
   return {
     totalInvested,
     totalCurrentValue,
     totalProfit,
-    totalProfitPercent:
-      totalInvested > 0 ? (totalProfit / totalInvested) * 100 : 0,
+    totalProfitPercent: totalInvested > 0 ? (totalProfit / totalInvested) * 100 : 0,
     itemCount: rows.reduce(
-      (sum, row) =>
-        sum + row.item.quantity + (row.item.storageUnitQuantity ?? 0),
-      0,
+      (sum, row) => sum + row.item.quantity + (row.item.storageUnitQuantity ?? 0),
+      0
     ),
     caseCount: rows.length,
   };

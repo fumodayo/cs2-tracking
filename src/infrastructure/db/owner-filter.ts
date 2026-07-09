@@ -1,6 +1,8 @@
 /**
- * Generates the owner filter for MongoDB queries based on ownerId.
- * If the ownerId is "guest", it checks for either "guest" or fields where ownerId doesn't exist.
+ *
+ * Tạo filter owner cho truy vấn MongoDB dựa trên ownerId.
+ * Nếu ownerId là "guest", kiểm tra cả "guest" hoặc các field chưa có ownerId.
+ *
  */
 export function getOwnerFilter(ownerId: string) {
   if (ownerId === 'guest') {

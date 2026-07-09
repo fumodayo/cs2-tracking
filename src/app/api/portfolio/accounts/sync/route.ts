@@ -5,6 +5,7 @@ import { decrypt } from '@/services/crypto-service';
 import { createServices } from '@/infrastructure/container';
 import { ObjectId } from 'mongodb';
 import { getOwnerFilter } from '@/infrastructure/db/owner-filter';
+import { publishPortfolioChanged } from '@/services/realtime/portfolio-events';
 import {
   SCANNER_IMPORT_NOTE,
   SCANNER_IMPORT_NOTES,
@@ -80,7 +81,7 @@ export async function POST(request: NextRequest) {
           iconUrl: string | null;
         }> = [];
 
-        // Scan each account with job-based progress polling
+        // Quét từng tài khoản bằng job có polling tiến độ
         for (let i = 0; i < accounts.length; i++) {
           const account = accounts[i];
           const accountName = String(account.name || `TK ${i + 1}`);
@@ -115,7 +116,7 @@ export async function POST(request: NextRequest) {
               ownerId,
             });
 
-            // Poll job progress
+            // Polling tiến độ job
             const scanResult = await pollJobProgress(origin, jobId, (progress) => {
               send({
                 type: 'account_progress',
@@ -139,7 +140,7 @@ export async function POST(request: NextRequest) {
                 );
             }
 
-            // Process live results
+            // Xử lý kết quả quét trực tiếp
             processScanResult(scanResult, account, allScannedItems, allScannedStorageUnits);
 
             send({
@@ -168,13 +169,13 @@ export async function POST(request: NextRequest) {
             });
           }
 
-          // Small delay between account scans
+          // Nghỉ ngắn giữa các lần quét tài khoản
           if (i < accounts.length - 1) {
             await new Promise((r) => setTimeout(r, 500));
           }
         }
 
-        // Import phase
+        // Giai đoạn import
         if (skippedAccounts.length > 0) {
           send({
             type: 'error',
@@ -201,7 +202,7 @@ export async function POST(request: NextRequest) {
           return;
         }
 
-        // Read existing portfolio for missing items comparison (before clearing)
+        // Đọc portfolio hiện có để so sánh vật phẩm thiếu trước khi xóa
         const portfolioCol = db.collection('portfolio_items');
         const existingPortfolioItems = (await portfolioCol
           .find({
@@ -210,13 +211,13 @@ export async function POST(request: NextRequest) {
           })
           .toArray()) as unknown as ExistingPortfolioItem[];
 
-        // Clear existing automated scan items
+        // Xóa các vật phẩm quét tự động hiện có
         await portfolioCol.deleteMany({
           ...getOwnerFilter(ownerId),
           note: { $in: [...SCANNER_IMPORT_NOTES] },
         });
 
-        // Group and resolve items
+        // Gom nhóm và resolve vật phẩm
         const { caseRepository, portfolioService, priceService } = createServices({
           ownerId,
         });
@@ -231,7 +232,7 @@ export async function POST(request: NextRequest) {
           rarity?: SyncScannedItem['rarity'];
         };
 
-        // Pre-fetch all cases to optimize N+1 lookups
+        // Nạp trước toàn bộ case để tối ưu các lookup N+1
         const allCasesDocs = await db.collection('cases').find({ isActive: true }).toArray();
         const casesMap = new Map<string, ResolvedCaseCacheItem>();
         const casesByIdMap = new Map<string, ResolvedCaseCacheItem>();
@@ -262,12 +263,12 @@ export async function POST(request: NextRequest) {
             continue;
           }
 
-          // Try resolving from cache first
+          // Ưu tiên resolve từ cache
           let resolvedCaseItem =
             (marketHashName ? casesMap.get(marketHashName) : null) ??
             (rawCaseId ? casesByIdMap.get(rawCaseId) : null);
 
-          // If not found in cache, query database/repository (fallback)
+          // Nếu không có trong cache thì truy vấn database/repository làm dự phòng
           if (!resolvedCaseItem) {
             const fallbackItem =
               (marketHashName ? await caseRepository.findByMarketHashName(marketHashName) : null) ??
@@ -299,7 +300,7 @@ export async function POST(request: NextRequest) {
             }
           }
 
-          // Update metadata only if the image or rarity actually changed / is missing in the database
+          // Chỉ cập nhật metadata khi ảnh hoặc độ hiếm thật sự đổi hoặc đang thiếu trong database
           if (resolvedCaseItem && marketHashName) {
             const hasNewImage =
               imageUrl && (!resolvedCaseItem.imageUrl || resolvedCaseItem.imageUrl !== imageUrl);
@@ -316,7 +317,7 @@ export async function POST(request: NextRequest) {
                 rarity,
               });
 
-              // Update our local cache
+              // Cập nhật cache cục bộ
               if (hasNewImage) resolvedCaseItem.imageUrl = imageUrl;
               if (hasNewRarity) resolvedCaseItem.rarity = rarity;
             }
@@ -379,7 +380,7 @@ export async function POST(request: NextRequest) {
           }
         }
 
-        // Insert new items
+        // Thêm các vật phẩm mới
         const buyDate = new Date();
         if (groupedInputs.size > 0) {
           const resolvedInputs = Array.from(groupedInputs.values()).flatMap((input) => {
@@ -416,7 +417,7 @@ export async function POST(request: NextRequest) {
           percent: 90,
         });
 
-        // Upsert Storage Units from scan results
+        // Upsert Storage Unit từ kết quả quét
         let syncedStorageUnits: SyncStorageUnit[] = [];
         if (allScannedStorageUnits.length > 0) {
           const suCol = db.collection('storage_units');
@@ -443,7 +444,7 @@ export async function POST(request: NextRequest) {
             );
           }
 
-          // Fetch all storage units for this owner to include in result
+          // Lấy toàn bộ storage unit của owner này để đưa vào kết quả
           const allSUs = await suCol.find(getOwnerFilter(ownerId)).toArray();
           syncedStorageUnits = allSUs.map((doc) => ({
             id: doc._id.toString(),
@@ -474,6 +475,12 @@ export async function POST(request: NextRequest) {
           extraItems: extraItems.length > 0 ? extraItems : undefined,
           storageUnits: syncedStorageUnits.length > 0 ? syncedStorageUnits : undefined,
         };
+
+        await publishPortfolioChanged(ownerId, 'synced', {
+          importedCount: summary.importedCount,
+          scannedAccountsCount: summary.scannedAccountsCount,
+          totalAccountsCount: summary.totalAccountsCount,
+        });
 
         send({
           type: 'complete',

@@ -1,17 +1,17 @@
-import { NextResponse } from "next/server";
-import { getDatabase } from "@/infrastructure/db/mongo-client";
-import { getPortfolioOwnerId } from "@/services/auth-service";
-import { ObjectId } from "mongodb";
-import { getOwnerFilter } from "@/infrastructure/db/owner-filter";
-import { STORAGE_UNIT_MAX_CAPACITY } from "@/domain/storage-unit";
+import { NextResponse } from 'next/server';
+import { getDatabase } from '@/infrastructure/db/mongo-client';
+import { getPortfolioOwnerId } from '@/services/auth-service';
+import { ObjectId } from 'mongodb';
+import { getOwnerFilter } from '@/infrastructure/db/owner-filter';
+import { STORAGE_UNIT_MAX_CAPACITY } from '@/domain/storage-unit';
 
-export const dynamic = "force-dynamic";
+export const dynamic = 'force-dynamic';
 
 type MissingItemResolution = {
   caseId: string;
   marketHashName: string;
   missingQuantity: number;
-  resolution: "storage_unit" | "traded" | "deleted" | "unknown";
+  resolution: 'storage_unit' | 'traded' | 'deleted' | 'unknown';
   storageUnitId?: string;
 };
 
@@ -23,9 +23,13 @@ type StorageUnitItem = {
 };
 
 /**
+ *
+ *
  * POST /api/portfolio/storage-units/resolve-missing
- * Resolve missing items detected during sync.
+ * Xử lý các vật phẩm thiếu được phát hiện khi đồng bộ.
  * Body: { resolutions: MissingItemResolution[] }
+ *
+ *
  */
 export async function POST(request: Request) {
   try {
@@ -35,13 +39,10 @@ export async function POST(request: Request) {
     const { resolutions } = body;
 
     if (!Array.isArray(resolutions) || resolutions.length === 0) {
-      return NextResponse.json(
-        { message: "noResolutionsToProcess" },
-        { status: 400 },
-      );
+      return NextResponse.json({ message: 'noResolutionsToProcess' }, { status: 400 });
     }
 
-    const storageUnitCol = db.collection("storage_units");
+    const storageUnitCol = db.collection('storage_units');
     const now = new Date();
     const results: Array<{
       marketHashName: string;
@@ -59,14 +60,14 @@ export async function POST(request: Request) {
         storageUnitId,
       } = resolution;
 
-      if (action === "storage_unit" && storageUnitId) {
+      if (action === 'storage_unit' && storageUnitId) {
         try {
           if (!ObjectId.isValid(storageUnitId)) {
             results.push({
               marketHashName,
               resolution: action,
               success: false,
-              error: "storageUnitNotFound",
+              error: 'storageUnitNotFound',
             });
             continue;
           }
@@ -81,17 +82,15 @@ export async function POST(request: Request) {
               marketHashName,
               resolution: action,
               success: false,
-              error: "storageUnitNotFound",
+              error: 'storageUnitNotFound',
             });
             continue;
           }
 
-          const existingItems: StorageUnitItem[] = Array.isArray(suDoc.items)
-            ? suDoc.items
-            : [];
+          const existingItems: StorageUnitItem[] = Array.isArray(suDoc.items) ? suDoc.items : [];
           const currentCount = existingItems.reduce(
             (sum, item) => sum + (Number(item.quantity) || 0),
-            0,
+            0
           );
 
           if (currentCount + missingQuantity > STORAGE_UNIT_MAX_CAPACITY) {
@@ -104,9 +103,7 @@ export async function POST(request: Request) {
             continue;
           }
 
-          const existingIdx = existingItems.findIndex(
-            (ei) => ei.caseId === caseId,
-          );
+          const existingIdx = existingItems.findIndex((ei) => ei.caseId === caseId);
           if (existingIdx >= 0) {
             existingItems[existingIdx].quantity += missingQuantity;
           } else {
@@ -120,7 +117,7 @@ export async function POST(request: Request) {
 
           await storageUnitCol.updateOne(
             { _id: new ObjectId(storageUnitId), ...getOwnerFilter(ownerId) },
-            { $set: { items: existingItems, updatedAt: now } },
+            { $set: { items: existingItems, updatedAt: now } }
           );
 
           results.push({ marketHashName, resolution: action, success: true });
@@ -129,11 +126,11 @@ export async function POST(request: Request) {
             marketHashName,
             resolution: action,
             success: false,
-            error: err instanceof Error ? err.message : "unknownError",
+            error: err instanceof Error ? err.message : 'unknownError',
           });
         }
       } else {
-        // For traded/deleted/unknown: just log and acknowledge
+        // Với trạng thái đã trade/đã xóa/không rõ: chỉ ghi log và xác nhận
         results.push({ marketHashName, resolution: action, success: true });
       }
     }
@@ -143,10 +140,7 @@ export async function POST(request: Request) {
       results,
     });
   } catch (error) {
-    console.error("Error resolving missing items:", error);
-    return NextResponse.json(
-      { message: "cannotResolveMissingItems" },
-      { status: 500 },
-    );
+    console.error('Error resolving missing items:', error);
+    return NextResponse.json({ message: 'cannotResolveMissingItems' }, { status: 500 });
   }
 }

@@ -19,7 +19,7 @@ export async function uploadImageToCloudinary(
     throw new Error('cloudinaryNotConfigured');
   }
 
-  // Format base64 data to data URI format if not already formatted
+  // Định dạng dữ liệu base64 thành data URI nếu chưa đúng định dạng
   const cleanBase64 = base64Data.includes(',') ? (base64Data.split(',').pop() ?? '') : base64Data;
   const dataUri = `data:${mimeType};base64,${cleanBase64}`;
 

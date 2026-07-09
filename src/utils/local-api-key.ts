@@ -1,33 +1,24 @@
 const LOCAL_API_KEY_STORAGE_KEY = 'cs2cap_local_api_key';
 
-function encryptKey(key: string): string {
-  if (typeof window === 'undefined') return '';
-  const reversed = key.split('').reverse().join('');
-  return window.btoa(unescape(encodeURIComponent(reversed)));
-}
-
-function decryptKey(hash: string): string {
-  if (typeof window === 'undefined') return '';
-  try {
-    const decoded = decodeURIComponent(escape(window.atob(hash)));
-    return decoded.split('').reverse().join('');
-  } catch {
-    return '';
-  }
-}
-
 export function getLocalApiKey(): string {
   if (typeof window === 'undefined') return '';
-  const encrypted = localStorage.getItem(LOCAL_API_KEY_STORAGE_KEY);
-  return encrypted ? decryptKey(encrypted) : '';
+
+  const sessionValue = window.sessionStorage.getItem(LOCAL_API_KEY_STORAGE_KEY);
+  if (sessionValue) return sessionValue;
+
+  // Drop legacy persistent values. Browser-side obfuscation is not encryption.
+  window.localStorage.removeItem(LOCAL_API_KEY_STORAGE_KEY);
+  return '';
 }
 
 export function saveLocalApiKey(key: string): void {
   if (typeof window === 'undefined') return;
-  localStorage.setItem(LOCAL_API_KEY_STORAGE_KEY, encryptKey(key));
+  window.localStorage.removeItem(LOCAL_API_KEY_STORAGE_KEY);
+  window.sessionStorage.setItem(LOCAL_API_KEY_STORAGE_KEY, key);
 }
 
 export function removeLocalApiKey(): void {
   if (typeof window === 'undefined') return;
-  localStorage.removeItem(LOCAL_API_KEY_STORAGE_KEY);
+  window.sessionStorage.removeItem(LOCAL_API_KEY_STORAGE_KEY);
+  window.localStorage.removeItem(LOCAL_API_KEY_STORAGE_KEY);
 }

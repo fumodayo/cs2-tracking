@@ -1,12 +1,12 @@
-import { NextRequest, NextResponse } from "next/server";
-import { createServices } from "@/infrastructure/container";
-import { searchCases } from "@/services/case-search";
+import { NextRequest, NextResponse } from 'next/server';
+import { createServices } from '@/infrastructure/container';
+import { searchCases } from '@/services/case-search';
 
-export const dynamic = "force-dynamic";
+export const dynamic = 'force-dynamic';
 
 export async function GET(request: NextRequest) {
   try {
-    const query = request.nextUrl.searchParams.get("q") ?? "";
+    const query = request.nextUrl.searchParams.get('q') ?? '';
     if (!query.trim()) {
       return NextResponse.json({ results: [] });
     }
@@ -21,7 +21,7 @@ export async function GET(request: NextRequest) {
           const snapshot = await priceService.getCurrentPrice(caseItem);
           price = snapshot?.price || 0;
         } catch {
-          // ignore price errors
+          // Bỏ qua lỗi giá
         }
 
         return {
@@ -34,7 +34,7 @@ export async function GET(request: NextRequest) {
           },
           price,
         };
-      }),
+      })
     );
 
     const filteredResults = results.filter((r) => r.price > 0).slice(0, 10);
@@ -42,8 +42,8 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ results: filteredResults });
   } catch (error) {
     return NextResponse.json(
-      { message: error instanceof Error ? error.message : "searchFailed" },
-      { status: 500 },
+      { message: error instanceof Error ? error.message : 'searchFailed' },
+      { status: 500 }
     );
   }
 }

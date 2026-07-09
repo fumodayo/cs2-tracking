@@ -1,15 +1,15 @@
-import { NextResponse } from "next/server";
-import { getPortfolioOwnerId } from "@/services/auth-service";
-import { getDatabase } from "@/infrastructure/db/mongo-client";
+import { NextResponse } from 'next/server';
+import { getPortfolioOwnerId } from '@/services/auth-service';
+import { getDatabase } from '@/infrastructure/db/mongo-client';
 
-export const dynamic = "force-dynamic";
+export const dynamic = 'force-dynamic';
 
 export async function POST() {
   try {
     const ownerId = await getPortfolioOwnerId();
     const db = await getDatabase();
 
-    // Auto-migrate legacy sync items that don't have sourceAccounts populated
+    // Tự động migrate vật phẩm đồng bộ cũ chưa có sourceAccounts
     const legacySyncQuery = {
       ownerId,
       $or: [
@@ -28,26 +28,20 @@ export async function POST() {
       ],
     };
 
-    const syncItems = await db
-      .collection("portfolio_items")
-      .find(legacySyncQuery)
-      .toArray();
+    const syncItems = await db.collection('portfolio_items').find(legacySyncQuery).toArray();
 
     let migratedCount = 0;
 
     if (syncItems.length > 0) {
       const accounts = await db
-        .collection("portfolio_accounts")
+        .collection('portfolio_accounts')
         .find({
-          $or: [
-            { ownerId },
-            ...(ownerId === "guest" ? [{ ownerId: { $exists: false } }] : []),
-          ],
+          $or: [{ ownerId }, ...(ownerId === 'guest' ? [{ ownerId: { $exists: false } }] : [])],
         })
         .toArray();
 
       if (accounts.length > 0) {
-        // Fallback to the first linked account
+        // Dự phòng bằng tài khoản đã liên kết đầu tiên
         const primaryAccount = accounts[0];
         const sourceAccounts = [
           {
@@ -56,26 +50,26 @@ export async function POST() {
           },
         ];
 
-        const updateResult = await db.collection("portfolio_items").updateMany(
+        const updateResult = await db.collection('portfolio_items').updateMany(
           {
             _id: { $in: syncItems.map((item) => item._id) },
           },
           {
             $set: { sourceAccounts },
-          },
+          }
         );
         migratedCount = updateResult.modifiedCount;
       }
     }
 
     return NextResponse.json({
-      message: "Migration completed",
+      message: 'Migration completed',
       migratedCount,
     });
   } catch (error) {
     return NextResponse.json(
-      { message: error instanceof Error ? error.message : "Migration failed" },
-      { status: 500 },
+      { message: error instanceof Error ? error.message : 'Migration failed' },
+      { status: 500 }
     );
   }
 }

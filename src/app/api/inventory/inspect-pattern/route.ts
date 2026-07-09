@@ -1,67 +1,63 @@
-import { NextRequest, NextResponse } from "next/server";
-import { getDatabase } from "@/infrastructure/db/mongo-client";
-import { inspectItem } from "@/services/pattern/csfloat-client";
+import { NextRequest, NextResponse } from 'next/server';
+import { getDatabase } from '@/infrastructure/db/mongo-client';
+import { inspectItem } from '@/services/pattern/csfloat-client';
 import {
   decodeInspectLink,
   type DecodedKeychain,
   type DecodedSticker,
-} from "@/services/pattern/inspect-link-decoder";
-import { analyzePattern } from "@/services/pattern/pattern-analyzer";
-import { estimateOverpay } from "@/services/pattern/overpay-calculator";
-import { buffPriceRateLimiter } from "@/infrastructure/rate-limiter";
-import { fetchBuffPriceCny } from "@/services/parser/buff-price-client";
+} from '@/services/pattern/inspect-link-decoder';
+import { analyzePattern } from '@/services/pattern/pattern-analyzer';
+import { estimateOverpay } from '@/services/pattern/overpay-calculator';
+import { buffPriceRateLimiter } from '@/infrastructure/rate-limiter';
+import { fetchBuffPriceCny } from '@/services/parser/buff-price-client';
 
-export const dynamic = "force-dynamic";
+export const dynamic = 'force-dynamic';
 
 export async function POST(request: NextRequest) {
   try {
     const ip =
-      request.headers.get("x-forwarded-for") ||
+      request.headers.get('x-forwarded-for') ||
       (request as NextRequest & { ip?: string }).ip ||
-      "unknown-ip";
+      'unknown-ip';
     const { allowed, retryAfter } = await buffPriceRateLimiter.check(ip);
     if (!allowed) {
       return NextResponse.json(
-        { message: "tooManyRequests", details: { retryAfter } },
-        { status: 429, headers: { "Retry-After": String(retryAfter) } },
+        { message: 'tooManyRequests', details: { retryAfter } },
+        { status: 429, headers: { 'Retry-After': String(retryAfter) } }
       );
     }
 
     const body = await request.json();
-    const inspectLink =
-      typeof body.inspectLink === "string" ? body.inspectLink.trim() : "";
+    const inspectLink = typeof body.inspectLink === 'string' ? body.inspectLink.trim() : '';
     const marketHashName =
-      typeof body.marketHashName === "string" ? body.marketHashName.trim() : "";
+      typeof body.marketHashName === 'string' ? body.marketHashName.trim() : '';
     const existingDopplerPhase =
-      typeof body.dopplerPhase === "string" ? body.dopplerPhase.trim() : "";
+      typeof body.dopplerPhase === 'string' ? body.dopplerPhase.trim() : '';
 
     if (!inspectLink) {
-      return NextResponse.json(
-        { message: "missingInspectLink" },
-        { status: 400 },
-      );
+      return NextResponse.json({ message: 'missingInspectLink' }, { status: 400 });
     }
 
-    // 1. Check MongoDB cache
+    // 1. Kiểm tra cache MongoDB
     const db = await getDatabase();
-    const cacheCol = db.collection("pattern_inspect_cache");
+    const cacheCol = db.collection('pattern_inspect_cache');
     const cached = await cacheCol.findOne({ inspectLink });
 
     if (cached) {
       return NextResponse.json({
-        source: "cache",
+        source: 'cache',
         patternInfo: cached.patternInfo,
         overpay: cached.overpay,
       });
     }
 
-    // 2. Decode inspect link (Offline first, fallback to CSFloat)
+    // 2. Giải mã inspect link (ưu tiên offline, dự phòng bằng CSFloat)
     let paintseed: number | undefined;
     let floatvalue: number | undefined;
     let paintindex: number | undefined;
     let stickers: DecodedSticker[] = [];
     let keychains: DecodedKeychain[] = [];
-    let source = "offline-decode";
+    let source = 'offline-decode';
 
     const decoded = decodeInspectLink(inspectLink);
     if (decoded) {
@@ -78,29 +74,26 @@ export async function POST(request: NextRequest) {
           paintseed = floatRes.iteminfo.paintseed;
           floatvalue = floatRes.iteminfo.floatvalue;
           paintindex = floatRes.iteminfo.paintindex;
-          source = "csfloat";
+          source = 'csfloat';
         }
       }
     }
 
     if (paintseed === undefined) {
-      return NextResponse.json(
-        { message: "cannotDecodeInspectLink" },
-        { status: 502 },
-      );
+      return NextResponse.json({ message: 'cannotDecodeInspectLink' }, { status: 502 });
     }
 
-    // 3. Analyze pattern
+    // 3. Phân tích pattern
     const patternInfo = await analyzePattern(
       marketHashName,
       paintseed,
       floatvalue,
       paintindex,
       existingDopplerPhase,
-      { stickers, keychains },
+      { stickers, keychains }
     );
 
-    // 4. Fetch Buff price & calculate overpay
+    // 4. Lấy giá Buff và tính overpay
     let overpay = null;
     if (marketHashName) {
       const basePriceCny = await fetchBuffPriceCny(marketHashName);
@@ -109,7 +102,7 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    // 5. Store in cache
+    // 5. Lưu vào cache
     const doc = {
       inspectLink,
       marketHashName,
@@ -125,10 +118,7 @@ export async function POST(request: NextRequest) {
       overpay,
     });
   } catch (err) {
-    console.error("Error inspecting pattern:", err);
-    return NextResponse.json(
-      { message: "internalServerError" },
-      { status: 500 },
-    );
+    console.error('Error inspecting pattern:', err);
+    return NextResponse.json({ message: 'internalServerError' }, { status: 500 });
   }
 }

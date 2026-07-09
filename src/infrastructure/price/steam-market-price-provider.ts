@@ -33,7 +33,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 
 const FALLBACK_PRICES_CACHE_FILE = path.join(process.cwd(), 'steam_prices_fallback_cache.json');
-const FALLBACK_PRICES_CACHE_MAX_AGE_MS = 6 * 60 * 60 * 1000; // 6 hours
+const FALLBACK_PRICES_CACHE_MAX_AGE_MS = 6 * 60 * 60 * 1000; // 6 giờ
 
 let inMemoryFallbackPrices: Record<string, number> | null = null;
 let lastLoadedTime = 0;
@@ -122,7 +122,7 @@ async function loadFallbackPrices(): Promise<Record<string, number>> {
       return inMemoryFallbackPrices!;
     }
   } catch {
-    // ignore fallback cache failure
+    // Bỏ qua lỗi cache dự phòng.
   }
 
   return {};
@@ -252,7 +252,7 @@ function parseVndPrice(value: string, usdToVndRate: number): number | null {
     return usd !== null ? Math.round(usd * usdToVndRate) : null;
   }
 
-  // Keep only digits, dots, and commas
+  // Chỉ giữ chữ số, dấu chấm và dấu phẩy
   const cleaned = value.replace(/[^0-9.,]/g, '');
 
   let noThousands = cleaned;

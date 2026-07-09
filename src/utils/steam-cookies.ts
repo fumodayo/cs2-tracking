@@ -5,8 +5,12 @@ export type ParsedSteamCookie = {
 };
 
 /**
- * Parses a raw cookie string (either a full browser cookie header or a single token)
- * into its constituent Steam-related parts.
+ *
+ *
+ * Phân tích chuỗi cookie thô, có thể là tiêu đề cookie đầy đủ của trình duyệt hoặc một token đơn
+ * thành các phần liên quan tới Steam.
+ *
+ *
  */
 export function parseSteamCookies(rawCookie: string): ParsedSteamCookie {
   const result: ParsedSteamCookie = { steamLoginSecure: '' };
@@ -46,7 +50,7 @@ export function parseSteamCookies(rawCookie: string): ParsedSteamCookie {
 }
 
 /**
- * Builds a standardized Steam cookie string from constituent parts.
+ * Tạo chuỗi cookie Steam chuẩn hóa từ các phần thành phần.
  */
 export function buildSteamCookie(
   steamLoginSecure: string,
@@ -60,9 +64,11 @@ export function buildSteamCookie(
 }
 
 /**
- * Merges an incoming (possibly masked) cookie string with the existing database cookie string.
- * If an optional part is omitted or masked (starts with "****"), it retains the value from the existing cookie.
- * Send an explicit empty value (e.g. "sessionid=") to clear an optional part.
+ *
+ * Gộp chuỗi cookie đầu vào, có thể đã mask, với chuỗi cookie hiện có trong database.
+ * Nếu phần tùy chọn bị bỏ trống hoặc đã mask (bắt đầu bằng "****"), giữ lại giá trị từ cookie hiện có.
+ * Gửi giá trị rỗng tường minh (ví dụ "sessionid=") để xóa một phần tùy chọn.
+ *
  */
 export function mergeIncomingCookieWithExisting(incoming: string, existing: string): string {
   if (!incoming) return '';
@@ -96,7 +102,7 @@ export function mergeIncomingCookieWithExisting(incoming: string, existing: stri
 }
 
 /**
- * Returns a masked preview of the steam cookie containing only the last 4 characters of each token.
+ * Trả về bản xem trước cookie Steam đã mask, chỉ giữ 4 ký tự cuối của mỗi token.
  */
 export function getCookiePreview(cookie: string): string {
   if (!cookie) return '';

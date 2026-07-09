@@ -21,7 +21,7 @@ export interface ApiErrorResponse {
 }
 
 /**
- * Creates a standardized API error response.
+ * Tạo response lỗi API theo chuẩn chung.
  */
 export function apiError(
   code: ApiErrorCode | string,

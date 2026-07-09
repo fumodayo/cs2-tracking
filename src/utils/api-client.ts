@@ -9,7 +9,7 @@ export const USER_AGENTS = {
 export async function fetchCs2cApi(path: string, options: RequestInit = {}): Promise<Response> {
   let apiKey = process.env.CS2CAP_API_KEY?.trim();
 
-  // Try to use logged-in user's custom API key
+  // Thử dùng API key tùy chỉnh của user đã đăng nhập
   try {
     const { getCurrentUser, getUserCs2capApiKey } = await import('@/services/auth-service');
     const user = await getCurrentUser();
@@ -20,7 +20,7 @@ export async function fetchCs2cApi(path: string, options: RequestInit = {}): Pro
       }
     }
   } catch (err) {
-    // Gracefully ignore error if called outside request context or DB not connected
+    // Bỏ qua lỗi nhẹ nhàng nếu gọi ngoài request context hoặc DB chưa kết nối
     console.warn(
       'Could not retrieve custom user CS2Cap API key, falling back to environment key:',
       err
@@ -81,7 +81,7 @@ interface RequestOptions extends RequestInit {
 async function request<T>(url: string, options: RequestOptions = {}): Promise<T> {
   const { params, headers, ...customOptions } = options;
 
-  // 1. Build URL with query parameters if present
+  // 1. Tạo URL kèm query parameter nếu có
   let finalUrl = url;
   if (params) {
     const searchParams = new URLSearchParams();
@@ -96,7 +96,7 @@ async function request<T>(url: string, options: RequestOptions = {}): Promise<T>
     }
   }
 
-  // 2. Set default headers
+  // 2. Đặt header mặc định
   const defaultHeaders: HeadersInit = {
     'Content-Type': 'application/json',
   };
@@ -106,18 +106,18 @@ async function request<T>(url: string, options: RequestOptions = {}): Promise<T>
     ...headers,
   } as Record<string, string>;
 
-  // Remove Content-Type if body is FormData (e.g. file uploads) to let browser set boundary
+  // Xóa Content-Type nếu body là FormData để trình duyệt tự đặt boundary
   if (customOptions.body instanceof FormData) {
     delete mergedHeaders['Content-Type'];
   }
 
-  // 3. Perform fetch
+  // 3. Thực hiện fetch
   const response = await fetch(finalUrl, {
     ...customOptions,
     headers: mergedHeaders,
   });
 
-  // 4. Parse response body
+  // 4. Parse body response
   let data: unknown = null;
   const contentType = response.headers.get('content-type');
   if (contentType && contentType.includes('application/json')) {
@@ -134,7 +134,7 @@ async function request<T>(url: string, options: RequestOptions = {}): Promise<T>
     }
   }
 
-  // 5. Handle HTTP errors (non-2xx status code)
+  // 5. Xử lý lỗi HTTP (status code không phải 2xx)
   if (!response.ok) {
     throw new HttpError(response, data);
   }

@@ -1,4 +1,4 @@
-import { decodeLink } from "@csfloat/cs2-inspect-serializer";
+import { decodeLink } from '@csfloat/cs2-inspect-serializer';
 
 export type DecodedSticker = {
   id?: number;
@@ -22,8 +22,10 @@ export type DecodedInspectLink = {
 };
 
 /**
- * Decodes a CS2 inspect link offline using @csfloat/cs2-inspect-serializer.
- * Returns null if the link is legacy, invalid, or cannot be parsed.
+ *
+ * Giải mã CS2 inspect link offline bằng @csfloat/cs2-inspect-serializer.
+ * Trả về null nếu link thuộc dạng cũ, không hợp lệ hoặc không parse được.
+ *
  */
 export function decodeInspectLink(link: string): DecodedInspectLink | null {
   if (!link) return null;
@@ -31,9 +33,9 @@ export function decodeInspectLink(link: string): DecodedInspectLink | null {
     const decoded = decodeLink(link);
     if (
       decoded &&
-      typeof decoded.paintseed === "number" &&
-      typeof decoded.paintwear === "number" &&
-      typeof decoded.paintindex === "number"
+      typeof decoded.paintseed === 'number' &&
+      typeof decoded.paintwear === 'number' &&
+      typeof decoded.paintindex === 'number'
     ) {
       return {
         paintSeed: decoded.paintseed,
@@ -45,8 +47,8 @@ export function decodeInspectLink(link: string): DecodedInspectLink | null {
       };
     }
   } catch (err) {
-    // Fail gracefully for legacy or non-Protobuf format links
-    console.debug("[decodeInspectLink] Failed to decode link offline:", err);
+    // Fail mềm với link legacy hoặc không phải định dạng Protobuf
+    console.debug('[decodeInspectLink] Failed to decode link offline:', err);
   }
   return null;
 }
@@ -70,9 +72,7 @@ function normalizeKeychains(value: unknown): DecodedKeychain[] {
     const source = item as Record<string, unknown>;
     return {
       id:
-        getNumber(source.stickerId) ??
-        getNumber(source.sticker_id) ??
-        getNumber(source.keychainId),
+        getNumber(source.stickerId) ?? getNumber(source.sticker_id) ?? getNumber(source.keychainId),
       slot: getNumber(source.slot),
       pattern: getNumber(source.pattern),
     };
@@ -80,7 +80,5 @@ function normalizeKeychains(value: unknown): DecodedKeychain[] {
 }
 
 function getNumber(value: unknown): number | undefined {
-  return typeof value === "number" && Number.isFinite(value)
-    ? value
-    : undefined;
+  return typeof value === 'number' && Number.isFinite(value) ? value : undefined;
 }

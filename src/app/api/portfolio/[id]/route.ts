@@ -1,14 +1,15 @@
-import { NextRequest, NextResponse } from "next/server";
-import type { UpdatePortfolioItemInput } from "@/domain/portfolio-item";
-import { getErrorMessage } from "@/utils/error";
-import { createServices } from "@/infrastructure/container";
-import { getPortfolioOwnerId } from "@/services/auth-service";
-import { serializeReport } from "@/services/dto";
-import { ObjectId } from "mongodb";
-import { getDatabase } from "@/infrastructure/db/mongo-client";
-import { STORAGE_UNIT_MAX_CAPACITY } from "@/domain/storage-unit";
+import { NextRequest, NextResponse } from 'next/server';
+import type { UpdatePortfolioItemInput } from '@/domain/portfolio-item';
+import { getErrorMessage } from '@/utils/error';
+import { createServices } from '@/infrastructure/container';
+import { getPortfolioOwnerId } from '@/services/auth-service';
+import { serializeReport } from '@/services/dto';
+import { ObjectId } from 'mongodb';
+import { getDatabase } from '@/infrastructure/db/mongo-client';
+import { STORAGE_UNIT_MAX_CAPACITY } from '@/domain/storage-unit';
+import { publishPortfolioChanged } from '@/services/realtime/portfolio-events';
 
-export const dynamic = "force-dynamic";
+export const dynamic = 'force-dynamic';
 
 type RouteContext = {
   params: Promise<{ id: string }>;
@@ -25,26 +26,21 @@ export async function PATCH(request: NextRequest, context: RouteContext) {
     const db = await getDatabase();
 
     const ownerFilter =
-      ownerId === "guest"
-        ? { $or: [{ ownerId: "guest" }, { ownerId: { $exists: false } }] }
+      ownerId === 'guest'
+        ? { $or: [{ ownerId: 'guest' }, { ownerId: { $exists: false } }] }
         : { ownerId };
 
     const oldItem = await db
-      .collection("portfolio_items")
+      .collection('portfolio_items')
       .findOne({ _id: new ObjectId(id), ...ownerFilter });
 
     if (!oldItem) {
-      return NextResponse.json(
-        { message: "itemNotFound" },
-        { status: 404 },
-      );
+      return NextResponse.json({ message: 'itemNotFound' }, { status: 404 });
     }
 
     const oldQty = Number(oldItem.quantity ?? 0);
     const newQty = body.quantity !== undefined ? Number(body.quantity) : oldQty;
-    const oldSuId = oldItem.storageUnitId
-      ? String(oldItem.storageUnitId)
-      : undefined;
+    const oldSuId = oldItem.storageUnitId ? String(oldItem.storageUnitId) : undefined;
     const newSuId =
       body.storageUnitId !== undefined
         ? body.storageUnitId
@@ -53,9 +49,7 @@ export async function PATCH(request: NextRequest, context: RouteContext) {
         : oldSuId;
     const caseId = String(oldItem.caseId);
 
-    const caseItem = await db
-      .collection("cases")
-      .findOne({ _id: new ObjectId(caseId) });
+    const caseItem = await db.collection('cases').findOne({ _id: new ObjectId(caseId) });
 
     const input: UpdatePortfolioItemInput = {};
     if (body.quantity !== undefined) input.quantity = Number(body.quantity);
@@ -65,14 +59,10 @@ export async function PATCH(request: NextRequest, context: RouteContext) {
     }
     if (body.buyDate !== undefined) input.buyDate = new Date(body.buyDate);
     if (body.note !== undefined) input.note = String(body.note);
-    if (body.sourceAccounts !== undefined)
-      input.sourceAccounts = body.sourceAccounts;
-    if (body.storageUnitId !== undefined)
-      input.storageUnitId = body.storageUnitId || undefined;
+    if (body.sourceAccounts !== undefined) input.sourceAccounts = body.sourceAccounts;
+    if (body.storageUnitId !== undefined) input.storageUnitId = body.storageUnitId || undefined;
     if (body.tradeHoldUntil !== undefined) {
-      input.tradeHoldUntil = body.tradeHoldUntil
-        ? new Date(body.tradeHoldUntil)
-        : undefined;
+      input.tradeHoldUntil = body.tradeHoldUntil ? new Date(body.tradeHoldUntil) : undefined;
     }
     if (body.dopplerPhase !== undefined) input.dopplerPhase = body.dopplerPhase;
     if (body.inspectLink !== undefined) input.inspectLink = body.inspectLink;
@@ -100,10 +90,7 @@ export async function PATCH(request: NextRequest, context: RouteContext) {
         ? new Date(body.stickerScanPriceCapturedAt)
         : undefined;
     }
-    if (
-      input.stickerBuyPriceRate !== undefined ||
-      input.stickerScanTotalPrice !== undefined
-    ) {
+    if (input.stickerBuyPriceRate !== undefined || input.stickerScanTotalPrice !== undefined) {
       const nextBuyRate =
         input.stickerBuyPriceRate ??
         (oldItem.stickerBuyPriceRate !== undefined
@@ -120,12 +107,12 @@ export async function PATCH(request: NextRequest, context: RouteContext) {
           : undefined;
     }
 
-    // Adjust storage unit items
-    const suCollection = db.collection("storage_units");
+    // Điều chỉnh vật phẩm trong storage unit
+    const suCollection = db.collection('storage_units');
     const adjustStorageUnitItem = async (suId: string, qtyDelta: number) => {
       if (qtyDelta === 0) return;
       if (!ObjectId.isValid(suId)) {
-        if (qtyDelta > 0) throw new Error("storageUnitNotFound");
+        if (qtyDelta > 0) throw new Error('storageUnitNotFound');
         return;
       }
 
@@ -134,33 +121,29 @@ export async function PATCH(request: NextRequest, context: RouteContext) {
         ...ownerFilter,
       });
       if (!suDoc) {
-        if (qtyDelta > 0) throw new Error("storageUnitNotFound");
+        if (qtyDelta > 0) throw new Error('storageUnitNotFound');
         return;
       }
 
       const existingItems = Array.isArray(suDoc.items) ? suDoc.items : [];
       const currentCount = existingItems.reduce(
-        (sum: number, item: { quantity?: unknown }) =>
-          sum + (Number(item.quantity) || 0),
-        0,
+        (sum: number, item: { quantity?: unknown }) => sum + (Number(item.quantity) || 0),
+        0
       );
 
       if (qtyDelta > 0 && currentCount + qtyDelta > STORAGE_UNIT_MAX_CAPACITY) {
         throw new Error(
-          `storageUnitCapacityExceeded:name=${suDoc.name},currentCount=${currentCount},addingCount=${qtyDelta},maxCapacity=${STORAGE_UNIT_MAX_CAPACITY}`,
+          `storageUnitCapacityExceeded:name=${suDoc.name},currentCount=${currentCount},addingCount=${qtyDelta},maxCapacity=${STORAGE_UNIT_MAX_CAPACITY}`
         );
       }
 
       const updatedItems = [...existingItems];
       const existingIdx = updatedItems.findIndex(
-        (ei: { caseId: unknown }) => String(ei.caseId) === caseId,
+        (ei: { caseId: unknown }) => String(ei.caseId) === caseId
       );
 
       if (existingIdx >= 0) {
-        const nextQty = Math.max(
-          0,
-          updatedItems[existingIdx].quantity + qtyDelta,
-        );
+        const nextQty = Math.max(0, updatedItems[existingIdx].quantity + qtyDelta);
         if (nextQty === 0) {
           updatedItems.splice(existingIdx, 1);
         } else {
@@ -172,7 +155,7 @@ export async function PATCH(request: NextRequest, context: RouteContext) {
       } else if (qtyDelta > 0) {
         updatedItems.push({
           caseId,
-          marketHashName: caseItem?.marketHashName ?? "",
+          marketHashName: caseItem?.marketHashName ?? '',
           quantity: qtyDelta,
           addedAt: new Date(),
         });
@@ -180,7 +163,7 @@ export async function PATCH(request: NextRequest, context: RouteContext) {
 
       await suCollection.updateOne(
         { _id: new ObjectId(suId), ...ownerFilter },
-        { $set: { items: updatedItems, updatedAt: new Date() } },
+        { $set: { items: updatedItems, updatedAt: new Date() } }
       );
     };
 
@@ -194,20 +177,18 @@ export async function PATCH(request: NextRequest, context: RouteContext) {
     const updated = await portfolioService.update(id, input);
 
     if (!updated) {
-      return NextResponse.json(
-        { message: "itemNotFound" },
-        { status: 404 },
-      );
+      return NextResponse.json({ message: 'itemNotFound' }, { status: 404 });
     }
 
     const report = await portfolioReportService.buildReport({
       refreshStalePrices: false,
     });
+    await publishPortfolioChanged(ownerId, 'updated', { id });
     return NextResponse.json(serializeReport(report));
   } catch (error) {
     return NextResponse.json(
-      { message: getErrorMessage(error, "cannotUpdatePortfolio") },
-      { status: 400 },
+      { message: getErrorMessage(error, 'cannotUpdatePortfolio') },
+      { status: 400 }
     );
   }
 }
@@ -222,12 +203,12 @@ export async function DELETE(_request: NextRequest, context: RouteContext) {
     const db = await getDatabase();
 
     const ownerFilter =
-      ownerId === "guest"
-        ? { $or: [{ ownerId: "guest" }, { ownerId: { $exists: false } }] }
+      ownerId === 'guest'
+        ? { $or: [{ ownerId: 'guest' }, { ownerId: { $exists: false } }] }
         : { ownerId };
 
     const oldItem = await db
-      .collection("portfolio_items")
+      .collection('portfolio_items')
       .findOne({ _id: new ObjectId(id), ...ownerFilter });
 
     if (oldItem && oldItem.storageUnitId) {
@@ -235,7 +216,7 @@ export async function DELETE(_request: NextRequest, context: RouteContext) {
       const oldQty = Number(oldItem.quantity ?? 0);
       const caseId = String(oldItem.caseId);
 
-      const suCollection = db.collection("storage_units");
+      const suCollection = db.collection('storage_units');
       const suDoc = await suCollection.findOne({
         _id: new ObjectId(oldSuId),
         ...ownerFilter,
@@ -244,14 +225,11 @@ export async function DELETE(_request: NextRequest, context: RouteContext) {
         const existingItems = Array.isArray(suDoc.items) ? suDoc.items : [];
         const updatedItems = [...existingItems];
         const existingIdx = updatedItems.findIndex(
-          (ei: { caseId: unknown }) => String(ei.caseId) === caseId,
+          (ei: { caseId: unknown }) => String(ei.caseId) === caseId
         );
 
         if (existingIdx >= 0) {
-          const nextQty = Math.max(
-            0,
-            updatedItems[existingIdx].quantity - oldQty,
-          );
+          const nextQty = Math.max(0, updatedItems[existingIdx].quantity - oldQty);
           if (nextQty === 0) {
             updatedItems.splice(existingIdx, 1);
           } else {
@@ -262,7 +240,7 @@ export async function DELETE(_request: NextRequest, context: RouteContext) {
           }
           await suCollection.updateOne(
             { _id: new ObjectId(oldSuId), ...ownerFilter },
-            { $set: { items: updatedItems, updatedAt: new Date() } },
+            { $set: { items: updatedItems, updatedAt: new Date() } }
           );
         }
       }
@@ -271,20 +249,18 @@ export async function DELETE(_request: NextRequest, context: RouteContext) {
     const deleted = await portfolioService.delete(id);
 
     if (!deleted) {
-      return NextResponse.json(
-        { message: "itemNotFound" },
-        { status: 404 },
-      );
+      return NextResponse.json({ message: 'itemNotFound' }, { status: 404 });
     }
 
     const report = await portfolioReportService.buildReport({
       refreshStalePrices: false,
     });
+    await publishPortfolioChanged(ownerId, 'deleted', { id });
     return NextResponse.json(serializeReport(report));
   } catch (error) {
     return NextResponse.json(
-      { message: getErrorMessage(error, "cannotUpdatePortfolio") },
-      { status: 400 },
+      { message: getErrorMessage(error, 'cannotUpdatePortfolio') },
+      { status: 400 }
     );
   }
 }

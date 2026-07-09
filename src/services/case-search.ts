@@ -2,7 +2,7 @@ import { createServices } from '@/infrastructure/container';
 import type { CaseItem } from '@/domain/case-item';
 
 /**
- * Common case search logic that queries MongoDB and handles external dynamic Steam image fetching if needed.
+ * Logic tìm case dùng chung: truy vấn MongoDB và xử lý lấy ảnh Steam động bên ngoài khi cần.
  */
 export async function searchCases(query: string): Promise<CaseItem[]> {
   const { caseRepository } = createServices();
@@ -16,7 +16,7 @@ export async function searchCases(query: string): Promise<CaseItem[]> {
         c.name.toLowerCase() === trimmedQuery.toLowerCase()
     );
     if (!hasExactMatch) {
-      // Dynamically import to avoid circular dependencies in some setups
+      // Import động để tránh phụ thuộc vòng trong một số cấu hình
       const { getSteamCaseImageUrl } =
         await import('@/infrastructure/cases/steam-case-image-provider');
       const imageUrl = await getSteamCaseImageUrl(trimmedQuery);

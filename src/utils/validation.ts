@@ -42,7 +42,7 @@ const imageBase64Schema = z
   });
 
 /**
- * Zod schema for Steam account inputs (creation or updates).
+ * Schema Zod cho đầu vào tài khoản Steam khi tạo hoặc cập nhật.
  */
 export const steamAccountSchema = z.object({
   steamUrl: z
@@ -57,7 +57,7 @@ export const steamAccountSchema = z.object({
 });
 
 /**
- * Zod schema for portfolio item transaction inputs.
+ * Schema Zod cho đầu vào giao dịch vật phẩm portfolio.
  */
 export const portfolioItemSchema = z.object({
   caseId: z.string().trim().min(1, 'caseIdRequired'),
@@ -98,7 +98,7 @@ export const bugReportSchema = z.object({
 });
 
 /**
- * Zod schema for Facebook post analysis requests.
+ * Schema Zod cho request phân tích bài viết Facebook.
  */
 export const postAnalyzeSchema = z.object({
   text: z.string().trim().min(1, 'postContentRequired'),
@@ -113,7 +113,7 @@ export const postAnalyzeSchema = z.object({
 });
 
 /**
- * Zod schema for CS2Cap API Key validation requests.
+ * Schema Zod cho request validate CS2Cap API Key.
  */
 export const cs2capValidateSchema = z.object({
   apiKey: z.string().trim().min(1, 'apiKeyRequired'),

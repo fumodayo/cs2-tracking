@@ -21,7 +21,7 @@ export async function GET() {
     let mongoLatencyMs: number | null = null;
     let detailInfo: HealthDetails | null = null;
 
-    // Check authorization for detailed output
+    // Kiểm tra quyền trước khi trả về chẩn đoán chi tiết
     const currentUser = await getCurrentUser();
     const isAdmin = currentUser ? isAdminUser(currentUser.email) : false;
 
@@ -29,11 +29,11 @@ export async function GET() {
     try {
       const db = await getDatabase();
       if (isAdmin) {
-        // Run a real query if admin requested detailed diagnostics
+        // Chạy truy vấn thật nếu admin yêu cầu chẩn đoán chi tiết
         await db.command({ ping: 1 });
         dbStatus = 'healthy';
       } else {
-        // Just verify connection exists without running query
+        // Chỉ xác minh kết nối tồn tại, không chạy truy vấn
         dbStatus = db ? 'connected' : 'disconnected';
       }
       mongoLatencyMs = Date.now() - dbStartTime;

@@ -1,10 +1,10 @@
-import { NextResponse } from "next/server";
+import { NextResponse } from 'next/server';
 
-export const dynamic = "force-dynamic";
+export const dynamic = 'force-dynamic';
 
 // GET /api/user/cs2cap/status
-// Public endpoint: returns whether the server has a default CS2Cap API key configured,
-// plus account usage/tier info from CS2Cap for guests to display.
+// Endpoint public: trả về việc server có cấu hình CS2Cap API key mặc định hay không,
+// kèm thông tin usage/tier từ CS2Cap để hiển thị cho khách.
 export async function GET() {
   const apiKey = process.env.CS2CAP_API_KEY?.trim();
   if (!apiKey) {
@@ -12,10 +12,10 @@ export async function GET() {
   }
 
   try {
-    const res = await fetch("https://api.cs2c.app/v1/account", {
+    const res = await fetch('https://api.cs2c.app/v1/account', {
       headers: {
         Authorization: `Bearer ${apiKey}`,
-        "Content-Type": "application/json",
+        'Content-Type': 'application/json',
       },
       next: { revalidate: 60 }, // cache 60s to avoid too many calls
     });

@@ -84,7 +84,7 @@ export class RateLimiter {
   }
 }
 
-// Singleton instances for specific routes/actions
+// Instance singleton cho route/action cụ thể
 export const geminiRateLimiter = new RateLimiter('gemini', {
   windowMs: 60 * 1000, // 1 minute
   maxRequests: 10,

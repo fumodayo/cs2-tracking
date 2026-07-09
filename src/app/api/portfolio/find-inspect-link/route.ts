@@ -1,26 +1,26 @@
-import { NextRequest, NextResponse } from "next/server";
-import { getDatabase } from "@/infrastructure/db/mongo-client";
-import { getPortfolioOwnerId } from "@/services/auth-service";
-import { getOwnerFilter } from "@/infrastructure/db/owner-filter";
-import { getErrorMessage } from "@/utils/error";
+import { NextRequest, NextResponse } from 'next/server';
+import { getDatabase } from '@/infrastructure/db/mongo-client';
+import { getPortfolioOwnerId } from '@/services/auth-service';
+import { getOwnerFilter } from '@/infrastructure/db/owner-filter';
+import { getErrorMessage } from '@/utils/error';
 
-export const dynamic = "force-dynamic";
+export const dynamic = 'force-dynamic';
 
 export async function GET(request: NextRequest) {
   try {
     const ownerId = await getPortfolioOwnerId();
     const url = new URL(request.url);
-    const marketHashName = url.searchParams.get("marketHashName") || "";
+    const marketHashName = url.searchParams.get('marketHashName') || '';
 
     if (!marketHashName) {
       return NextResponse.json({ inspectLink: null });
     }
 
     const db = await getDatabase();
-    
-    // Find all steam accounts for this user
+
+    // Tìm toàn bộ tài khoản Steam của user này
     const accounts = await db
-      .collection("portfolio_accounts")
+      .collection('portfolio_accounts')
       .find(getOwnerFilter(ownerId))
       .toArray();
 
@@ -29,8 +29,8 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ inspectLink: null });
     }
 
-    // Search cache for these accounts
-    const cacheCol = db.collection("inventory_scan_cache");
+    // Tìm cache của các tài khoản này
+    const cacheCol = db.collection('inventory_scan_cache');
     const cacheDocs = await cacheCol
       .find({
         steamId64: { $in: steamIds },
@@ -38,25 +38,25 @@ export async function GET(request: NextRequest) {
       })
       .toArray();
 
-    // Loop through the cache documents and find the first matching item with an inspectLink
+    // Duyệt các document cache và tìm vật phẩm khớp đầu tiên có inspectLink
     for (const doc of cacheDocs) {
       if (Array.isArray(doc.items)) {
-        // Try to match exact marketHashName
+        // Thử khớp chính xác marketHashName
         const match = doc.items.find((item: Record<string, unknown>) => {
           const caseItem =
-            item.caseItem && typeof item.caseItem === "object"
+            item.caseItem && typeof item.caseItem === 'object'
               ? (item.caseItem as Record<string, unknown>)
               : null;
           const itemMarketHashName =
-            typeof item.marketHashName === "string"
+            typeof item.marketHashName === 'string'
               ? item.marketHashName
-              : typeof caseItem?.marketHashName === "string"
+              : typeof caseItem?.marketHashName === 'string'
                 ? caseItem.marketHashName
-                : "";
+                : '';
 
           return (
             itemMarketHashName === marketHashName &&
-            typeof item.inspectLink === "string" &&
+            typeof item.inspectLink === 'string' &&
             item.inspectLink.trim().length > 0
           );
         });
@@ -68,9 +68,6 @@ export async function GET(request: NextRequest) {
 
     return NextResponse.json({ inspectLink: null });
   } catch (error) {
-    return NextResponse.json(
-      { message: getErrorMessage(error, "unknownError") },
-      { status: 500 }
-    );
+    return NextResponse.json({ message: getErrorMessage(error, 'unknownError') }, { status: 500 });
   }
 }

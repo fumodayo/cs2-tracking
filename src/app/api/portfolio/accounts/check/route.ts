@@ -1,34 +1,37 @@
-import { NextRequest, NextResponse } from "next/server";
-import { getDatabase } from "@/infrastructure/db/mongo-client";
-import { USER_AGENTS } from "@/utils/api-client";
-import { getPortfolioOwnerId } from "@/services/auth-service";
-import { decrypt } from "@/services/crypto-service";
-import { ObjectId } from "mongodb";
-import { resolveSteamId, fetchSteamWalletBalance } from "@/infrastructure/steam";
-import { parseSteamCookies, buildSteamCookie, mergeIncomingCookieWithExisting } from "@/utils/steam-cookies";
-import { getOwnerFilter } from "@/infrastructure/db/owner-filter";
+import { NextRequest, NextResponse } from 'next/server';
+import { getDatabase } from '@/infrastructure/db/mongo-client';
+import { USER_AGENTS } from '@/utils/api-client';
+import { getPortfolioOwnerId } from '@/services/auth-service';
+import { decrypt } from '@/services/crypto-service';
+import { ObjectId } from 'mongodb';
+import { resolveSteamId, fetchSteamWalletBalance } from '@/infrastructure/steam';
+import {
+  parseSteamCookies,
+  buildSteamCookie,
+  mergeIncomingCookieWithExisting,
+} from '@/utils/steam-cookies';
+import { getOwnerFilter } from '@/infrastructure/db/owner-filter';
 
-export const dynamic = "force-dynamic";
+export const dynamic = 'force-dynamic';
 
 function parseSteamLoginSecure(rawCookie: string): string {
   const trimmed = rawCookie.trim();
 
-  if (trimmed.includes(";")) {
-    for (const pair of trimmed.split(";")) {
-      const [key, ...rest] = pair.trim().split("=");
-      if (key?.trim().toLowerCase() === "steamloginsecure") {
-        return rest.join("=").trim();
+  if (trimmed.includes(';')) {
+    for (const pair of trimmed.split(';')) {
+      const [key, ...rest] = pair.trim().split('=');
+      if (key?.trim().toLowerCase() === 'steamloginsecure') {
+        return rest.join('=').trim();
       }
     }
   }
 
-  if (trimmed.toLowerCase().startsWith("steamloginsecure=")) {
-    return trimmed.substring("steamloginsecure=".length).trim();
+  if (trimmed.toLowerCase().startsWith('steamloginsecure=')) {
+    return trimmed.substring('steamloginsecure='.length).trim();
   }
 
   return trimmed;
 }
-
 
 export async function POST(request: NextRequest) {
   let accountId: string | undefined;
@@ -40,33 +43,27 @@ export async function POST(request: NextRequest) {
     const { steamId64, steamCookie, steamUrl } = body;
 
     let targetSteamId64 = steamId64;
-    let decryptedCookie = "";
+    let decryptedCookie = '';
 
     if (accountId) {
       if (!ObjectId.isValid(accountId)) {
-        return NextResponse.json(
-          { message: "invalidAccountId" },
-          { status: 400 },
-        );
+        return NextResponse.json({ message: 'invalidAccountId' }, { status: 400 });
       }
 
       const db = await getDatabase();
-      const account = await db.collection("portfolio_accounts").findOne({
+      const account = await db.collection('portfolio_accounts').findOne({
         _id: new ObjectId(accountId),
         ...getOwnerFilter(ownerId),
       });
 
       if (!account) {
-        return NextResponse.json(
-          { message: "accountNotFound" },
-          { status: 404 },
-        );
+        return NextResponse.json({ message: 'accountNotFound' }, { status: 404 });
       }
 
       if (!account.steamCookie) {
         return NextResponse.json({
           isValid: false,
-          message: "accountCookieNotConfigured",
+          message: 'accountCookieNotConfigured',
         });
       }
 
@@ -80,31 +77,25 @@ export async function POST(request: NextRequest) {
         } catch (resolveErr) {
           return NextResponse.json({
             isValid: false,
-            message:
-              resolveErr instanceof Error
-                ? resolveErr.message
-                : "steamProfileNotFound",
+            message: resolveErr instanceof Error ? resolveErr.message : 'steamProfileNotFound',
           });
         }
       }
 
       if (!targetSteamId64) {
-        return NextResponse.json(
-          { message: "missingSteamIdOrUrl" },
-          { status: 400 },
-        );
+        return NextResponse.json({ message: 'missingSteamIdOrUrl' }, { status: 400 });
       }
       if (!steamCookie) {
         return NextResponse.json({
           isValid: false,
-          message: "enterCookieToCheck",
+          message: 'enterCookieToCheck',
         });
       }
       let finalCookie = steamCookie;
       if (targetSteamId64) {
         try {
           const db = await getDatabase();
-          const existingAccount = await db.collection("portfolio_accounts").findOne({
+          const existingAccount = await db.collection('portfolio_accounts').findOne({
             ownerId,
             steamId64: targetSteamId64,
           });
@@ -113,7 +104,10 @@ export async function POST(request: NextRequest) {
             finalCookie = mergeIncomingCookieWithExisting(steamCookie, decryptedExisting);
           }
         } catch (dbErr) {
-          console.error("[check/route.ts] Failed to fetch and merge existing account cookie:", dbErr);
+          console.error(
+            '[check/route.ts] Failed to fetch and merge existing account cookie:',
+            dbErr
+          );
         }
       }
       decryptedCookie = finalCookie;
@@ -121,19 +115,19 @@ export async function POST(request: NextRequest) {
 
     const cookieValue = parseSteamLoginSecure(decryptedCookie);
 
-    // Parse SteamID and access token from cookie
+    // Tách SteamID và access token từ cookie
     const decoded = decodeURIComponent(cookieValue);
     let cookieSteamId: string | null = null;
     try {
-      const dotIndex = decoded.indexOf(".");
+      const dotIndex = decoded.indexOf('.');
       if (dotIndex !== -1) {
-        const jwtSubParts = decoded.split(".");
+        const jwtSubParts = decoded.split('.');
         if (jwtSubParts.length >= 2) {
           const payloadBase64 = jwtSubParts[1];
           const payloadJson = Buffer.from(
-            payloadBase64.replace(/-/g, "+").replace(/_/g, "/"),
-            "base64",
-          ).toString("utf8");
+            payloadBase64.replace(/-/g, '+').replace(/_/g, '/'),
+            'base64'
+          ).toString('utf8');
           const payload = JSON.parse(payloadJson);
           if (payload && payload.sub && /^\d{17}$/.test(payload.sub)) {
             cookieSteamId = payload.sub;
@@ -141,7 +135,7 @@ export async function POST(request: NextRequest) {
         }
       }
     } catch {
-      /* ignore */
+      /* bỏ qua */
     }
 
     const parts = decoded.split(/[|%]+/);
@@ -151,14 +145,14 @@ export async function POST(request: NextRequest) {
     const accessToken = parts.length >= 2 && parts[1] ? parts[1] : null;
 
     if (!cookieSteamId || !accessToken) {
-      const errorMsg = "invalidCookieFormat";
+      const errorMsg = 'invalidCookieFormat';
       if (accountId) {
         const db = await getDatabase();
         await db
-          .collection("portfolio_accounts")
+          .collection('portfolio_accounts')
           .updateOne(
             { _id: new ObjectId(accountId), ...getOwnerFilter(ownerId) },
-            { $set: { cookieError: errorMsg, updatedAt: new Date() } },
+            { $set: { cookieError: errorMsg, updatedAt: new Date() } }
           );
       }
       return NextResponse.json({ isValid: false, message: errorMsg });
@@ -169,10 +163,10 @@ export async function POST(request: NextRequest) {
       if (accountId) {
         const db = await getDatabase();
         await db
-          .collection("portfolio_accounts")
+          .collection('portfolio_accounts')
           .updateOne(
             { _id: new ObjectId(accountId), ...getOwnerFilter(ownerId) },
-            { $set: { cookieError: errorMsg, updatedAt: new Date() } },
+            { $set: { cookieError: errorMsg, updatedAt: new Date() } }
           );
       }
       return NextResponse.json({
@@ -183,22 +177,22 @@ export async function POST(request: NextRequest) {
 
     const params = new URLSearchParams({
       access_token: accessToken,
-      max_trades: "1",
-      get_descriptions: "0",
-      language: "english",
-      include_total: "0",
-      start_after_time: "0",
-      start_after_tradeid: "0",
-      navigating_back: "false",
-      include_failed: "false",
+      max_trades: '1',
+      get_descriptions: '0',
+      language: 'english',
+      include_total: '0',
+      start_after_time: '0',
+      start_after_tradeid: '0',
+      navigating_back: 'false',
+      include_failed: 'false',
     });
 
     const res = await fetch(
       `https://api.steampowered.com/IEconService/GetTradeHistory/v1/?${params}`,
       {
-        headers: { "User-Agent": USER_AGENTS.steamApi },
-        cache: "no-store",
-      },
+        headers: { 'User-Agent': USER_AGENTS.steamApi },
+        cache: 'no-store',
+      }
     );
 
     if (res.ok) {
@@ -217,38 +211,38 @@ export async function POST(request: NextRequest) {
           walletVnd = walletResult.vnd;
         }
       } catch (walletErr) {
-        console.error("Failed to fetch steam wallet balance on check:", walletErr);
+        console.error('Failed to fetch steam wallet balance on check:', walletErr);
       }
 
       if (accountId) {
         const db = await getDatabase();
         const updateDoc: Record<string, unknown> = {
           cookieError: null,
-          updatedAt: new Date()
+          updatedAt: new Date(),
         };
         if (walletRaw !== null) {
           updateDoc.walletBalance = walletRaw;
           updateDoc.walletBalanceVnd = walletVnd;
         }
         await db
-          .collection("portfolio_accounts")
+          .collection('portfolio_accounts')
           .updateOne(
             { _id: new ObjectId(accountId), ...getOwnerFilter(ownerId) },
-            { $set: updateDoc },
+            { $set: updateDoc }
           );
       }
       return NextResponse.json({ isValid: true });
     }
 
     if (res.status === 401 || res.status === 403) {
-      const errorMsg = "cookieExpiredOrInvalid";
+      const errorMsg = 'cookieExpiredOrInvalid';
       if (accountId) {
         const db = await getDatabase();
         await db
-          .collection("portfolio_accounts")
+          .collection('portfolio_accounts')
           .updateOne(
             { _id: new ObjectId(accountId), ...getOwnerFilter(ownerId) },
-            { $set: { cookieError: errorMsg, updatedAt: new Date() } },
+            { $set: { cookieError: errorMsg, updatedAt: new Date() } }
           );
       }
       return NextResponse.json({
@@ -262,16 +256,15 @@ export async function POST(request: NextRequest) {
     if (accountId) {
       const db = await getDatabase();
       await db
-        .collection("portfolio_accounts")
+        .collection('portfolio_accounts')
         .updateOne(
           { _id: new ObjectId(accountId), ...getOwnerFilter(ownerId) },
-          { $set: { cookieError: errorMsg, updatedAt: new Date() } },
+          { $set: { cookieError: errorMsg, updatedAt: new Date() } }
         );
     }
     return NextResponse.json({ isValid: false, message: errorMsg });
   } catch (error) {
-    const errorMsg =
-      error instanceof Error ? error.message : "checkErrorGeneric";
+    const errorMsg = error instanceof Error ? error.message : 'checkErrorGeneric';
     if (accountId) {
       try {
         const db = await getDatabase();
@@ -279,11 +272,9 @@ export async function POST(request: NextRequest) {
         if (ownerId) {
           Object.assign(filter, getOwnerFilter(ownerId));
         }
-        await db
-          .collection("portfolio_accounts")
-          .updateOne(filter, {
-            $set: { cookieError: errorMsg, updatedAt: new Date() },
-          });
+        await db.collection('portfolio_accounts').updateOne(filter, {
+          $set: { cookieError: errorMsg, updatedAt: new Date() },
+        });
       } catch {
         /* ignore */
       }

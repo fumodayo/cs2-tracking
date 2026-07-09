@@ -25,7 +25,7 @@ export class MongoCaseRepository implements CaseRepository {
     await collection.createIndex({ marketHashName: 1 }, { unique: true });
     await collection.createIndex({ name: 'text', marketHashName: 'text' });
 
-    // Upsert all default items — adds any missing items without touching existing ones
+    // Upsert toàn bộ item mặc định — thêm item còn thiếu mà không chạm item đã có
     const ops = DEFAULT_CASES.map((caseItem) => ({
       updateOne: {
         filter: { marketHashName: caseItem.marketHashName },

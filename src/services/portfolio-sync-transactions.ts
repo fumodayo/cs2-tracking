@@ -79,7 +79,7 @@ export function resolveSyncTransactions(
   const tradeHoldUntil =
     tradeHoldUntilParam ?? (holdDays > 0 ? calculateTradeHoldUntil(buyDate, holdDays) : undefined);
 
-  // Initialize pool of available account quantities to distribute accurately
+  // Khởi tạo pool số lượng tài khoản khả dụng để phân bổ chính xác
   const pool: AccountBreakdownPool[] = sourceAccounts.map((sa) => ({
     steamId64: sa.steamId64,
     name: sa.name,
@@ -111,7 +111,7 @@ export function resolveSyncTransactions(
         holdDetails: [] as Array<{ quantity: number; holdDays: number }>,
       };
 
-      // Take from tradeable
+      // Lấy từ phần có thể trade
       if (entry.tradeable > 0 && remainingToTakeFromEntry > 0) {
         const take = Math.min(entry.tradeable, remainingToTakeFromEntry);
         breakdown.tradeable = take;
@@ -119,7 +119,7 @@ export function resolveSyncTransactions(
         remainingToTakeFromEntry -= take;
       }
 
-      // Take from onMarket
+      // Lấy từ phần đang trên market
       if (entry.onMarket > 0 && remainingToTakeFromEntry > 0) {
         const take = Math.min(entry.onMarket, remainingToTakeFromEntry);
         breakdown.onMarket = take;
@@ -127,7 +127,7 @@ export function resolveSyncTransactions(
         remainingToTakeFromEntry -= take;
       }
 
-      // Take from tradeProtected
+      // Lấy từ phần được bảo vệ trade
       if (entry.tradeProtected > 0 && remainingToTakeFromEntry > 0) {
         const take = Math.min(entry.tradeProtected, remainingToTakeFromEntry);
         breakdown.tradeProtected = take;
@@ -135,14 +135,14 @@ export function resolveSyncTransactions(
         remainingToTakeFromEntry -= take;
       }
 
-      // Take from hold
+      // Lấy từ phần đang hold
       if (entry.hold > 0 && remainingToTakeFromEntry > 0) {
         const take = Math.min(entry.hold, remainingToTakeFromEntry);
         breakdown.hold = take;
         entry.hold -= take;
         remainingToTakeFromEntry -= take;
 
-        // Also take from holdDetails
+        // Lấy thêm từ holdDetails
         let holdRemainingToTake = take;
         const newHoldDetails = [];
         for (const hd of entry.holdDetails) {
@@ -250,7 +250,7 @@ export function resolveSyncTransactions(
     return resolved;
   }
 
-  // LIFO deduction
+  // Trừ theo LIFO
   const resolved: CreatePortfolioItemInput[] = [];
   let remainingToKeep = totalScannedQty;
 

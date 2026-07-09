@@ -6,6 +6,7 @@ import { createServices } from '@/infrastructure/container';
 import { ObjectId } from 'mongodb';
 import { getOwnerFilter } from '@/infrastructure/db/owner-filter';
 import { getCachedScan } from '@/services/scan-cache';
+import { publishPortfolioChanged } from '@/services/realtime/portfolio-events';
 import {
   SCANNER_IMPORT_NOTE,
   SCANNER_IMPORT_NOTES,
@@ -83,6 +84,7 @@ export async function POST(request: NextRequest) {
     const stream = new ReadableStream({
       async start(controller) {
         let isClosed = false;
+        // Route này stream Server-Sent Events, nên cần chặn gọi close/enqueue lặp.
         const send = (event: SyncProgressEvent) => {
           if (isClosed) return;
           controller.enqueue(encoder.encode(`data: ${JSON.stringify(event)}\n\n`));
@@ -106,7 +108,7 @@ export async function POST(request: NextRequest) {
           const accountName = String(targetAccount.name || 'Steam Account');
           const targetSteamId64 = String(targetAccount.steamId64);
 
-          // 1. Scan target account live
+          // 1. Quét trực tiếp tài khoản mục tiêu
           send({
             type: 'account_start',
             accountIndex: 0,
@@ -131,7 +133,7 @@ export async function POST(request: NextRequest) {
               ownerId,
             });
 
-            // Poll progress
+            // Polling tiến độ
             targetScanResult = await pollJobProgress(origin, jobId, (progress) => {
               send({
                 type: 'account_progress',
@@ -146,7 +148,7 @@ export async function POST(request: NextRequest) {
               });
             });
 
-            // Process live results
+            // Xử lý kết quả quét trực tiếp
             processScanResult(
               targetScanResult,
               targetAccount,
@@ -192,7 +194,7 @@ export async function POST(request: NextRequest) {
             return;
           }
 
-          // 2. Load cached scan results for all other accounts
+          // 2. Nạp kết quả quét trong cache cho các tài khoản còn lại
           send({
             type: 'import_start',
             message: 'syncFetchingCacheOtherAccounts',
@@ -204,6 +206,8 @@ export async function POST(request: NextRequest) {
             if (currentSteamId === targetSteamId64) continue;
 
             try {
+              // Đồng bộ một tài khoản chỉ quét lại tài khoản mục tiêu; các tài khoản khác dùng cache
+              // để so sánh thiếu/thừa vẫn có đủ ngữ cảnh portfolio.
               const cached = ((await getCachedScan({
                 steamId64: currentSteamId,
                 ownerId,
@@ -222,7 +226,7 @@ export async function POST(request: NextRequest) {
             }
           }
 
-          // 3. Import phase
+          // 3. Giai đoạn import
           send({
             type: 'import_start',
             message: `syncImportingItems:count=${allScannedItems.length}`,
@@ -239,7 +243,7 @@ export async function POST(request: NextRequest) {
             return;
           }
 
-          // Read existing portfolio for missing items comparison (before clearing)
+          // Đọc portfolio hiện có để so sánh vật phẩm thiếu trước khi xóa
           const portfolioCol = db.collection('portfolio_items');
           const existingPortfolioItems = (await portfolioCol
             .find({
@@ -248,13 +252,13 @@ export async function POST(request: NextRequest) {
             })
             .toArray()) as unknown as ExistingPortfolioItem[];
 
-          // Clear existing automated scan items
+          // Xóa các vật phẩm quét tự động hiện có
           await portfolioCol.deleteMany({
             ...getOwnerFilter(ownerId),
             note: { $in: [...SCANNER_IMPORT_NOTES] },
           });
 
-          // Group and resolve items
+          // Gom nhóm và resolve vật phẩm
           const { caseRepository, portfolioService, priceService } = createServices({
             ownerId,
           });
@@ -269,7 +273,7 @@ export async function POST(request: NextRequest) {
             rarity?: SyncScannedItem['rarity'];
           };
 
-          // Pre-fetch all cases to optimize N+1 lookups
+          // Nạp trước toàn bộ case để tối ưu các lookup N+1
           const allCasesDocs = await db.collection('cases').find({ isActive: true }).toArray();
           const casesMap = new Map<string, ResolvedCaseCacheItem>();
           const casesByIdMap = new Map<string, ResolvedCaseCacheItem>();
@@ -300,12 +304,12 @@ export async function POST(request: NextRequest) {
               continue;
             }
 
-            // Try resolving from cache first
+            // Ưu tiên resolve từ cache
             let resolvedCaseItem =
               (marketHashName ? casesMap.get(marketHashName) : null) ??
               (rawCaseId ? casesByIdMap.get(rawCaseId) : null);
 
-            // If not found in cache, query database/repository (fallback)
+            // Nếu không có trong cache thì truy vấn database/repository làm dự phòng
             if (!resolvedCaseItem) {
               const fallbackItem =
                 (marketHashName
@@ -339,7 +343,7 @@ export async function POST(request: NextRequest) {
               }
             }
 
-            // Update metadata only if the image or rarity actually changed / is missing in the database
+            // Chỉ cập nhật metadata khi ảnh hoặc độ hiếm thật sự đổi hoặc đang thiếu trong database
             if (resolvedCaseItem && marketHashName) {
               const hasNewImage =
                 imageUrl && (!resolvedCaseItem.imageUrl || resolvedCaseItem.imageUrl !== imageUrl);
@@ -356,7 +360,7 @@ export async function POST(request: NextRequest) {
                   rarity,
                 });
 
-                // Update our local cache
+                // Cập nhật cache cục bộ
                 if (hasNewImage) resolvedCaseItem.imageUrl = imageUrl;
                 if (hasNewRarity) resolvedCaseItem.rarity = rarity;
               }
@@ -369,6 +373,7 @@ export async function POST(request: NextRequest) {
 
             const stickerFields = await buildAccessoryPriceFields(item.patternInfo, priceService);
             const priceWithSticker = Math.round(price + (stickerFields.stickerBuyPriceAdd ?? 0));
+            // Gom theo định danh vật phẩm, không theo tài khoản, rồi gộp tài khoản nguồn vào nhóm.
             const groupKey = buildSyncGroupKey({
               caseId: resolvedCaseItem.id,
               dopplerPhase: item.dopplerPhase,
@@ -379,6 +384,7 @@ export async function POST(request: NextRequest) {
             if (existing) {
               const nextQuantity = existing.quantity + quantity;
               let updatedTradeHoldUntil = existing.tradeHoldUntil;
+              // Giữ ngày hold xa nhất khi nhiều dòng tài khoản được gộp.
               if (item.tradeHoldUntil) {
                 if (
                   !updatedTradeHoldUntil ||
@@ -421,9 +427,10 @@ export async function POST(request: NextRequest) {
             }
           }
 
-          // Insert new items
+          // Thêm các vật phẩm mới
           const buyDate = new Date();
           if (groupedInputs.size > 0) {
+            // So sánh chênh lệch với lần import scanner trước để báo vật phẩm đã bán hoặc bị thiếu.
             const resolvedInputs = Array.from(groupedInputs.values()).flatMap((input) => {
               return resolveSyncTransactions(
                 input.caseId,
@@ -458,7 +465,7 @@ export async function POST(request: NextRequest) {
             percent: 90,
           });
 
-          // Upsert Storage Units from scan results
+          // Upsert Storage Unit từ kết quả quét
           let syncedStorageUnits: SyncStorageUnit[] = [];
           if (allScannedStorageUnits.length > 0) {
             const suCol = db.collection('storage_units');
@@ -485,7 +492,7 @@ export async function POST(request: NextRequest) {
               );
             }
 
-            // Fetch all storage units for this owner to include in result
+            // Lấy toàn bộ storage unit của owner này để đưa vào kết quả
             const allSUs = await suCol.find(getOwnerFilter(ownerId)).toArray();
             syncedStorageUnits = allSUs.map((doc) => ({
               id: doc._id.toString(),
@@ -520,13 +527,20 @@ export async function POST(request: NextRequest) {
             storageUnits: syncedStorageUnits.length > 0 ? syncedStorageUnits : undefined,
           };
 
-          // Update lastSyncedAt for this account
+          // Cập nhật lastSyncedAt cho tài khoản này
           await db
             .collection('portfolio_accounts')
             .updateOne(
               { _id: targetAccount._id, ...getOwnerFilter(ownerId) },
               { $set: { lastSyncedAt: new Date() } }
             );
+
+          await publishPortfolioChanged(ownerId, 'synced', {
+            importedCount: summary.importedCount,
+            scannedAccountsCount: summary.scannedAccountsCount,
+            totalAccountsCount: summary.totalAccountsCount,
+            steamId64: targetSteamId64,
+          });
 
           send({
             type: 'complete',

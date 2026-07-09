@@ -1,4 +1,5 @@
 import { MongoClient } from 'mongodb';
+import '@/env';
 import { ensureIndexes } from './ensure-indexes';
 
 const uri = process.env.MONGODB_URI;
@@ -52,13 +53,13 @@ export async function getDatabase() {
     const mongoClient = await getClientPromise();
     const db = mongoClient.db(process.env.MONGODB_DB ?? 'cs2_case_tracker');
 
-    // Proactively drop any stale unique index on portfolio_items that blocks duplicate imports
+    // Chủ động xóa unique index cũ trên portfolio_items đang chặn import trùng
     stalePortfolioIndexDropPromise ??= db
       .collection('portfolio_items')
       .dropIndex('importSource_1_caseId_1')
       .catch(() => {});
 
-    // Lazily bootstrap database indexes
+    // Khởi tạo index database theo kiểu lazy
     indexesPromise ??= ensureIndexes(db).catch(() => {});
 
     return db;

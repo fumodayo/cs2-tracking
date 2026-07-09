@@ -2,7 +2,7 @@ import { createHash } from 'node:crypto';
 import { isRecord } from '@/utils/type-guards';
 
 /**
- * Creates a stable SHA256 fingerprint for a post analysis based on text and image data.
+ * Tạo fingerprint SHA256 ổn định cho phân tích bài viết dựa trên text và dữ liệu ảnh.
  */
 export function createPostAnalysisFingerprint(
   text: string,
@@ -30,7 +30,7 @@ export function createPostAnalysisFingerprint(
 }
 
 /**
- * Creates a stable SHA256 fingerprint for a ChatGPT analyzed post based on text and JSON data.
+ * Tạo fingerprint SHA256 ổn định cho bài viết đã phân tích bằng ChatGPT dựa trên text và dữ liệu JSON.
  */
 export function createChatGptPostAnalysisFingerprint(text: string, json: unknown): string {
   const normalizedText = text.replace(/\s+/g, ' ').trim().toLowerCase();
@@ -43,7 +43,7 @@ export function createChatGptPostAnalysisFingerprint(text: string, json: unknown
 }
 
 /**
- * Validates and normalizes base64 image data inputs.
+ * Kiểm tra hợp lệ và chuẩn hóa đầu vào dữ liệu ảnh base64.
  */
 export function normalizeImageInput(
   value: unknown

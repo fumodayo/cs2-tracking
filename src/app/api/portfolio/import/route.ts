@@ -1,11 +1,12 @@
-import { NextRequest, NextResponse } from "next/server";
-import { createServices } from "@/infrastructure/container";
-import { getPortfolioOwnerId } from "@/services/auth-service";
-import { serializeReport } from "@/services/dto";
-import type { PortfolioImportRowInput } from "@/services/portfolio-import-service";
-import { getErrorMessage } from "@/utils/error";
+import { NextRequest, NextResponse } from 'next/server';
+import { createServices } from '@/infrastructure/container';
+import { getPortfolioOwnerId } from '@/services/auth-service';
+import { serializeReport } from '@/services/dto';
+import type { PortfolioImportRowInput } from '@/services/portfolio-import-service';
+import { getErrorMessage } from '@/utils/error';
+import { publishPortfolioChanged } from '@/services/realtime/portfolio-events';
 
-export const dynamic = "force-dynamic";
+export const dynamic = 'force-dynamic';
 
 export async function POST(request: NextRequest) {
   try {
@@ -20,7 +21,7 @@ export async function POST(request: NextRequest) {
     const stream = new ReadableStream({
       async start(controller) {
         const send = (event: unknown) => {
-          controller.enqueue(encoder.encode(JSON.stringify(event) + "\n"));
+          controller.enqueue(encoder.encode(JSON.stringify(event) + '\n'));
         };
 
         try {
@@ -28,10 +29,10 @@ export async function POST(request: NextRequest) {
           const total = rows.length;
 
           for (const [index, row] of rows.entries()) {
-            const name = row.marketHashName || row.caseId || "item";
+            const name = row.marketHashName || row.caseId || 'item';
             send({
-              type: "progress",
-              stage: "resolving",
+              type: 'progress',
+              stage: 'resolving',
               index,
               total,
               name,
@@ -65,8 +66,8 @@ export async function POST(request: NextRequest) {
           }
 
           send({
-            type: "progress",
-            stage: "saving",
+            type: 'progress',
+            stage: 'saving',
             message: `importProgressSavingItems:count=${total}`,
           });
 
@@ -77,23 +78,26 @@ export async function POST(request: NextRequest) {
           };
 
           send({
-            type: "progress",
-            stage: "building_report",
-            message: "importProgressBuildingReport",
+            type: 'progress',
+            stage: 'building_report',
+            message: 'importProgressBuildingReport',
           });
 
           const report = await portfolioReportService.buildReport({
             refreshStalePrices: false,
           });
+          await publishPortfolioChanged(ownerId, 'imported', {
+            count: importResult.importedCount,
+          });
 
           send({
-            type: "complete",
+            type: 'complete',
             result: { ...serializeReport(report), importResult },
           });
         } catch (err) {
           send({
-            type: "error",
-            message: err instanceof Error ? err.message : "importErrorGenericWithReason",
+            type: 'error',
+            message: err instanceof Error ? err.message : 'importErrorGenericWithReason',
           });
         } finally {
           controller.close();
@@ -103,22 +107,22 @@ export async function POST(request: NextRequest) {
 
     return new Response(stream, {
       headers: {
-        "Content-Type": "application/x-ndjson",
-        "Cache-Control": "no-cache",
-        Connection: "keep-alive",
+        'Content-Type': 'application/x-ndjson',
+        'Cache-Control': 'no-cache',
+        Connection: 'keep-alive',
       },
     });
   } catch (error) {
     return NextResponse.json(
-      { message: getErrorMessage(error, "importErrorGeneric") },
-      { status: 400 },
+      { message: getErrorMessage(error, 'importErrorGeneric') },
+      { status: 400 }
     );
   }
 }
 
 function normalizeRows(value: unknown): PortfolioImportRowInput[] {
   if (!Array.isArray(value)) {
-    throw new Error("importErrorInvalidPayload");
+    throw new Error('importErrorInvalidPayload');
   }
 
   return value.map((row, index) => normalizeRow(row, index));
@@ -131,7 +135,7 @@ function normalizeRow(value: unknown, index: number): PortfolioImportRowInput {
 
   const quantity = Number(value.quantity);
   const buyPrice = Number(value.buyPrice);
-  const buyDate = new Date(String(value.buyDate ?? ""));
+  const buyDate = new Date(String(value.buyDate ?? ''));
 
   if (!Number.isFinite(quantity) || quantity <= 0) {
     throw new Error(`importErrorRowInvalidQuantity:row=${index + 2}`);
@@ -156,9 +160,9 @@ function normalizeRow(value: unknown, index: number): PortfolioImportRowInput {
 }
 
 function getOptionalString(value: unknown): string | undefined {
-  return typeof value === "string" && value.trim() ? value.trim() : undefined;
+  return typeof value === 'string' && value.trim() ? value.trim() : undefined;
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
 }

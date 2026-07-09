@@ -1,11 +1,11 @@
-import { NextResponse } from "next/server";
-import { getDatabase } from "@/infrastructure/db/mongo-client";
-import { getPortfolioOwnerId } from "@/services/auth-service";
-import { ObjectId } from "mongodb";
-import { STORAGE_UNIT_MAX_CAPACITY } from "@/domain/storage-unit";
-import { getOwnerFilter } from "@/infrastructure/db/owner-filter";
+import { NextResponse } from 'next/server';
+import { getDatabase } from '@/infrastructure/db/mongo-client';
+import { getPortfolioOwnerId } from '@/services/auth-service';
+import { ObjectId } from 'mongodb';
+import { STORAGE_UNIT_MAX_CAPACITY } from '@/domain/storage-unit';
+import { getOwnerFilter } from '@/infrastructure/db/owner-filter';
 
-export const dynamic = "force-dynamic";
+export const dynamic = 'force-dynamic';
 
 type AssignItem = {
   caseId: string;
@@ -21,9 +21,13 @@ type StorageUnitItem = {
 };
 
 /**
+ *
+ *
  * POST /api/portfolio/storage-units/assign
- * Assign items to a Storage Unit.
+ * Gán vật phẩm vào Storage Unit.
  * Body: { storageUnitId: string, items: AssignItem[] }
+ *
+ *
  */
 export async function POST(request: Request) {
   try {
@@ -38,33 +42,24 @@ export async function POST(request: Request) {
       !Array.isArray(items) ||
       items.length === 0
     ) {
-      return NextResponse.json(
-        { message: "missingStorageUnitIdOrItems" },
-        { status: 400 },
-      );
+      return NextResponse.json({ message: 'missingStorageUnitIdOrItems' }, { status: 400 });
     }
 
-    const collection = db.collection("storage_units");
+    const collection = db.collection('storage_units');
     const doc = await collection.findOne({
       _id: new ObjectId(storageUnitId),
       ...getOwnerFilter(ownerId),
     });
 
     if (!doc) {
-      return NextResponse.json(
-        { message: "storageUnitNotFound" },
-        { status: 404 },
-      );
+      return NextResponse.json({ message: 'storageUnitNotFound' }, { status: 404 });
     }
 
     const existingItems: StorageUnitItem[] = Array.isArray(doc.items) ? doc.items : [];
-    const currentCount = existingItems.reduce(
-      (sum, item) => sum + (Number(item.quantity) || 0),
-      0,
-    );
+    const currentCount = existingItems.reduce((sum, item) => sum + (Number(item.quantity) || 0), 0);
     const addingCount = items.reduce(
       (sum: number, item: AssignItem) => sum + (Number(item.quantity) || 0),
-      0,
+      0
     );
 
     if (currentCount + addingCount > STORAGE_UNIT_MAX_CAPACITY) {
@@ -75,7 +70,7 @@ export async function POST(request: Request) {
           addingCount,
           maxCapacity: STORAGE_UNIT_MAX_CAPACITY,
         },
-        { status: 400 },
+        { status: 400 }
       );
     }
 
@@ -92,9 +87,7 @@ export async function POST(request: Request) {
         continue;
       }
 
-      const existingIdx = updatedItems.findIndex(
-        (ei) => ei.caseId === item.caseId,
-      );
+      const existingIdx = updatedItems.findIndex((ei) => ei.caseId === item.caseId);
 
       if (existingIdx >= 0) {
         updatedItems[existingIdx] = {
@@ -113,23 +106,17 @@ export async function POST(request: Request) {
 
     await collection.updateOne(
       { _id: new ObjectId(storageUnitId), ...getOwnerFilter(ownerId) },
-      { $set: { items: updatedItems, updatedAt: now } },
+      { $set: { items: updatedItems, updatedAt: now } }
     );
 
-    const newCount = updatedItems.reduce(
-      (sum, item) => sum + (Number(item.quantity) || 0),
-      0,
-    );
+    const newCount = updatedItems.reduce((sum, item) => sum + (Number(item.quantity) || 0), 0);
 
     return NextResponse.json({
       message: `storageUnitItemsAdded:count=${addingCount},name=${doc.name}`,
       currentCount: newCount,
     });
   } catch (error) {
-    console.error("Error assigning items to storage unit:", error);
-    return NextResponse.json(
-      { message: "cannotAddItemsToStorageUnit" },
-      { status: 500 },
-    );
+    console.error('Error assigning items to storage unit:', error);
+    return NextResponse.json({ message: 'cannotAddItemsToStorageUnit' }, { status: 500 });
   }
 }
