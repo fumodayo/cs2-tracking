@@ -4,6 +4,7 @@ import { getPortfolioOwnerId } from '@/services/auth-service';
 import { ObjectId } from 'mongodb';
 import { getOwnerFilter } from '@/infrastructure/db/owner-filter';
 import { STORAGE_UNIT_MAX_CAPACITY } from '@/domain/storage-unit';
+import { publishPortfolioChanged } from '@/services/realtime/portfolio-events';
 
 export const dynamic = 'force-dynamic';
 
@@ -50,6 +51,7 @@ export async function POST(request: Request) {
       success: boolean;
       error?: string;
     }> = [];
+    let storageUnitUpdatedCount = 0;
 
     for (const resolution of resolutions as MissingItemResolution[]) {
       const {
@@ -120,6 +122,7 @@ export async function POST(request: Request) {
             { $set: { items: existingItems, updatedAt: now } }
           );
 
+          storageUnitUpdatedCount++;
           results.push({ marketHashName, resolution: action, success: true });
         } catch (err) {
           results.push({
@@ -133,6 +136,13 @@ export async function POST(request: Request) {
         // Với trạng thái đã trade/đã xóa/không rõ: chỉ ghi log và xác nhận
         results.push({ marketHashName, resolution: action, success: true });
       }
+    }
+
+    if (storageUnitUpdatedCount > 0) {
+      await publishPortfolioChanged(ownerId, 'updated', {
+        entity: 'storage_units',
+        resolvedMissingCount: storageUnitUpdatedCount,
+      });
     }
 
     return NextResponse.json({

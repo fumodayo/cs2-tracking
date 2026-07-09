@@ -24,15 +24,33 @@ export function usePortfolioRealtime(enabled: boolean, ownerId?: string) {
     let sseSource: EventSource | null = null;
     let ablyClient: Ably.Realtime | null = null;
     let ablyChannel: Ably.RealtimeChannel | null = null;
+    let invalidationTimer: ReturnType<typeof setTimeout> | null = null;
+
+    const invalidatePortfolioQueries = () => {
+      void queryClient.invalidateQueries({ queryKey: PORTFOLIO_QUERY_KEY });
+      void queryClient.invalidateQueries({ queryKey: ['portfolio-storage-units'] });
+      void queryClient.invalidateQueries({ queryKey: STEAM_ACCOUNTS_QUERY_KEY });
+    };
+
+    const schedulePortfolioInvalidation = () => {
+      if (invalidationTimer) {
+        clearTimeout(invalidationTimer);
+      }
+
+      invalidationTimer = setTimeout(() => {
+        invalidationTimer = null;
+        if (!disposed) {
+          invalidatePortfolioQueries();
+        }
+      }, 250);
+    };
 
     const handlePortfolioChanged = (payload: PortfolioRealtimePayload | null) => {
       if (!payload || payload.type !== 'portfolio.changed') return;
       if (payload.id && payload.id === lastEventIdRef.current) return;
 
       lastEventIdRef.current = payload.id ?? null;
-      void queryClient.invalidateQueries({ queryKey: PORTFOLIO_QUERY_KEY });
-      void queryClient.invalidateQueries({ queryKey: ['portfolio-storage-units'] });
-      void queryClient.invalidateQueries({ queryKey: STEAM_ACCOUNTS_QUERY_KEY });
+      schedulePortfolioInvalidation();
     };
 
     const startSseFallback = () => {
@@ -78,6 +96,9 @@ export function usePortfolioRealtime(enabled: boolean, ownerId?: string) {
 
     return () => {
       disposed = true;
+      if (invalidationTimer) {
+        clearTimeout(invalidationTimer);
+      }
       sseSource?.close();
       if (ablyChannel) {
         ablyChannel.unsubscribe('portfolio.changed');

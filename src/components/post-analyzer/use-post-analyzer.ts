@@ -1,7 +1,7 @@
 'use client';
 
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import type React from 'react';
 import { useTranslation } from 'react-i18next';
 import type { PostAnalysisDto, PostAnalysisHistoryItemDto } from '@/types/post-analysis';
@@ -14,6 +14,7 @@ import {
   fetchPostAnalysisHistory,
   type UploadedPostImage,
 } from './post-analyzer-api';
+import { subscribePostAnalysisHistoryChanges } from '@/lib/api-client/post-analysis-history-realtime';
 
 export type { UploadedPostImage } from './post-analyzer-api';
 
@@ -67,6 +68,12 @@ export function usePostAnalyzer() {
     queryFn: () => fetchPostAnalysisHistory(t),
     staleTime: 5 * 60 * 1000,
   });
+
+  useEffect(() => {
+    return subscribePostAnalysisHistoryChanges(() => {
+      void queryClient.invalidateQueries({ queryKey: ['post-analysis-history'] });
+    });
+  }, [queryClient]);
 
   const history = useMemo(() => {
     const dbHistory = historyQuery.data ?? [];

@@ -6,6 +6,7 @@ import { ObjectId } from 'mongodb';
 import { bugReportRateLimiter } from '@/infrastructure/rate-limiter';
 import { bugReportSchema } from '@/utils/validation';
 import { apiError, ApiErrorCode } from '@/utils/error';
+import { publishBugReportChanged } from '@/services/realtime/bug-report-events';
 
 export const dynamic = 'force-dynamic';
 
@@ -77,6 +78,7 @@ export async function POST(request: NextRequest) {
     };
 
     const result = await db.collection('bug_reports').insertOne(report);
+    await publishBugReportChanged('created', { id: result.insertedId.toString() });
 
     return NextResponse.json({ success: true, id: result.insertedId }, { status: 201 });
   } catch (error) {
@@ -146,6 +148,8 @@ export async function PATCH(request: NextRequest) {
     if (result.matchedCount === 0) {
       return NextResponse.json({ message: 'notFound' }, { status: 404 });
     }
+
+    await publishBugReportChanged('updated', { id, status });
 
     return NextResponse.json({ success: true });
   } catch (error) {

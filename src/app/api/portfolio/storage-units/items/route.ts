@@ -3,6 +3,7 @@ import { ObjectId } from 'mongodb';
 import { getDatabase } from '@/infrastructure/db/mongo-client';
 import { getPortfolioOwnerId } from '@/services/auth-service';
 import { getOwnerFilter } from '@/infrastructure/db/owner-filter';
+import { publishPortfolioChanged } from '@/services/realtime/portfolio-events';
 
 export const dynamic = 'force-dynamic';
 
@@ -92,6 +93,14 @@ export async function DELETE(request: Request) {
         { $set: { items: remainingItems, updatedAt: now } }
       );
       touchedStorageUnits++;
+    }
+
+    if (touchedStorageUnits > 0) {
+      await publishPortfolioChanged(ownerId, 'updated', {
+        entity: 'storage_units',
+        removedCount,
+        touchedStorageUnits,
+      });
     }
 
     return NextResponse.json({

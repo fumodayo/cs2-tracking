@@ -6,6 +6,7 @@ import {
   mergeUserBuffPrices,
   updateUserBuffPrice,
 } from '@/lib/api-client/user-buff-prices-api';
+import { subscribeUserBuffPricesChanges } from '@/lib/api-client/user-buff-prices-realtime';
 import {
   clearLocalBuffPrices,
   hasBuffPrices,
@@ -62,6 +63,29 @@ export function useBuffPricing({ user, sessionLoading }: UseBuffPricingOptions) 
 
     return () => {
       cancelled = true;
+    };
+  }, [sessionLoading, userId]);
+
+  useEffect(() => {
+    if (sessionLoading || !userId) return;
+
+    let cancelled = false;
+    const unsubscribe = subscribeUserBuffPricesChanges(() => {
+      void fetchUserBuffPrices()
+        .then((serverPrices) => {
+          if (cancelled) return;
+          clearLocalBuffPrices();
+          pricesRef.current = serverPrices;
+          setPricesCnyState(serverPrices);
+        })
+        .catch((error) => {
+          console.error('Failed to refresh realtime BUFF prices:', error);
+        });
+    });
+
+    return () => {
+      cancelled = true;
+      unsubscribe();
     };
   }, [sessionLoading, userId]);
 

@@ -11,6 +11,7 @@ import {
   mergeIncomingCookieWithExisting,
 } from '@/utils/steam-cookies';
 import { getOwnerFilter } from '@/infrastructure/db/owner-filter';
+import { publishPortfolioChanged } from '@/services/realtime/portfolio-events';
 
 export const dynamic = 'force-dynamic';
 
@@ -154,6 +155,7 @@ export async function POST(request: NextRequest) {
             { _id: new ObjectId(accountId), ...getOwnerFilter(ownerId) },
             { $set: { cookieError: errorMsg, updatedAt: new Date() } }
           );
+        await publishAccountStatusChanged(ownerId, accountId, targetSteamId64, ['cookieError']);
       }
       return NextResponse.json({ isValid: false, message: errorMsg });
     }
@@ -168,6 +170,7 @@ export async function POST(request: NextRequest) {
             { _id: new ObjectId(accountId), ...getOwnerFilter(ownerId) },
             { $set: { cookieError: errorMsg, updatedAt: new Date() } }
           );
+        await publishAccountStatusChanged(ownerId, accountId, targetSteamId64, ['cookieError']);
       }
       return NextResponse.json({
         isValid: false,
@@ -230,6 +233,14 @@ export async function POST(request: NextRequest) {
             { _id: new ObjectId(accountId), ...getOwnerFilter(ownerId) },
             { $set: updateDoc }
           );
+        await publishAccountStatusChanged(
+          ownerId,
+          accountId,
+          targetSteamId64,
+          walletRaw !== null
+            ? ['cookieError', 'walletBalance', 'walletBalanceVnd']
+            : ['cookieError']
+        );
       }
       return NextResponse.json({ isValid: true });
     }
@@ -244,6 +255,7 @@ export async function POST(request: NextRequest) {
             { _id: new ObjectId(accountId), ...getOwnerFilter(ownerId) },
             { $set: { cookieError: errorMsg, updatedAt: new Date() } }
           );
+        await publishAccountStatusChanged(ownerId, accountId, targetSteamId64, ['cookieError']);
       }
       return NextResponse.json({
         isValid: false,
@@ -261,6 +273,7 @@ export async function POST(request: NextRequest) {
           { _id: new ObjectId(accountId), ...getOwnerFilter(ownerId) },
           { $set: { cookieError: errorMsg, updatedAt: new Date() } }
         );
+      await publishAccountStatusChanged(ownerId, accountId, targetSteamId64, ['cookieError']);
     }
     return NextResponse.json({ isValid: false, message: errorMsg });
   } catch (error) {
@@ -275,10 +288,30 @@ export async function POST(request: NextRequest) {
         await db.collection('portfolio_accounts').updateOne(filter, {
           $set: { cookieError: errorMsg, updatedAt: new Date() },
         });
+        await publishAccountStatusChanged(ownerId, accountId, undefined, ['cookieError']);
       } catch {
         /* ignore */
       }
     }
     return NextResponse.json({ message: errorMsg }, { status: 500 });
   }
+}
+
+async function publishAccountStatusChanged(
+  ownerId: string | undefined,
+  accountId: string | undefined,
+  steamId64: unknown,
+  fields: string[]
+) {
+  if (!ownerId || !accountId) return;
+
+  await publishPortfolioChanged(ownerId, 'updated', {
+    entity: 'account',
+    accountId,
+    steamId64:
+      typeof steamId64 === 'string' || typeof steamId64 === 'number'
+        ? String(steamId64)
+        : undefined,
+    fields,
+  });
 }

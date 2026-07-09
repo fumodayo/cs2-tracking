@@ -7,6 +7,7 @@ import {
   selectUserCs2capApiKey,
   removeUserCs2capApiKey,
 } from '@/services/auth-service';
+import { publishUserSettingsChanged } from '@/services/realtime/user-settings-events';
 
 export const dynamic = 'force-dynamic';
 
@@ -94,6 +95,9 @@ export async function POST(request: Request) {
       }
 
       await selectUserCs2capApiKey(user.id, match);
+      await publishUserSettingsChanged(`google:${user.id}`, 'cs2cap_key_selected', {
+        keyPrefix,
+      });
 
       // Lấy thống kê tài khoản active mới
       const res = await fetch('https://api.cs2c.app/v1/account', {
@@ -135,6 +139,9 @@ export async function POST(request: Request) {
       }
 
       await removeUserCs2capApiKey(user.id, match);
+      await publishUserSettingsChanged(`google:${user.id}`, 'cs2cap_key_deleted', {
+        keyPrefix,
+      });
 
       // Lấy thống kê active mới
       const newActiveKey = await getUserCs2capApiKey(user.id);
@@ -192,6 +199,9 @@ export async function POST(request: Request) {
     await addUserCs2capApiKey(user.id, apiKey);
 
     const keyPrefix = apiKey.slice(0, 12) + '•'.repeat(24);
+    await publishUserSettingsChanged(`google:${user.id}`, 'cs2cap_key_added', {
+      keyPrefix,
+    });
     const customKeys = await getUserCs2capApiKeys(user.id);
     const keysList = customKeys.map((k) => ({
       prefix: k.slice(0, 12) + '•'.repeat(24),

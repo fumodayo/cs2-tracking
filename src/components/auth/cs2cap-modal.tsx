@@ -30,6 +30,7 @@ import {
   CS2CapMemberKeysList,
   CS2CapModeNotice,
 } from './cs2cap-modal-key-sections';
+import { subscribeUserSettingsChanges } from '@/lib/api-client/user-settings-realtime';
 
 interface AccountData {
   user_id: string;
@@ -180,6 +181,14 @@ export function CS2CapModal({ open, onOpenChange, mode = 'auto' }: CS2CapModalPr
   }, [open, isMember, sessionLoading, mode, fetchInfo, fetchGuestAccountData]);
 
   // Xử lý lưu (thêm key mới)
+  useEffect(() => {
+    if (!open || !isMember || sessionLoading) return;
+
+    return subscribeUserSettingsChanges(() => {
+      void fetchInfo(false);
+    });
+  }, [open, isMember, sessionLoading, fetchInfo]);
+
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!apiKey.trim()) return;

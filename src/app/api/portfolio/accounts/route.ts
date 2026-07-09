@@ -80,7 +80,7 @@ export async function POST(request: NextRequest) {
       setFields.steamCookie = encrypt(finalCookie);
     }
 
-    await accountsCol.updateOne(
+    const accountWriteResult = await accountsCol.updateOne(
       { ownerId, steamId64: resolved.steamId64 },
       {
         $set: setFields,
@@ -95,6 +95,16 @@ export async function POST(request: NextRequest) {
       ownerId,
       steamId64: resolved.steamId64,
     });
+    await publishPortfolioChanged(
+      ownerId,
+      accountWriteResult.upsertedCount > 0 ? 'created' : 'updated',
+      {
+        entity: 'account',
+        accountId: saved?._id?.toString(),
+        steamId64: resolved.steamId64,
+      }
+    );
+
     return NextResponse.json(
       {
         id: saved?._id.toString(),
@@ -156,6 +166,11 @@ export async function PATCH(request: NextRequest) {
     if (result.matchedCount === 0) {
       return NextResponse.json({ message: 'accountNotFoundToUpdate' }, { status: 404 });
     }
+
+    await publishPortfolioChanged(ownerId, 'updated', {
+      entity: 'account',
+      accountId: id,
+    });
 
     return NextResponse.json({ success: true });
   } catch (error) {

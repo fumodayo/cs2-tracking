@@ -4,6 +4,7 @@ import { getPortfolioOwnerId } from '@/services/auth-service';
 import { ObjectId } from 'mongodb';
 import { STORAGE_UNIT_MAX_CAPACITY } from '@/domain/storage-unit';
 import { getOwnerFilter } from '@/infrastructure/db/owner-filter';
+import { publishPortfolioChanged } from '@/services/realtime/portfolio-events';
 
 export const dynamic = 'force-dynamic';
 
@@ -174,6 +175,14 @@ export async function POST(request: Request) {
         { upsert: true }
       );
       upserted++;
+    }
+
+    if (upserted > 0) {
+      await publishPortfolioChanged(ownerId, 'updated', {
+        entity: 'storage_units',
+        steamId64,
+        count: upserted,
+      });
     }
 
     return NextResponse.json({

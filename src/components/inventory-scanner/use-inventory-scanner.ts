@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from 'r
 import { useLocalStorage } from '@/hooks/use-local-storage';
 import { useSession } from '@/components/auth/use-session';
 import { fetchUserBuffPrices, mergeUserBuffPrices } from '@/lib/api-client/user-buff-prices-api';
+import { subscribeUserBuffPricesChanges } from '@/lib/api-client/user-buff-prices-realtime';
 import {
   clearLocalBuffPrices,
   hasBuffPrices,
@@ -213,6 +214,29 @@ export function useInventoryScanner() {
 
     return () => {
       cancelled = true;
+    };
+  }, [isLoaded, sessionLoading, userId]);
+
+  // Sync logged-in BUFF prices across tabs via realtime.
+  useEffect(() => {
+    if (!isLoaded || sessionLoading || !userId) return;
+
+    let cancelled = false;
+    const unsubscribe = subscribeUserBuffPricesChanges(() => {
+      void fetchUserBuffPrices()
+        .then((pricesCny) => {
+          if (cancelled) return;
+          clearLocalBuffPrices();
+          dispatch({ type: 'SET_BUFF_PRICES_CNY', buffPricesCny: pricesCny });
+        })
+        .catch((error) => {
+          console.error('Failed to refresh realtime BUFF prices:', error);
+        });
+    });
+
+    return () => {
+      cancelled = true;
+      unsubscribe();
     };
   }, [isLoaded, sessionLoading, userId]);
 

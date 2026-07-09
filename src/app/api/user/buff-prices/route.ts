@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getDatabase } from '@/infrastructure/db/mongo-client';
 import { getCurrentUser } from '@/services/auth-service';
+import { publishUserBuffPricesChanged } from '@/services/realtime/user-buff-price-events';
 import { getErrorMessage } from '@/utils/error';
 import { normalizeBuffPricesCny, type BuffPricesCny } from '@/utils/buff-prices';
 
@@ -25,9 +26,11 @@ export async function POST(request: NextRequest) {
     const ownerId = await requireOwnerId();
     const body = await request.json();
     const pricesCny = parsePricesMap(body?.pricesCny);
+    const count = Object.keys(pricesCny).length;
 
-    if (Object.keys(pricesCny).length > 0) {
+    if (count > 0) {
       await upsertUserBuffPrices(ownerId, pricesCny);
+      await publishUserBuffPricesChanged(ownerId, 'merged', { count });
     }
 
     return NextResponse.json({ pricesCny: await readUserBuffPrices(ownerId) });
@@ -42,6 +45,9 @@ export async function PUT(request: NextRequest) {
     const body = await request.json();
     const pricesCny = parsePricesMap(body?.pricesCny);
     await replaceUserBuffPrices(ownerId, pricesCny);
+    await publishUserBuffPricesChanged(ownerId, 'replaced', {
+      count: Object.keys(pricesCny).length,
+    });
     return NextResponse.json({ pricesCny: await readUserBuffPrices(ownerId) });
   } catch (error) {
     return handleBuffPriceError(error);
@@ -61,10 +67,11 @@ export async function PATCH(request: NextRequest) {
 
     const rawPrice = body?.priceCny;
     const priceCny = rawPrice === null ? null : Number(rawPrice);
+    const shouldRemove = priceCny === null || !Number.isFinite(priceCny) || priceCny <= 0;
     const db = await getDatabase();
     const collection = db.collection(COLLECTION);
 
-    if (priceCny === null || !Number.isFinite(priceCny) || priceCny <= 0) {
+    if (shouldRemove) {
       await collection.deleteOne({ ownerId, marketHashName });
     } else {
       const now = new Date();
@@ -77,6 +84,12 @@ export async function PATCH(request: NextRequest) {
         { upsert: true }
       );
     }
+
+    await publishUserBuffPricesChanged(ownerId, 'updated', {
+      marketHashName,
+      removed: shouldRemove,
+      ...(shouldRemove ? {} : { priceCny }),
+    });
 
     return NextResponse.json({ pricesCny: await readUserBuffPrices(ownerId) });
   } catch (error) {

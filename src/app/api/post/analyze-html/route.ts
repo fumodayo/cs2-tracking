@@ -4,6 +4,7 @@ import { isSafeUrl } from '@/utils/url';
 import { SteamMarketPriceProvider } from '@/infrastructure/price/steam-market-price-provider';
 import { MongoPostAnalysisHistoryRepository } from '@/infrastructure/repositories/mongo-post-analysis-history-repository';
 import { PostAnalysisService } from '@/services/post-analysis-service';
+import { publishPostAnalysisHistoryChanged } from '@/services/realtime/post-analysis-events';
 import { checkAuth, getCurrentUser, isAdminAccessAllowed } from '@/services/auth-service';
 import { geminiRateLimiter } from '@/infrastructure/rate-limiter';
 import { createPostAnalysisFingerprint } from '@/services/post-analysis-fingerprint';
@@ -65,7 +66,10 @@ export async function POST(request: NextRequest) {
     if (!force && postUrl) {
       const cachedByUrl = await historyRepository.findByPostUrl(postUrl);
       if (cachedByUrl) {
-        await historyRepository.touch(cachedByUrl.id);
+        const touchedHistoryItem = await historyRepository.touch(cachedByUrl.id);
+        if (touchedHistoryItem) {
+          await publishPostAnalysisHistoryChanged('touched', { id: touchedHistoryItem.id });
+        }
         return NextResponse.json({
           ...cachedByUrl.analysis,
           imageCloudinaryUrl: cachedByUrl.imageCloudinaryUrl,
@@ -142,7 +146,10 @@ export async function POST(request: NextRequest) {
       : null;
 
     if (cachedHistoryItem) {
-      await historyRepository.touch(cachedHistoryItem.id);
+      const touchedHistoryItem = await historyRepository.touch(cachedHistoryItem.id);
+      if (touchedHistoryItem) {
+        await publishPostAnalysisHistoryChanged('touched', { id: touchedHistoryItem.id });
+      }
 
       // Nâng cấp động: upload ảnh lên Cloudinary nếu trước đó chưa làm
       if (!cachedHistoryItem.imageCloudinaryUrl && imageInputs.length > 0) {
@@ -157,7 +164,7 @@ export async function POST(request: NextRequest) {
             cachedHistoryItem.imageCloudinaryUrl = imageCloudinaryUrl;
             cachedHistoryItem.analysis.imageCloudinaryUrl = imageCloudinaryUrl;
 
-            await historyRepository.save({
+            const savedHistoryItem = await historyRepository.save({
               fingerprint,
               text,
               imageFileName: imageInputs[0].fileName,
@@ -167,6 +174,7 @@ export async function POST(request: NextRequest) {
                 imageCloudinaryUrl,
               },
             });
+            await publishPostAnalysisHistoryChanged('saved', { id: savedHistoryItem.id });
           }
         } catch (uploadError) {
           console.error('Failed to dynamically upload cached image to Cloudinary:', uploadError);
@@ -209,7 +217,7 @@ export async function POST(request: NextRequest) {
     analysis.steamUrl =
       typeof body.steamUrl === 'string' ? body.steamUrl : extractSteamUrl(text) || undefined;
 
-    await historyRepository.save({
+    const savedHistoryItem = await historyRepository.save({
       fingerprint,
       text,
       imageFileName: imageInputs.length > 0 ? imageInputs[0].fileName : undefined,
@@ -219,6 +227,7 @@ export async function POST(request: NextRequest) {
         imageCloudinaryUrl,
       },
     });
+    await publishPostAnalysisHistoryChanged('saved', { id: savedHistoryItem.id });
 
     return NextResponse.json({
       ...analysis,

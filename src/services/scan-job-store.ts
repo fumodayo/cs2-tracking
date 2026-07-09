@@ -1,9 +1,10 @@
-import { getDatabase } from "@/infrastructure/db/mongo-client";
+import { getDatabase } from '@/infrastructure/db/mongo-client';
+import { publishScanJobChanged } from '@/services/realtime/scan-events';
 
 export type ScanJob = {
   id: string;
   ownerId: string;
-  status: "queued" | "running" | "done" | "error";
+  status: 'queued' | 'running' | 'done' | 'error';
   percent: number;
   message: string;
   stage?: string;
@@ -41,9 +42,7 @@ export async function createScanJob(jobId: string, job: ScanJob) {
       createdAt: new Date(job.createdAt),
       updatedAt: new Date(job.updatedAt),
     };
-    await db
-      .collection("scan_jobs")
-      .updateOne({ id: jobId }, { $set: doc }, { upsert: true });
+    await db.collection('scan_jobs').updateOne({ id: jobId }, { $set: doc }, { upsert: true });
   } catch (err) {
     console.error(`[MongoDB] Failed to create scan job ${jobId}:`, err);
   }
@@ -66,10 +65,10 @@ export async function updateScanJob(jobId: string, update: Partial<ScanJob>) {
       createdAt: new Date(updated.createdAt),
       updatedAt: new Date(updated.updatedAt),
     };
-    await db
-      .collection("scan_jobs")
-      .updateOne({ id: jobId }, { $set: doc }, { upsert: true });
+    await db.collection('scan_jobs').updateOne({ id: jobId }, { $set: doc }, { upsert: true });
   } catch (err) {
     console.error(`[MongoDB] Failed to persist scan job ${jobId}:`, err);
   }
+
+  await publishScanJobChanged(updated);
 }

@@ -4,6 +4,7 @@ import { getPortfolioOwnerId } from '@/services/auth-service';
 import { ObjectId } from 'mongodb';
 import { STORAGE_UNIT_MAX_CAPACITY } from '@/domain/storage-unit';
 import { getOwnerFilter } from '@/infrastructure/db/owner-filter';
+import { publishPortfolioChanged } from '@/services/realtime/portfolio-events';
 
 export const dynamic = 'force-dynamic';
 
@@ -110,6 +111,12 @@ export async function POST(request: Request) {
     );
 
     const newCount = updatedItems.reduce((sum, item) => sum + (Number(item.quantity) || 0), 0);
+    await publishPortfolioChanged(ownerId, 'updated', {
+      entity: 'storage_unit',
+      storageUnitId,
+      addedCount: addingCount,
+      currentCount: newCount,
+    });
 
     return NextResponse.json({
       message: `storageUnitItemsAdded:count=${addingCount},name=${doc.name}`,

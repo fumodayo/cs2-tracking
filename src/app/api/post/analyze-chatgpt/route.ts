@@ -6,6 +6,7 @@ import { extractSteamUrl } from '@/services/parser/facebook-parser';
 import { checkAuth, getCurrentUser, isAdminAccessAllowed } from '@/services/auth-service';
 import { geminiRateLimiter } from '@/infrastructure/rate-limiter';
 import { createChatGptPostAnalysisFingerprint as createPostAnalysisFingerprint } from '@/services/post-analysis-fingerprint';
+import { publishPostAnalysisHistoryChanged } from '@/services/realtime/post-analysis-events';
 
 export const dynamic = 'force-dynamic';
 
@@ -61,11 +62,12 @@ export async function POST(request: NextRequest) {
 
     const fingerprint = createPostAnalysisFingerprint(text, chatGptJson);
 
-    await historyRepository.save({
+    const savedHistoryItem = await historyRepository.save({
       fingerprint,
       text,
       analysis,
     });
+    await publishPostAnalysisHistoryChanged('saved', { id: savedHistoryItem.id });
 
     return NextResponse.json({
       ...analysis,

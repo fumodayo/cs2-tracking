@@ -1,6 +1,7 @@
 'use client';
 
-import { useState } from 'react';
+import * as Ably from 'ably';
+import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -31,11 +32,61 @@ interface BugReport {
   status?: string;
 }
 
+type AdminBugReportsRealtimeTokenResponse = {
+  tokenDetails?: Ably.TokenDetails;
+  channelName?: string;
+};
+
 export function AdminBugReportsClient() {
   const queryClient = useQueryClient();
   const { t } = useTranslation();
   const [activeTab, setActiveTab] = useState<'unresolved' | 'resolved'>('unresolved');
   const [selectedImage, setSelectedImage] = useState<string | null>(null);
+  const [realtimeConnected, setRealtimeConnected] = useState(false);
+
+  useEffect(() => {
+    let disposed = false;
+    let client: Ably.Realtime | null = null;
+    let channel: Ably.RealtimeChannel | null = null;
+
+    const startRealtime = async () => {
+      try {
+        const tokenResponse = await fetch('/api/realtime/ably-token?adminBugReports=1', {
+          cache: 'no-store',
+        });
+        if (!tokenResponse.ok) return;
+
+        const realtimeConfig = (await tokenResponse.json()) as AdminBugReportsRealtimeTokenResponse;
+        if (!realtimeConfig.tokenDetails || !realtimeConfig.channelName || disposed) {
+          return;
+        }
+
+        client = new Ably.Realtime({ tokenDetails: realtimeConfig.tokenDetails });
+        channel = client.channels.get(realtimeConfig.channelName);
+        await channel.subscribe('bug-report.changed', () => {
+          void queryClient.invalidateQueries({ queryKey: ['bug-reports'] });
+        });
+
+        if (!disposed) {
+          setRealtimeConnected(true);
+        }
+      } catch {
+        if (!disposed) {
+          setRealtimeConnected(false);
+        }
+      }
+    };
+
+    void startRealtime();
+
+    return () => {
+      disposed = true;
+      if (channel) {
+        void channel.unsubscribe('bug-report.changed');
+      }
+      client?.close();
+    };
+  }, [queryClient]);
 
   // Polling cập nhật realtime mỗi 5 giây
   const {
@@ -66,7 +117,7 @@ export function AdminBugReportsClient() {
       }
       return data as BugReport[];
     },
-    refetchInterval: 5000, // 5s polling
+    refetchInterval: realtimeConnected ? false : 5000,
   });
 
   // Mutation để cập nhật trạng thái report (ví dụ đánh dấu đã xử lý)
@@ -171,7 +222,7 @@ export function AdminBugReportsClient() {
             {isFetching && !isLoading && (
               <RefreshCw className="size-3 animate-spin text-blue-300" />
             )}
-            <span>{t('bugReportsAdmin.autoUpdateEvery5s')}</span>
+            <span>{realtimeConnected ? 'Realtime' : t('bugReportsAdmin.autoUpdateEvery5s')}</span>
           </div>
         </div>
 
