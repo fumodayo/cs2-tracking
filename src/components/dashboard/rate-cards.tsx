@@ -1,32 +1,34 @@
-"use client";
+'use client';
 
-import { useState, useEffect } from "react";
-import { useTranslation } from "react-i18next";
-import { Card } from "@/components/ui/card";
-import type { PortfolioTableRow } from "@/components/portfolio";
-import { TbPercentage, TbShoppingBag, TbInfoCircle } from "react-icons/tb";
-import { CountUp } from "@/components/ui/animation/count-up";
-import { Tooltip, TooltipProvider } from "@/components/ui/tooltip";
+import { useState, useEffect } from 'react';
+import { useTranslation } from 'react-i18next';
+import { Card } from '@/components/ui/card';
+import type { PortfolioTableRow } from '@/components/portfolio';
+import { TbPercentage, TbShoppingBag, TbInfoCircle } from 'react-icons/tb';
+import { CountUp } from '@/components/ui/animation/count-up';
+import { Tooltip, TooltipProvider } from '@/components/ui/tooltip';
 
 type RateCardsProps = {
   rows: PortfolioTableRow[];
   totalInvested: number;
 };
 
-const RATE_ITEM_TYPES = new Set(["case", "sticker", "capsule"]);
+const RATE_ITEM_TYPES = new Set(['case', 'sticker', 'capsule']);
 
-const LS_KEY_RATE_SI = "cs2t_rateSi";
-const LS_KEY_RATE_LE = "cs2t_rateLe";
+const LS_KEY_RATE_SI = 'cs2t_rateSi';
+const LS_KEY_RATE_LE = 'cs2t_rateLe';
 
 function readRate(key: string, fallback: number): number {
-  if (typeof window === "undefined") return fallback;
+  if (typeof window === 'undefined') return fallback;
   const saved = localStorage.getItem(key);
   return saved ? Number(saved) || fallback : fallback;
 }
 
 /**
- * Check if a skin row has a buff price override.
- * When buff price was set, currentPrice differs from steamPrice.
+ *
+ * Kiểm tra dòng skin có giá Buff override hay không.
+ * Khi đã đặt giá Buff, currentPrice sẽ khác steamPrice.
+ *
  */
 function hasBuff(row: PortfolioTableRow): boolean {
   return (
@@ -37,20 +39,17 @@ function hasBuff(row: PortfolioTableRow): boolean {
   );
 }
 
-function computeRateValue(
-  rows: PortfolioTableRow[],
-  ratePercent: number,
-): number {
+function computeRateValue(rows: PortfolioTableRow[], ratePercent: number): number {
   let total = 0;
 
   for (const r of rows) {
     const value = r.currentValue ?? r.investedValue;
 
-    if (r.itemType === "skin") {
-      // Skin with buff price → 100%, skin without buff → apply rate
+    if (r.itemType === 'skin') {
+      // Skin có giá Buff → 100%, skin không có Buff → áp rate
       total += hasBuff(r) ? value : value * (ratePercent / 100);
     } else if (RATE_ITEM_TYPES.has(r.itemType)) {
-      // Case, sticker, capsule → apply rate
+      // Case, sticker, capsule → áp rate
       total += value * (ratePercent / 100);
     }
   }
@@ -59,29 +58,21 @@ function computeRateValue(
 }
 
 const fmt = (v: number) =>
-  new Intl.NumberFormat("vi-VN", {
-    style: "decimal",
+  new Intl.NumberFormat('vi-VN', {
+    style: 'decimal',
     maximumFractionDigits: 0,
   }).format(v);
 
-function ProfitBadge({
-  profit,
-  invested,
-}: {
-  profit: number;
-  invested: number;
-}) {
+function ProfitBadge({ profit, invested }: { profit: number; invested: number }) {
   const percent = invested > 0 ? (profit / invested) * 100 : 0;
   const isPositive = profit >= 0;
 
   return (
-    <p
-      className={`mt-1.5 text-sm font-medium ${isPositive ? "text-emerald-400" : "text-red-400"}`}
-    >
-      {isPositive ? "+" : ""}
+    <p className={`mt-1.5 text-sm font-medium ${isPositive ? 'text-emerald-400' : 'text-red-400'}`}>
+      {isPositive ? '+' : ''}
       {fmt(profit)} đ
       <span className="ml-1.5 text-xs opacity-70">
-        ({isPositive ? "+" : ""}
+        ({isPositive ? '+' : ''}
         {percent.toFixed(1)}%)
       </span>
     </p>
@@ -89,7 +80,7 @@ function ProfitBadge({
 }
 
 /**
- * Renders as a fragment — designed to be slotted into the SummaryCards grid.
+ * Render dưới dạng fragment — thiết kế để gắn vào lưới SummaryCards.
  */
 export function RateCards({ rows, totalInvested }: RateCardsProps) {
   const { t } = useTranslation();
@@ -113,79 +104,66 @@ export function RateCards({ rows, totalInvested }: RateCardsProps) {
   return (
     <>
       {/* Rate sỉ (all) */}
-      <Card className="h-full border border-accent/24 bg-accent/8 p-4 text-foreground transition-all duration-300 hover:shadow-[0_8px_30px_rgb(0,0,0,0.04)] dark:hover:shadow-[0_8px_30px_rgb(0,0,0,0.12)]">
+      <Card className="border-accent/24 bg-accent/8 text-foreground h-full border p-4 transition-all duration-300 hover:shadow-[0_8px_30px_rgb(0,0,0,0.04)] dark:hover:shadow-[0_8px_30px_rgb(0,0,0,0.12)]">
         <div className="flex items-start justify-between gap-3">
           <div className="min-w-0 flex-1">
             <div className="flex items-center gap-2">
-              <p className="text-xs font-medium tracking-[0.12em] text-muted-foreground uppercase">
-                {t("rateCards.rateSi")}
+              <p className="text-muted-foreground text-xs font-medium tracking-[0.12em] uppercase">
+                {t('rateCards.rateSi')}
               </p>
               <TooltipProvider>
                 <Tooltip
-                  content={
-                    <span>
-                      {t("rateCards.rateSiTooltip")}
-                    </span>
-                  }
+                  content={<span>{t('rateCards.rateSiTooltip')}</span>}
                   side="top"
                   align="start"
                 >
-                  <span className="cursor-help text-muted-foreground opacity-60 hover:opacity-100 transition-opacity">
+                  <span className="text-muted-foreground cursor-help opacity-60 transition-opacity hover:opacity-100">
                     <TbInfoCircle className="size-3.5" />
                   </span>
                 </Tooltip>
               </TooltipProvider>
-              <div className="flex items-center gap-1 rounded-md border border-accent/24 bg-accent/12 px-1.5 py-0.5">
+              <div className="border-accent/24 bg-accent/12 flex items-center gap-1 rounded-md border px-1.5 py-0.5">
                 <input
                   type="number"
                   min={0}
                   max={100}
                   value={rateSi}
                   onChange={(e) => setRateSi(Number(e.target.value) || 0)}
-                  aria-label={t("rateCards.rateSiAriaLabel")}
-                  className="w-10 [appearance:textfield] bg-transparent text-center text-sm font-bold text-accent outline-none [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
+                  aria-label={t('rateCards.rateSiAriaLabel')}
+                  className="text-accent w-10 [appearance:textfield] bg-transparent text-center text-sm font-bold outline-none [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
                 />
-                <span className="text-xs text-muted-foreground">
-                  %
-                </span>
+                <span className="text-muted-foreground text-xs">%</span>
               </div>
             </div>
-            <p className="mt-2 text-2xl font-semibold tracking-normal text-accent">
-              <CountUp to={valueSi} decimals={0} separator="." />
-              ₫
+            <p className="text-accent mt-2 text-2xl font-semibold tracking-normal">
+              <CountUp to={valueSi} decimals={0} separator="." />₫
             </p>
             <div className="mt-2">
               <ProfitBadge profit={profitSi} invested={totalInvested} />
-              <p className="mt-1 text-xs text-muted-foreground">
-                {t("rateCards.rateSiDesc")}
-              </p>
+              <p className="text-muted-foreground mt-1 text-xs">{t('rateCards.rateSiDesc')}</p>
             </div>
           </div>
-          <div className="grid size-10 shrink-0 place-items-center rounded-md bg-accent/12 text-accent border border-accent/20 transition-colors duration-200">
+          <div className="bg-accent/12 text-accent border-accent/20 grid size-10 shrink-0 place-items-center rounded-md border transition-colors duration-200">
             <TbPercentage className="size-5.5" />
           </div>
         </div>
       </Card>
 
       {/* Rate lẻ */}
-      <Card className="h-full border border-amber-500/20 bg-amber-500/5 p-4 text-foreground transition-all duration-300 hover:shadow-[0_8px_30px_rgb(0,0,0,0.04)] dark:hover:shadow-[0_8px_30px_rgb(0,0,0,0.12)]">
+      <Card className="text-foreground h-full border border-amber-500/20 bg-amber-500/5 p-4 transition-all duration-300 hover:shadow-[0_8px_30px_rgb(0,0,0,0.04)] dark:hover:shadow-[0_8px_30px_rgb(0,0,0,0.12)]">
         <div className="flex items-start justify-between gap-3">
           <div className="min-w-0 flex-1">
             <div className="flex items-center gap-2">
-              <p className="text-xs font-medium tracking-[0.12em] text-muted-foreground uppercase">
-                {t("rateCards.rateLe")}
+              <p className="text-muted-foreground text-xs font-medium tracking-[0.12em] uppercase">
+                {t('rateCards.rateLe')}
               </p>
               <TooltipProvider>
                 <Tooltip
-                  content={
-                    <span>
-                      {t("rateCards.rateLeTooltip")}
-                    </span>
-                  }
+                  content={<span>{t('rateCards.rateLeTooltip')}</span>}
                   side="top"
                   align="start"
                 >
-                  <span className="cursor-help text-muted-foreground opacity-60 hover:opacity-100 transition-opacity">
+                  <span className="text-muted-foreground cursor-help opacity-60 transition-opacity hover:opacity-100">
                     <TbInfoCircle className="size-3.5" />
                   </span>
                 </Tooltip>
@@ -197,26 +175,21 @@ export function RateCards({ rows, totalInvested }: RateCardsProps) {
                   max={100}
                   value={rateLe}
                   onChange={(e) => setRateLe(Number(e.target.value) || 0)}
-                  aria-label={t("rateCards.rateLeAriaLabel")}
-                  className="w-10 [appearance:textfield] bg-transparent text-center text-sm font-bold text-amber-500 dark:text-amber-400 outline-none [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
+                  aria-label={t('rateCards.rateLeAriaLabel')}
+                  className="w-10 [appearance:textfield] bg-transparent text-center text-sm font-bold text-amber-500 outline-none dark:text-amber-400 [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
                 />
-                <span className="text-xs text-muted-foreground">
-                  %
-                </span>
+                <span className="text-muted-foreground text-xs">%</span>
               </div>
             </div>
             <p className="mt-2 text-2xl font-semibold tracking-normal text-amber-500 dark:text-amber-400">
-              <CountUp to={valueLe} decimals={0} separator="." />
-              ₫
+              <CountUp to={valueLe} decimals={0} separator="." />₫
             </p>
             <div className="mt-2">
               <ProfitBadge profit={profitLe} invested={totalInvested} />
-              <p className="mt-1 text-xs text-muted-foreground">
-                {t("rateCards.rateLeDesc")}
-              </p>
+              <p className="text-muted-foreground mt-1 text-xs">{t('rateCards.rateLeDesc')}</p>
             </div>
           </div>
-          <div className="grid size-10 shrink-0 place-items-center rounded-md bg-amber-500/10 text-amber-550 dark:text-amber-400 border border-amber-500/20 transition-colors duration-200">
+          <div className="text-amber-550 grid size-10 shrink-0 place-items-center rounded-md border border-amber-500/20 bg-amber-500/10 transition-colors duration-200 dark:text-amber-400">
             <TbShoppingBag className="size-5.5" />
           </div>
         </div>

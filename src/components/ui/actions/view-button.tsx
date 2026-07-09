@@ -77,7 +77,7 @@ export function ViewButton<TData>({ table, columnLabels = {}, className }: ViewB
               {t('columns.toggleTitle', 'Toggle Columns')}
             </h3>
 
-            {/* Column toggles list */}
+            {/* Danh sách bật/tắt cột */}
             <div
               className="hover:[&::-webkit-scrollbar-thumb]:bg-stone-750 max-h-60 overflow-y-auto p-1.5 [&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-stone-800 [&::-webkit-scrollbar-track]:bg-transparent"
               style={{

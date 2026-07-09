@@ -105,7 +105,7 @@ export function Dashboard() {
     e.preventDefault();
     setIsDragOver(false);
     const file = e.dataTransfer.files[0];
-    if (file && /\.(xlsx|xls|csv)$/i.test(file.name)) {
+    if (file && /\.(csv|tsv|txt)$/i.test(file.name)) {
       await handleExcelSource(file, file.name);
     }
   };
@@ -161,10 +161,10 @@ export function Dashboard() {
           <div className="pointer-events-none absolute inset-0 z-50 flex flex-col items-center justify-center rounded-lg border-2 border-dashed border-blue-500/80 bg-[#0c0f17]/90 backdrop-blur-sm">
             <Upload className="mx-auto size-12 animate-bounce text-blue-400" />
             <p className="mt-4 text-lg font-bold text-stone-100">
-              {t('excelMapping.dropFileHere', 'Drop Excel file here')}
+              {t('excelMapping.dropFileHere', 'Drop CSV file here')}
             </p>
             <p className="mt-1 text-sm text-stone-400">
-              {t('excelMapping.pasteHint', 'Or copy cells from Excel and press Ctrl+V')}
+              {t('excelMapping.pasteHint', 'Or copy cells from Excel or Sheets and press Ctrl+V')}
             </p>
           </div>
         )}
@@ -228,16 +228,16 @@ export function Dashboard() {
                     <Upload className="size-4 text-blue-400" />
                   )}
                   {importStatus.phase === 'reading'
-                    ? t('dashboard.readingExcel')
+                    ? t('dashboard.readingExcel', 'Reading CSV')
                     : importMutation.isPending
                       ? t('dashboard.importing')
-                      : t('dashboard.importExcel')}
+                      : t('dashboard.importExcel', 'Import CSV')}
                 </Button>
                 <RecentImportsPopover recentImports={recentImports} onRemove={removeRecentImport} />
                 <input
                   ref={importInputRef}
                   type="file"
-                  accept=".xlsx,.xls,.csv"
+                  accept=".csv,.tsv,.txt"
                   className="sr-only"
                   onChange={handleImportFile}
                 />

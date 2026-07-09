@@ -68,7 +68,7 @@ export function AccountCookiePanel({
   const parsedParental = parsed.steamparental || '';
   const parsedSessionId = parsed.sessionid || '';
 
-  // If local override state is not set yet, derive from active cookie data presence
+  // Nếu state override local chưa được đặt, suy ra từ việc có dữ liệu cookie active
   const isFamilyViewEnabled =
     useFamilyView !== null ? useFamilyView : !!parsedParental || !!parsedSessionId;
 

@@ -347,7 +347,7 @@ export function AccountList({
         );
       })}
 
-      {/* Add Account Card */}
+      {/* Card thêm tài khoản */}
       <button
         type="button"
         onClick={onAddAccountClick}

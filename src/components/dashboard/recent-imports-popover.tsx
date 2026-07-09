@@ -1,14 +1,14 @@
-"use client";
+'use client';
 
-import { useState, useEffect } from "react";
-import { useTranslation } from "react-i18next";
-import { History, Loader2, RotateCcw } from "lucide-react";
-import * as Popover from "@radix-ui/react-popover";
-import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { formatRelative } from "@/utils/date";
-import { PORTFOLIO_QUERY_KEY } from "@/lib/api-client/portfolio-api";
+import { useState, useEffect } from 'react';
+import { useTranslation } from 'react-i18next';
+import { History, Loader2, RotateCcw } from 'lucide-react';
+import * as Popover from '@radix-ui/react-popover';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { formatRelative } from '@/utils/date';
+import { PORTFOLIO_QUERY_KEY } from '@/lib/api-client/portfolio-api';
 
-import { Button } from "@/components/ui/button";
+import { Button } from '@/components/ui/button';
 export type RecentImport = {
   id: string;
   fileName: string;
@@ -23,19 +23,19 @@ export function useRecentImports() {
 
   useEffect(() => {
     try {
-      const saved = localStorage.getItem("cs2t_recentImports");
+      const saved = localStorage.getItem('cs2t_recentImports');
       if (saved) {
         setRecentImports(JSON.parse(saved));
       }
     } catch {
-      // ignore
+      // Bỏ qua lỗi đọc lịch sử import đã lưu.
     }
   }, []);
 
   const addRecentImport = (newImport: RecentImport) => {
     setRecentImports((prev) => {
-      const next = [newImport, ...prev].slice(0, 10); // Keep last 10
-      localStorage.setItem("cs2t_recentImports", JSON.stringify(next));
+      const next = [newImport, ...prev].slice(0, 10); // Giữ 10 lần gần nhất
+      localStorage.setItem('cs2t_recentImports', JSON.stringify(next));
       return next;
     });
   };
@@ -43,14 +43,14 @@ export function useRecentImports() {
   const removeRecentImport = (id: string) => {
     setRecentImports((prev) => {
       const next = prev.filter((x) => x.id !== id);
-      localStorage.setItem("cs2t_recentImports", JSON.stringify(next));
+      localStorage.setItem('cs2t_recentImports', JSON.stringify(next));
       return next;
     });
   };
 
   const clearAll = () => {
     setRecentImports([]);
-    localStorage.removeItem("cs2t_recentImports");
+    localStorage.removeItem('cs2t_recentImports');
   };
 
   return { recentImports, addRecentImport, removeRecentImport, clearAll };
@@ -69,12 +69,12 @@ export function RecentImportsPopover({
 
   const undoMutation = useMutation({
     mutationFn: async (importItem: RecentImport) => {
-      const res = await fetch("/api/portfolio", {
-        method: "DELETE",
-        headers: { "Content-Type": "application/json" },
+      const res = await fetch('/api/portfolio', {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ ids: importItem.importedIds }),
       });
-      if (!res.ok) throw new Error("Undo failed");
+      if (!res.ok) throw new Error('Undo failed');
       return importItem.id;
     },
     onMutate: (item) => {
@@ -96,7 +96,7 @@ export function RecentImportsPopover({
           variant="outline"
           disabled={recentImports.length === 0}
           className="h-10 w-10 p-0"
-          title={t("dashboard.importHistory")}
+          title={t('dashboard.importHistory')}
         >
           <History className="size-4" />
         </Button>
@@ -105,23 +105,23 @@ export function RecentImportsPopover({
         <Popover.Content
           align="end"
           sideOffset={8}
-          className="z-50 w-80 rounded-lg border border-border bg-surface p-3 shadow-xl outline-none"
+          className="border-border bg-surface z-50 w-80 rounded-lg border p-3 shadow-xl outline-none"
         >
           <div className="mb-3 flex items-center justify-between">
-            <h4 className="text-sm font-semibold text-foreground">
-              {t("dashboard.recentImportHistory")}
+            <h4 className="text-foreground text-sm font-semibold">
+              {t('dashboard.recentImportHistory')}
             </h4>
           </div>
           {recentImports.length === 0 ? (
             <div className="py-4 text-center text-sm text-stone-500">
-              {t("dashboard.noImportsYet")}
+              {t('dashboard.noImportsYet')}
             </div>
           ) : (
             <div className="max-h-[300px] space-y-2 overflow-y-auto pr-1">
               {recentImports.map((item) => (
                 <div
                   key={item.id}
-                  className="group flex flex-col gap-1.5 rounded-md border border-border bg-surface-muted p-2.5 transition-colors hover:border-stone-700"
+                  className="group border-border bg-surface-muted flex flex-col gap-1.5 rounded-md border p-2.5 transition-colors hover:border-stone-700"
                 >
                   <div className="flex items-start justify-between gap-2">
                     <div className="min-w-0 flex-1">
@@ -131,9 +131,7 @@ export function RecentImportsPopover({
                       >
                         {item.fileName}
                       </p>
-                      <p className="text-[11px] text-stone-400">
-                        {formatRelative(item.date)}
-                      </p>
+                      <p className="text-[11px] text-stone-400">{formatRelative(item.date)}</p>
                     </div>
                     <div className="shrink-0 text-right">
                       <span className="text-xs font-semibold text-emerald-400">
@@ -153,7 +151,7 @@ export function RecentImportsPopover({
                       ) : (
                         <RotateCcw className="size-3" />
                       )}
-                      {undoingId === item.id ? t("dashboard.undoing") : t("dashboard.undo")}
+                      {undoingId === item.id ? t('dashboard.undoing') : t('dashboard.undo')}
                     </Button>
                   </div>
                 </div>

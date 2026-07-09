@@ -27,10 +27,10 @@ function computeRateValue(rows: PortfolioTableRow[], ratePercent: number): numbe
     const value = r.currentValue ?? r.investedValue;
 
     if (r.itemType === 'skin') {
-      // Skin with buff price → 100%, skin without buff → apply rate
+      // Skin có giá Buff → 100%, skin không có Buff → áp rate
       total += hasBuff(r) ? value : value * (ratePercent / 100);
     } else if (RATE_ITEM_TYPES.has(r.itemType)) {
-      // Case, sticker, capsule → apply rate
+      // Case, sticker, capsule → áp rate
       total += value * (ratePercent / 100);
     }
   }
@@ -73,7 +73,7 @@ export function SummaryCards({
     localStorage.setItem(LS_KEY_RATE_LE, String(rateLe));
   }, [rateLe]);
 
-  // Calculations
+  // Các phép tính
   const valueSi = computeRateValue(computedRows, rateSi);
   const valueLe = computeRateValue(computedRows, rateLe);
   const itemCount = computedRows.reduce((sum, r) => sum + r.quantity, 0);

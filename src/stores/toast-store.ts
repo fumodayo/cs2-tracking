@@ -8,7 +8,7 @@ export type Toast = {
   type: ToastType;
   title: string;
   description?: ReactNode;
-  duration?: number; // duration in ms, 0 means infinite
+  duration?: number; // Thời lượng theo ms, 0 nghĩa là không tự tắt.
   action?: {
     label: string;
     icon?: ReactNode;

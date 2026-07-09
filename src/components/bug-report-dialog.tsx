@@ -36,7 +36,7 @@ export function BugReportDialog({ open, onOpenChange }: BugReportDialogProps) {
     setIsDragActive(false);
   };
 
-  // Load draft or reset state when dialog opens
+  // Nạp bản nháp hoặc reset trạng thái khi dialog mở
   useEffect(() => {
     if (open) {
       try {
@@ -55,12 +55,12 @@ export function BugReportDialog({ open, onOpenChange }: BugReportDialogProps) {
         console.error('Failed to load bug report draft from localStorage', e);
       }
 
-      // Default reset if no draft found
+      // Reset mặc định nếu không có bản nháp
       resetForm();
     }
   }, [open]);
 
-  // Save state to localStorage as draft
+  // Lưu trạng thái vào localStorage làm bản nháp
   useEffect(() => {
     if (open) {
       const isDefault = !description.trim() && images.length === 0;
@@ -72,7 +72,7 @@ export function BugReportDialog({ open, onOpenChange }: BugReportDialogProps) {
           try {
             localStorage.setItem('bug_report_draft', JSON.stringify(draft));
           } catch {
-            // If quota exceeded (due to large images), fall back to saving only the description
+            // Nếu vượt quota do ảnh lớn, dự phòng bằng cách chỉ lưu mô tả
             const textOnlyDraft = { description, images: [] };
             localStorage.setItem('bug_report_draft', JSON.stringify(textOnlyDraft));
           }
@@ -93,7 +93,7 @@ export function BugReportDialog({ open, onOpenChange }: BugReportDialogProps) {
     try {
       localStorage.removeItem('bug_report_draft');
     } catch {
-      // ignore
+      // bỏ qua
     }
     resetForm();
     onOpenChange(false);
@@ -140,7 +140,7 @@ export function BugReportDialog({ open, onOpenChange }: BugReportDialogProps) {
     [t]
   );
 
-  // Listen for paste event to capture screenshots
+  // Lắng nghe sự kiện paste để bắt ảnh chụp màn hình
   useEffect(() => {
     if (!open) return;
 
@@ -173,7 +173,7 @@ export function BugReportDialog({ open, onOpenChange }: BugReportDialogProps) {
     };
   }, [open, isSubmitting, processFiles]);
 
-  // Listen for left/right arrow keys when Lightbox is open
+  // Lắng nghe phím mũi tên trái/phải khi khung xem ảnh mở
   useEffect(() => {
     if (lightboxIndex === null) return;
 
@@ -246,7 +246,7 @@ export function BugReportDialog({ open, onOpenChange }: BugReportDialogProps) {
         },
         body: JSON.stringify({
           description,
-          images, // array of { base64, mimeType }
+          images, // Mảng gồm { base64, mimeType }
         }),
       });
 

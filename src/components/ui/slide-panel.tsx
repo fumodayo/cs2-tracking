@@ -1,11 +1,11 @@
 /* eslint-disable react-refresh/only-export-components */
-"use client";
+'use client';
 
-import * as DialogPrimitive from "@radix-ui/react-dialog";
-import { X } from "lucide-react";
-import type { ComponentPropsWithoutRef, ReactNode } from "react";
-import { Button } from "@/components/ui/button";
-import { cn } from "@/utils/cn";
+import * as DialogPrimitive from '@radix-ui/react-dialog';
+import { X } from 'lucide-react';
+import type { ComponentPropsWithoutRef, ReactNode } from 'react';
+import { Button } from '@/components/ui/button';
+import { cn } from '@/utils/cn';
 
 export const SlidePanel = DialogPrimitive.Root;
 export const SlidePanelTrigger = DialogPrimitive.Trigger;
@@ -13,14 +13,14 @@ export const SlidePanelClose = DialogPrimitive.Close;
 
 interface SlidePanelContentProps extends Omit<
   ComponentPropsWithoutRef<typeof DialogPrimitive.Content>,
-  "title"
+  'title'
 > {
   title?: ReactNode;
   description?: string;
   footer?: ReactNode;
   hideHeader?: boolean;
   noPadding?: boolean;
-  side?: "left" | "right";
+  side?: 'left' | 'right';
   showOverlay?: boolean;
 }
 
@@ -32,7 +32,7 @@ export function SlidePanelContent({
   footer,
   hideHeader = false,
   noPadding = false,
-  side = "right",
+  side = 'right',
   showOverlay = true,
   ...props
 }: SlidePanelContentProps) {
@@ -43,41 +43,34 @@ export function SlidePanelContent({
       )}
       <DialogPrimitive.Content
         className={cn(
-          "data-[state=open]:animate-in data-[state=closed]:animate-out fixed inset-y-0 z-50 flex h-full w-full max-w-lg flex-col bg-card shadow-2xl duration-250 outline-none",
-          side === "left"
-            ? "left-0 border-r border-border data-[state=open]:slide-in-from-left data-[state=closed]:slide-out-to-left"
-            : "right-0 border-l border-border data-[state=open]:slide-in-from-right data-[state=closed]:slide-out-to-right",
-          className,
+          'data-[state=open]:animate-in data-[state=closed]:animate-out bg-card fixed inset-y-0 z-50 flex h-full w-full max-w-lg flex-col shadow-2xl duration-250 outline-none',
+          side === 'left'
+            ? 'border-border data-[state=open]:slide-in-from-left data-[state=closed]:slide-out-to-left left-0 border-r'
+            : 'border-border data-[state=open]:slide-in-from-right data-[state=closed]:slide-out-to-right right-0 border-l',
+          className
         )}
         aria-describedby={undefined}
         {...props}
       >
         {hideHeader ? (
-          <DialogPrimitive.Title className="sr-only">
-            {title || "Panel"}
-          </DialogPrimitive.Title>
+          <DialogPrimitive.Title className="sr-only">{title || 'Panel'}</DialogPrimitive.Title>
         ) : (
-          /* Header */
-          <div className="flex shrink-0 items-center justify-between border-b border-border px-6 py-4">
+          /* Phần đầu */
+          <div className="border-border flex shrink-0 items-center justify-between border-b px-6 py-4">
             <div className="min-w-0 pr-6">
               {title && (
-                <DialogPrimitive.Title className="truncate text-lg font-semibold text-foreground">
+                <DialogPrimitive.Title className="text-foreground truncate text-lg font-semibold">
                   {title}
                 </DialogPrimitive.Title>
               )}
               {description && (
-                <DialogPrimitive.Description className="mt-1 truncate text-xs text-muted-foreground">
+                <DialogPrimitive.Description className="text-muted-foreground mt-1 truncate text-xs">
                   {description}
                 </DialogPrimitive.Description>
               )}
             </div>
             <DialogPrimitive.Close asChild>
-              <Button
-                variant="ghost"
-                size="icon"
-                aria-label="Close"
-                className="rounded-lg"
-              >
+              <Button variant="ghost" size="icon" aria-label="Close" className="rounded-lg">
                 <X className="size-4" />
               </Button>
             </DialogPrimitive.Close>
@@ -97,21 +90,14 @@ export function SlidePanelContent({
           </DialogPrimitive.Close>
         )}
 
-        {/* Content */}
-        <div
-          className={cn(
-            "min-h-0 flex-1 overflow-y-auto",
-            noPadding ? "" : "p-6",
-          )}
-        >
+        {/* Nội dung */}
+        <div className={cn('min-h-0 flex-1 overflow-y-auto', noPadding ? '' : 'p-6')}>
           {children}
         </div>
 
-        {/* Footer */}
+        {/* Phần cuối */}
         {footer && (
-          <div className="shrink-0 border-t border-border bg-surface/20 px-6 py-4">
-            {footer}
-          </div>
+          <div className="border-border bg-surface/20 shrink-0 border-t px-6 py-4">{footer}</div>
         )}
       </DialogPrimitive.Content>
     </DialogPrimitive.Portal>

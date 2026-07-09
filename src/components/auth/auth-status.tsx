@@ -22,7 +22,7 @@ const springTransition = {
 } as const;
 const slideTransition = { duration: 0.15, ease: 'easeOut' } as const;
 
-// Custom high-performance circular flags using inline SVGs for offline capability & CDN-independence
+// Cờ tròn tự dựng bằng SVG inline để chạy offline và không phụ thuộc CDN
 const UKFlag = ({ className = 'size-5.5' }: { className?: string }) => (
   <svg
     viewBox="0 0 30 30"
@@ -64,18 +64,18 @@ export function AuthStatus() {
   const [redirecting, setRedirecting] = useState(false);
   const queryClient = useQueryClient();
 
-  // Popover open state
+  // Trạng thái mở popover
   const [isOpen, setIsOpen] = useState(false);
   const [cs2capOpen, setCs2capOpen] = useState(false);
 
-  // Active submenu: "none" | "language" | "theme"
+  // Submenu đang active: "none" | "language" | "theme"
   const [activeSubmenu, setActiveSubmenu] = useState<'none' | 'language' | 'theme'>('none');
 
-  // Interactive language state
+  // Trạng thái ngôn ngữ tương tác
   const [lang, setLang] = useState<'vi' | 'en'>(i18n.language as 'vi' | 'en');
   const isMobile = useIsMobile();
 
-  // Load language from localStorage
+  // Nạp ngôn ngữ từ localStorage
   useEffect(() => {
     const savedLang = localStorage.getItem('cs2t_lang');
     if (savedLang === 'vi' || savedLang === 'en') {
@@ -96,7 +96,7 @@ export function AuthStatus() {
     setTheme(newTheme);
   };
 
-  // Close submenu when popover closes
+  // Đóng submenu khi popover đóng
   useEffect(() => {
     if (!isOpen) setActiveSubmenu('none');
   }, [isOpen]);
@@ -151,7 +151,7 @@ export function AuthStatus() {
     user.image ||
     'https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?w=100&auto=format&fit=crop&q=80';
 
-  // Initials fallback
+  // Fallback bằng chữ cái đầu
   const initials = profileName
     .split(' ')
     .map((w) => w[0])
@@ -184,7 +184,7 @@ export function AuthStatus() {
           </Button>
         </Popover.Trigger>
 
-        {/* Dropdown Menu */}
+        {/* Menu thả xuống */}
         <AnimatePresence>
           {isOpen && (
             <Popover.Portal forceMount>
@@ -194,7 +194,7 @@ export function AuthStatus() {
                 sideOffset={8}
                 className="z-50 outline-none"
                 onInteractOutside={(event) => {
-                  // Radix swallowing fix: do not close Popover or swallow click if clicking on the absolute submenu
+                  // Sửa lỗi Radix nuốt sự kiện: không đóng cửa sổ nổi hoặc nuốt cú nhấp khi bấm vào menu con định vị tuyệt đối.
                   if (event.target && (event.target as HTMLElement).closest('.submenu-content')) {
                     event.preventDefault();
                   }
@@ -208,7 +208,7 @@ export function AuthStatus() {
                   transition={springTransition}
                   className="border-border bg-surface shadow-soft relative w-[240px] overflow-visible rounded-xl border p-1.5 text-left select-none"
                 >
-                  {/* Google User Info Header (Avatar, Username, Email) */}
+                  {/* Phần đầu thông tin người dùng Google (ảnh đại diện, tên người dùng, email) */}
                   <div className="hover:bg-surface-hover/40 flex items-center gap-3 rounded-lg px-2.5 py-2.5 transition duration-150">
                     <div className="relative size-10 shrink-0">
                       {profileImage ? (
@@ -237,10 +237,10 @@ export function AuthStatus() {
                     </div>
                   </div>
 
-                  {/* Divider */}
+                  {/* Đường phân cách */}
                   <div className="bg-border/70 mx-1 my-1.5 h-px" />
 
-                  {/* CS2Cap API Key / Rate Limit Modal Trigger */}
+                  {/* Nút mở modal CS2Cap API Key / Rate Limit */}
                   <Button
                     type="button"
                     variant="ghost"
@@ -254,10 +254,10 @@ export function AuthStatus() {
                     <span>{t('auth.rateLimitAndKey')}</span>
                   </Button>
 
-                  {/* Divider */}
+                  {/* Đường phân cách */}
                   <div className="bg-border/70 mx-1 my-1.5 h-px" />
 
-                  {/* Change Language Item */}
+                  {/* Mục đổi ngôn ngữ */}
                   {!isMobile ? (
                     <div
                       className="relative"
@@ -285,7 +285,7 @@ export function AuthStatus() {
                         <ChevronRight className="text-muted-foreground size-3.5" />
                       </Button>
 
-                      {/* Change Language Submenu (Exactly Like Screenshot, Opening to the Right) */}
+                      {/* Submenu đổi ngôn ngữ (giống ảnh mẫu, mở sang phải) */}
                       <AnimatePresence>
                         {activeSubmenu === 'language' && (
                           <motion.div
@@ -295,7 +295,7 @@ export function AuthStatus() {
                             transition={slideTransition}
                             className="submenu-content border-border bg-surface shadow-soft absolute top-0 left-[calc(100%+8px)] z-50 flex min-w-[170px] flex-col gap-1.5 rounded-xl border p-1.5"
                           >
-                            {/* Invisible Hover Bridge */}
+                            {/* Vùng nối hover ẩn */}
                             <div className="absolute top-0 -left-2 h-full w-2 bg-transparent" />
                             <Button
                               type="button"
@@ -362,7 +362,7 @@ export function AuthStatus() {
                     </div>
                   )}
 
-                  {/* Change Theme Item */}
+                  {/* Mục đổi giao diện */}
                   {!isMobile ? (
                     <div
                       className="relative mt-0.5"
@@ -390,7 +390,7 @@ export function AuthStatus() {
                         <ChevronRight className="text-muted-foreground size-3.5" />
                       </Button>
 
-                      {/* Change Theme Submenu */}
+                      {/* Submenu đổi giao diện */}
                       <AnimatePresence>
                         {activeSubmenu === 'theme' && (
                           <motion.div
@@ -400,7 +400,7 @@ export function AuthStatus() {
                             transition={slideTransition}
                             className="submenu-content border-border bg-surface shadow-soft absolute top-0 left-[calc(100%+8px)] z-50 flex min-w-[170px] flex-col gap-1.5 rounded-xl border p-1.5"
                           >
-                            {/* Invisible Hover Bridge */}
+                            {/* Vùng nối hover ẩn */}
                             <div className="absolute top-0 -left-2 h-full w-2 bg-transparent" />
                             <Button
                               type="button"
@@ -467,10 +467,10 @@ export function AuthStatus() {
                     </div>
                   )}
 
-                  {/* Space / Divider */}
+                  {/* Khoảng trống / đường phân cách */}
                   <div className="bg-border/70 mx-1 my-1.5 h-px" />
 
-                  {/* Logout (Exact Red Danger Theme) */}
+                  {/* Đăng xuất (đúng theme đỏ cảnh báo) */}
                   {user ? (
                     <Button
                       type="button"

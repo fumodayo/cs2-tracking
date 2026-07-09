@@ -133,7 +133,7 @@ export function FilterPopover<TValue extends string>({
           className="animate-fade-slide-in z-50 w-72 overflow-hidden rounded-xl border border-stone-800 bg-stone-950/95 p-0 text-stone-200 shadow-2xl backdrop-blur-md"
         >
           <div className="flex h-full w-full flex-col overflow-hidden">
-            {/* Search Input */}
+            {/* Ô tìm kiếm */}
             {showSearch && (
               <div className="flex items-center gap-2 border-b border-stone-900 px-3 py-2">
                 <Search className="size-3.5 shrink-0 text-stone-500" />
@@ -147,7 +147,7 @@ export function FilterPopover<TValue extends string>({
               </div>
             )}
 
-            {/* Select List */}
+            {/* Danh sách chọn */}
             <div
               className="hover:[&::-webkit-scrollbar-thumb]:bg-stone-750 max-h-60 overflow-y-auto p-1.5 [&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-stone-800 [&::-webkit-scrollbar-track]:bg-transparent"
               style={{

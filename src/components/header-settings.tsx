@@ -17,7 +17,7 @@ const springTransition = {
   damping: 26,
 } as const;
 
-// Custom high-quality circular SVG flags using inline SVGs for offline capability & CDN-independence
+// Cờ tròn SVG chất lượng cao, dùng inline SVG để chạy offline và không phụ thuộc CDN.
 export const UKFlag = ({ className = 'size-5' }: { className?: string }) => (
   <svg
     viewBox="0 0 30 30"

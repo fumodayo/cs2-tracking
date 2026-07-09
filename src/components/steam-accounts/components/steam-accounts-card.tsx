@@ -209,7 +209,7 @@ export function SteamAccountsCard({
     <>
       <FadeIn delay={0.26} direction="up">
         <div className="mb-8 overflow-hidden rounded-xl border border-stone-800 bg-stone-900/50 transition-all duration-200">
-          {/* Header Row */}
+          {/* Hàng tiêu đề */}
           <div className="flex items-center justify-between p-4 select-none">
             <button
               type="button"

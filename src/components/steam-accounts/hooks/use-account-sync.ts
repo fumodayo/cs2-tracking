@@ -1,19 +1,23 @@
-"use client";
+'use client';
 
-import { useState, useRef, useCallback } from "react";
-import { useQueryClient, UseQueryResult, UseMutationResult } from "@tanstack/react-query";
-import { useTranslation } from "react-i18next";
-import { useSyncStore, syncStore, toast, toastStore } from "@/stores";
-import type { MissingItem, SyncStorageUnit, ExtraItem } from "@/components/portfolio";
+import { useState, useRef, useCallback } from 'react';
+import { useQueryClient, UseQueryResult, UseMutationResult } from '@tanstack/react-query';
+import { useTranslation } from 'react-i18next';
+import { useSyncStore, syncStore, toast, toastStore } from '@/stores';
+import type { MissingItem, SyncStorageUnit, ExtraItem } from '@/components/portfolio';
 
-import type { SteamAccountDto } from "@/lib/api-client/steam-accounts-api";
-import { PORTFOLIO_QUERY_KEY } from "@/lib/api-client/portfolio-api";
-import { translateSyncMessage } from "@/components/inventory-scanner/utils";
+import type { SteamAccountDto } from '@/lib/api-client/steam-accounts-api';
+import { PORTFOLIO_QUERY_KEY } from '@/lib/api-client/portfolio-api';
+import { translateSyncMessage } from '@/components/inventory-scanner/utils';
 
 interface UseAccountSyncProps {
   accountsQuery: UseQueryResult<SteamAccountDto[], unknown>;
   getUnsavedCookie: (account: { id: string; steamCookie?: string | null }) => string | null;
-  updateCookieMutation: UseMutationResult<{ success: boolean }, Error, { id: string; steamCookie: string }>;
+  updateCookieMutation: UseMutationResult<
+    { success: boolean },
+    Error,
+    { id: string; steamCookie: string }
+  >;
   reportQuery: { refetch: () => Promise<unknown>; data?: unknown };
   setError: (err: string | null) => void;
 }
@@ -28,13 +32,8 @@ export function useAccountSync({
   const { t } = useTranslation();
   const queryClient = useQueryClient();
 
-  const {
-    isSyncing,
-    syncOverallPercent,
-    syncOverallMessage,
-    syncAccountProgresses,
-    singleScanId,
-  } = useSyncStore();
+  const { isSyncing, syncOverallPercent, syncOverallMessage, syncAccountProgresses, singleScanId } =
+    useSyncStore();
 
   const syncAbortRef = useRef<AbortController | null>(null);
   const singleScanAbortRef = useRef<AbortController | null>(null);
@@ -70,31 +69,29 @@ export function useAccountSync({
         };
       },
       scanToastId: string | null,
-      accountName: string,
+      accountName: string
     ) => {
       syncStore.setState((prev) => {
         const nextMap = new Map(prev.syncAccountProgresses);
         if (
           event.steamId64 &&
-          (event.type === "account_start" ||
-            event.type === "account_progress" ||
-            event.type === "account_done" ||
-            event.type === "account_error")
+          (event.type === 'account_start' ||
+            event.type === 'account_progress' ||
+            event.type === 'account_done' ||
+            event.type === 'account_error')
         ) {
           nextMap.set(event.steamId64!, {
-            accountName: event.accountName ?? "Unknown",
+            accountName: event.accountName ?? 'Unknown',
             steamId64: event.steamId64!,
             avatarUrl: event.avatarUrl ?? null,
             status:
-              event.type === "account_done"
-                ? "done"
-                : event.type === "account_error"
-                  ? "error"
-                  : "scanning",
+              event.type === 'account_done'
+                ? 'done'
+                : event.type === 'account_error'
+                  ? 'error'
+                  : 'scanning',
             message: translateSyncMessage(event.message, t, event.scanProgress?.detail),
-            percent:
-              event.scanProgress?.percent ??
-              (event.type === "account_done" ? 100 : 0),
+            percent: event.scanProgress?.percent ?? (event.type === 'account_done' ? 100 : 0),
             scanProgress: event.scanProgress,
           });
         }
@@ -105,22 +102,22 @@ export function useAccountSync({
         };
       });
 
-      if (event.type === "complete" && event.summary) {
+      if (event.type === 'complete' && event.summary) {
         void queryClient.invalidateQueries({ queryKey: PORTFOLIO_QUERY_KEY });
         reportQuery.refetch();
         if (scanToastId) {
           toastStore.update(scanToastId, {
-            type: "success",
-            title: t("dashboard.scanSingleComplete", { name: accountName }),
-            description: t("dashboard.scanSingleCompleteDesc", {
+            type: 'success',
+            title: t('dashboard.scanSingleComplete', { name: accountName }),
+            description: t('dashboard.scanSingleCompleteDesc', {
               imported: event.summary.importedCount,
             }),
             duration: 5000,
-            path: "/portfolio",
+            path: '/portfolio',
           });
         }
 
-        // Show missing/extra items dialog if any
+        // Hiển thị dialog vật phẩm thiếu/thừa nếu có
         const anyMissing = event.summary.missingItems && event.summary.missingItems.length > 0;
         const anyExtra = event.summary.extraItems && event.summary.extraItems.length > 0;
         if (anyMissing || anyExtra) {
@@ -131,20 +128,20 @@ export function useAccountSync({
         }
       }
 
-      if (event.type === "error") {
+      if (event.type === 'error') {
         setError(translateSyncMessage(event.message, t));
         if (scanToastId) {
           toastStore.update(scanToastId, {
-            type: "error",
-            title: t("dashboard.scanSingleError"),
+            type: 'error',
+            title: t('dashboard.scanSingleError'),
             description: translateSyncMessage(event.message, t),
             duration: 5000,
-            path: "/portfolio",
+            path: '/portfolio',
           });
         }
       }
     },
-    [queryClient, reportQuery, t, setError],
+    [queryClient, reportQuery, t, setError]
   );
 
   const handleSyncEvent = useCallback(
@@ -172,31 +169,29 @@ export function useAccountSync({
           storageUnits?: SyncStorageUnit[];
         };
       },
-      syncToastId: string | null,
+      syncToastId: string | null
     ) => {
       syncStore.setState((prev) => {
         const nextMap = new Map(prev.syncAccountProgresses);
         if (
           event.steamId64 &&
-          (event.type === "account_start" ||
-            event.type === "account_progress" ||
-            event.type === "account_done" ||
-            event.type === "account_error")
+          (event.type === 'account_start' ||
+            event.type === 'account_progress' ||
+            event.type === 'account_done' ||
+            event.type === 'account_error')
         ) {
           nextMap.set(event.steamId64!, {
-            accountName: event.accountName ?? "Unknown",
+            accountName: event.accountName ?? 'Unknown',
             steamId64: event.steamId64!,
             avatarUrl: event.avatarUrl ?? null,
             status:
-              event.type === "account_done"
-                ? "done"
-                : event.type === "account_error"
-                  ? "error"
-                  : "scanning",
+              event.type === 'account_done'
+                ? 'done'
+                : event.type === 'account_error'
+                  ? 'error'
+                  : 'scanning',
             message: translateSyncMessage(event.message, t, event.scanProgress?.detail),
-            percent:
-              event.scanProgress?.percent ??
-              (event.type === "account_done" ? 100 : 0),
+            percent: event.scanProgress?.percent ?? (event.type === 'account_done' ? 100 : 0),
             scanProgress: event.scanProgress,
           });
         }
@@ -207,24 +202,24 @@ export function useAccountSync({
         };
       });
 
-      if (event.type === "complete" && event.summary) {
+      if (event.type === 'complete' && event.summary) {
         void queryClient.invalidateQueries({ queryKey: PORTFOLIO_QUERY_KEY });
         reportQuery.refetch();
         if (syncToastId) {
           toastStore.update(syncToastId, {
-            type: "success",
-            title: t("dashboard.syncComplete"),
-            description: t("dashboard.syncCompleteDesc", {
+            type: 'success',
+            title: t('dashboard.syncComplete'),
+            description: t('dashboard.syncCompleteDesc', {
               scanned: event.summary.scannedAccountsCount,
               total: event.summary.totalAccountsCount,
               imported: event.summary.importedCount,
             }),
             duration: 5000,
-            path: "/portfolio",
+            path: '/portfolio',
           });
         }
 
-        // Show missing/extra items dialog if any
+        // Hiển thị dialog vật phẩm thiếu/thừa nếu có
         const anyMissing = event.summary.missingItems && event.summary.missingItems.length > 0;
         const anyExtra = event.summary.extraItems && event.summary.extraItems.length > 0;
         if (anyMissing || anyExtra) {
@@ -235,20 +230,20 @@ export function useAccountSync({
         }
       }
 
-      if (event.type === "error") {
+      if (event.type === 'error') {
         setError(translateSyncMessage(event.message, t));
         if (syncToastId) {
           toastStore.update(syncToastId, {
-            type: "error",
-            title: t("dashboard.syncError"),
+            type: 'error',
+            title: t('dashboard.syncError'),
             description: translateSyncMessage(event.message, t),
             duration: 5000,
-            path: "/portfolio",
+            path: '/portfolio',
           });
         }
       }
     },
-    [queryClient, reportQuery, t, setError],
+    [queryClient, reportQuery, t, setError]
   );
 
   const startSync = useCallback(async () => {
@@ -256,19 +251,19 @@ export function useAccountSync({
     syncStore.setState({
       isSyncing: true,
       syncOverallPercent: 0,
-      syncOverallMessage: t("dashboard.syncStarting"),
+      syncOverallMessage: t('dashboard.syncStarting'),
       syncAccountProgresses: new Map(),
     });
     setError(null);
 
     const abortController = new AbortController();
     syncAbortRef.current = abortController;
-    const syncToastId: string | null = toast.loading(
-      t("dashboard.syncingAccounts"), { path: "/portfolio" }
-    );
+    const syncToastId: string | null = toast.loading(t('dashboard.syncingAccounts'), {
+      path: '/portfolio',
+    });
 
     try {
-      // Save any unsaved cookies first
+      // Lưu các cookie chưa lưu trước
       if (accountsQuery.data) {
         for (const account of accountsQuery.data) {
           const unsavedCookie = getUnsavedCookie(account);
@@ -279,71 +274,69 @@ export function useAccountSync({
                 steamCookie: unsavedCookie,
               });
             } catch {
-              // Ignore individual account save failures and continue
+              // Bỏ qua lỗi lưu từng tài khoản riêng lẻ và tiếp tục
             }
           }
         }
       }
 
-      const res = await fetch("/api/portfolio/accounts/sync", {
-        method: "POST",
+      const res = await fetch('/api/portfolio/accounts/sync', {
+        method: 'POST',
         signal: abortController.signal,
       });
 
       if (!res.ok) {
         const errData = await res.json().catch(() => ({}));
         const rawMsg = (errData as { message?: string }).message;
-        throw new Error(
-          rawMsg ? translateSyncMessage(rawMsg, t) : t("dashboard.syncFailed"),
-        );
+        throw new Error(rawMsg ? translateSyncMessage(rawMsg, t) : t('dashboard.syncFailed'));
       }
 
       const reader = res.body?.getReader();
-      if (!reader) throw new Error(t("dashboard.cannotReadStream"));
+      if (!reader) throw new Error(t('dashboard.cannotReadStream'));
 
       const decoder = new TextDecoder();
-      let buffer = "";
+      let buffer = '';
 
       while (true) {
         const { done, value } = await reader.read();
         if (done) break;
 
         buffer += decoder.decode(value, { stream: true });
-        const lines = buffer.split("\n");
-        buffer = lines.pop() ?? "";
+        const lines = buffer.split('\n');
+        buffer = lines.pop() ?? '';
 
         for (const line of lines) {
-          if (!line.startsWith("data: ")) continue;
+          if (!line.startsWith('data: ')) continue;
           try {
             const event = JSON.parse(line.slice(6));
             handleSyncEvent(event, syncToastId);
           } catch {
-            /* ignore parse errors */
+            /* bỏ qua lỗi parse */
           }
         }
       }
 
-      // Process remaining buffer
-      if (buffer.startsWith("data: ")) {
+      // Xử lý buffer còn lại
+      if (buffer.startsWith('data: ')) {
         try {
           const event = JSON.parse(buffer.slice(6));
           handleSyncEvent(event, syncToastId);
         } catch {
-          /* ignore */
+          /* bỏ qua */
         }
       }
     } catch (err) {
-      if ((err as Error).name !== "AbortError") {
+      if ((err as Error).name !== 'AbortError') {
         const msg =
-          err instanceof Error ? translateSyncMessage(err.message, t) : t("dashboard.syncFailed");
+          err instanceof Error ? translateSyncMessage(err.message, t) : t('dashboard.syncFailed');
         setError(msg);
         if (syncToastId)
           toastStore.update(syncToastId, {
-            type: "error",
-            title: t("dashboard.syncError"),
+            type: 'error',
+            title: t('dashboard.syncError'),
             description: msg,
             duration: 5000,
-            path: "/portfolio",
+            path: '/portfolio',
           });
       } else {
         if (syncToastId) toastStore.dismiss(syncToastId);
@@ -351,8 +344,8 @@ export function useAccountSync({
     } finally {
       syncStore.setState({ isSyncing: false });
       syncAbortRef.current = null;
-      queryClient.invalidateQueries({ queryKey: ["portfolio-accounts"] });
-      queryClient.invalidateQueries({ queryKey: ["portfolio-storage-units"] });
+      queryClient.invalidateQueries({ queryKey: ['portfolio-accounts'] });
+      queryClient.invalidateQueries({ queryKey: ['portfolio-storage-units'] });
     }
   }, [
     isSyncing,
@@ -371,7 +364,7 @@ export function useAccountSync({
       syncStore.setState({
         singleScanId: accountId,
         syncOverallPercent: 0,
-        syncOverallMessage: t("dashboard.scanSingleStarting", {
+        syncOverallMessage: t('dashboard.scanSingleStarting', {
           name: accountName,
         }),
         syncAccountProgresses: new Map(),
@@ -381,11 +374,12 @@ export function useAccountSync({
       const abortController = new AbortController();
       singleScanAbortRef.current = abortController;
       const scanToastId: string | null = toast.loading(
-        t("dashboard.scanSingleStarting", { name: accountName }), { path: "/portfolio" }
+        t('dashboard.scanSingleStarting', { name: accountName }),
+        { path: '/portfolio' }
       );
 
       try {
-        // Save any unsaved cookie for this account first
+        // Lưu cookie chưa lưu của tài khoản này trước
         const account = accountsQuery.data?.find((a) => a.id === accountId);
         if (account) {
           const unsavedCookie = getUnsavedCookie(account);
@@ -397,9 +391,9 @@ export function useAccountSync({
           }
         }
 
-        const res = await fetch("/api/portfolio/accounts/sync/single", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
+        const res = await fetch('/api/portfolio/accounts/sync/single', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ accountId }),
           signal: abortController.signal,
         });
@@ -407,56 +401,54 @@ export function useAccountSync({
         if (!res.ok) {
           const errData = await res.json().catch(() => ({}));
           const rawMsg = (errData as { message?: string }).message;
-          throw new Error(
-            rawMsg ? translateSyncMessage(rawMsg, t) : t("dashboard.syncFailed"),
-          );
+          throw new Error(rawMsg ? translateSyncMessage(rawMsg, t) : t('dashboard.syncFailed'));
         }
 
         const reader = res.body?.getReader();
-        if (!reader) throw new Error(t("dashboard.cannotReadStream"));
+        if (!reader) throw new Error(t('dashboard.cannotReadStream'));
 
         const decoder = new TextDecoder();
-        let buffer = "";
+        let buffer = '';
 
         while (true) {
           const { done, value } = await reader.read();
           if (done) break;
 
           buffer += decoder.decode(value, { stream: true });
-          const lines = buffer.split("\n");
-          buffer = lines.pop() ?? "";
+          const lines = buffer.split('\n');
+          buffer = lines.pop() ?? '';
 
           for (const line of lines) {
-            if (!line.startsWith("data: ")) continue;
+            if (!line.startsWith('data: ')) continue;
             try {
               const event = JSON.parse(line.slice(6));
               handleSingleSyncEvent(event, scanToastId, accountName);
             } catch {
-              /* ignore parse errors */
+              /* bỏ qua lỗi parse */
             }
           }
         }
 
-        if (buffer.startsWith("data: ")) {
+        if (buffer.startsWith('data: ')) {
           try {
             const event = JSON.parse(buffer.slice(6));
             handleSingleSyncEvent(event, scanToastId, accountName);
           } catch {
-            /* ignore */
+            /* bỏ qua */
           }
         }
       } catch (err) {
-        if ((err as Error).name !== "AbortError") {
+        if ((err as Error).name !== 'AbortError') {
           const msg =
-            err instanceof Error ? translateSyncMessage(err.message, t) : t("dashboard.syncFailed");
+            err instanceof Error ? translateSyncMessage(err.message, t) : t('dashboard.syncFailed');
           setError(msg);
           if (scanToastId)
             toastStore.update(scanToastId, {
-              type: "error",
-              title: t("dashboard.scanSingleError"),
+              type: 'error',
+              title: t('dashboard.scanSingleError'),
               description: msg,
               duration: 5000,
-              path: "/portfolio",
+              path: '/portfolio',
             });
         } else {
           if (scanToastId) toastStore.dismiss(scanToastId);
@@ -464,8 +456,8 @@ export function useAccountSync({
       } finally {
         syncStore.setState({ singleScanId: null });
         singleScanAbortRef.current = null;
-        queryClient.invalidateQueries({ queryKey: ["portfolio-accounts"] });
-        queryClient.invalidateQueries({ queryKey: ["portfolio-storage-units"] });
+        queryClient.invalidateQueries({ queryKey: ['portfolio-accounts'] });
+        queryClient.invalidateQueries({ queryKey: ['portfolio-storage-units'] });
       }
     },
     [
@@ -478,7 +470,7 @@ export function useAccountSync({
       setError,
       handleSingleSyncEvent,
       queryClient,
-    ],
+    ]
   );
 
   return {

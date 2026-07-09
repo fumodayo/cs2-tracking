@@ -2,21 +2,7 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
-import {
-  Key,
-  Shield,
-  Loader2,
-  AlertCircle,
-  RefreshCw,
-  Info,
-  ExternalLink,
-  Award,
-  Zap,
-  Lock,
-  Trash2,
-  Eye,
-  EyeOff,
-} from 'lucide-react';
+import { Shield, Loader2, AlertCircle, RefreshCw, Lock } from 'lucide-react';
 import {
   Dialog,
   DialogContent,
@@ -25,16 +11,25 @@ import {
   DialogDescription,
 } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
 import { toast, toastStore } from '@/stores';
-import { cn } from '@/utils/cn';
 import { useSession } from './use-session';
 import {
   getLocalApiKey,
   saveLocalApiKey,
   removeLocalApiKey,
 } from '@/components/inventory-scanner/utils';
-import { CS2CapUsageStats, type TierInfo, type UsageInfo } from './cs2cap-modal-sections';
+import {
+  CS2CapPlanOverview,
+  CS2CapUsageStats,
+  type TierInfo,
+  type UsageInfo,
+} from './cs2cap-modal-sections';
+import {
+  CS2CapApiKeyForm,
+  CS2CapGuestKeyCard,
+  CS2CapMemberKeysList,
+  CS2CapModeNotice,
+} from './cs2cap-modal-key-sections';
 
 interface AccountData {
   user_id: string;
@@ -63,33 +58,33 @@ interface CS2CapModalProps {
 }
 
 export function CS2CapModal({ open, onOpenChange, mode = 'auto' }: CS2CapModalProps) {
-  const { t, i18n } = useTranslation();
+  const { t } = useTranslation();
   const { user, loading: sessionLoading } = useSession();
 
-  // Logged-in Data State
+  // Trạng thái dữ liệu khi đã đăng nhập
   const [data, setData] = useState<CS2CapData | null>(null);
 
-  // Guest Data State
+  // Trạng thái dữ liệu khách
   const [guestKeyPrefix, setGuestKeyPrefix] = useState<string | null>(null);
   const [guestAccount, setGuestAccount] = useState<AccountData | null>(null);
   const [hasDefaultKey, setHasDefaultKey] = useState<boolean | null>(null);
   const [defaultAccount, setDefaultAccount] = useState<AccountData | null>(null);
 
-  // Form & Loader States
+  // Trạng thái form và loader
   const [apiKey, setApiKey] = useState('');
   const [showKey, setShowKey] = useState(false);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // Delete Confirmation Dialog states
+  // Trạng thái dialog xác nhận xóa
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [keyToDelete, setKeyToDelete] = useState<string | null>(null);
 
-  // Compute mode
+  // Tính mode
   const isMember = mode === 'member' || (mode === 'auto' && !!user);
 
-  // Fetch for Guest Mode
+  // Fetch dữ liệu cho chế độ khách
   const fetchGuestAccountData = useCallback(
     async (key: string, showLoading = true) => {
       if (showLoading) setLoading(true);
@@ -127,7 +122,7 @@ export function CS2CapModal({ open, onOpenChange, mode = 'auto' }: CS2CapModalPr
     [t]
   );
 
-  // Fetch for Logged-in Mode
+  // Fetch dữ liệu cho chế độ đã đăng nhập
   const fetchInfo = useCallback(
     async (showLoading = true) => {
       if (showLoading) setLoading(true);
@@ -152,14 +147,14 @@ export function CS2CapModal({ open, onOpenChange, mode = 'auto' }: CS2CapModalPr
     [t]
   );
 
-  // Load appropriate data on mount / open
+  // Nạp dữ liệu phù hợp khi mount hoặc mở
   useEffect(() => {
     if (!open || (mode === 'auto' && sessionLoading)) return;
 
     if (isMember) {
       fetchInfo();
     } else {
-      // Check if server has a default key + fetch its account data
+      // Kiểm tra server có key mặc định và lấy dữ liệu tài khoản tương ứng
       fetch('/api/user/cs2cap/status')
         .then((r) => r.json())
         .then((d) => {
@@ -184,7 +179,7 @@ export function CS2CapModal({ open, onOpenChange, mode = 'auto' }: CS2CapModalPr
     }
   }, [open, isMember, sessionLoading, mode, fetchInfo, fetchGuestAccountData]);
 
-  // Handle Save (Add new key)
+  // Xử lý lưu (thêm key mới)
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!apiKey.trim()) return;
@@ -254,7 +249,7 @@ export function CS2CapModal({ open, onOpenChange, mode = 'auto' }: CS2CapModalPr
           title: t('cs2cap.configureSuccess', 'Configured API Key successfully!'),
           description: t(
             'cs2cap.keyEncryptedLocal',
-            'Your key has been encrypted and stored on this browser.'
+            'Your key is stored only for this browser session.'
           ),
           duration: 4000,
         });
@@ -272,7 +267,7 @@ export function CS2CapModal({ open, onOpenChange, mode = 'auto' }: CS2CapModalPr
     }
   };
 
-  // Handle Switch Active Key (Logged-in only)
+  // Xử lý đổi key active (chỉ khi đã đăng nhập)
   const handleSelect = async (keyPrefix: string) => {
     setSaving(true);
     const toastId = toast.loading(t('cs2cap.switchingKey', 'Switching active API key...'));
@@ -318,7 +313,7 @@ export function CS2CapModal({ open, onOpenChange, mode = 'auto' }: CS2CapModalPr
     }
   };
 
-  // Open confirmation modal for deleting key
+  // Mở modal xác nhận xóa key
   const confirmDelete = (keyPrefix?: string) => {
     if (isMember) {
       if (keyPrefix) {
@@ -330,7 +325,7 @@ export function CS2CapModal({ open, onOpenChange, mode = 'auto' }: CS2CapModalPr
     }
   };
 
-  // Handle Delete Confirmed
+  // Xử lý sau khi xác nhận xóa
   const handleDeleteConfirm = async () => {
     setConfirmOpen(false);
     if (isMember) {
@@ -390,17 +385,9 @@ export function CS2CapModal({ open, onOpenChange, mode = 'auto' }: CS2CapModalPr
   const usage = account?.usage;
   const tier = account?.tier_info;
 
-  // For guest using default system key (no local key)
+  // Cho khách dùng key hệ thống mặc định (không có key local)
   const defaultUsage = !isMember && !guestKeyPrefix ? defaultAccount?.usage : null;
   const defaultTier = !isMember && !guestKeyPrefix ? defaultAccount?.tier_info : null;
-
-  // Get Tier Display Name Helper
-  const getTierDisplayName = (displayName?: string) => {
-    if (!displayName) return i18n.language === 'vi' ? 'MIỄN PHÍ' : 'FREE';
-    const upper = displayName.toUpperCase();
-    if (upper === 'FREE') return i18n.language === 'vi' ? 'MIỄN PHÍ' : 'FREE';
-    return displayName;
-  };
 
   return (
     <>
@@ -418,7 +405,7 @@ export function CS2CapModal({ open, onOpenChange, mode = 'auto' }: CS2CapModalPr
                 ? t('cs2cap.modalDesc', 'Configure your API Key to use CS2Cap services.')
                 : t(
                     'cs2cap.modalDescGuest',
-                    'Since you are not logged in, this key will be encrypted and stored locally on your browser to fetch direct prices from BUFF163.'
+                    'Since you are not logged in, this key is kept only for this browser session to fetch direct prices from BUFF163.'
                   )}
             </DialogDescription>
           </DialogHeader>
@@ -448,36 +435,7 @@ export function CS2CapModal({ open, onOpenChange, mode = 'auto' }: CS2CapModalPr
             </div>
           ) : (
             <div className="space-y-5 py-2">
-              {/* Info/Warning notice for Guest */}
-              {!isMember && (
-                <div className="flex items-start gap-3 rounded-xl border border-amber-500/15 bg-amber-500/5 px-3.5 py-3 transition hover:bg-amber-500/8">
-                  <Info className="mt-0.5 size-4.5 shrink-0 animate-pulse text-amber-600 dark:text-amber-500" />
-                  <p className="text-[11px] leading-relaxed font-semibold text-amber-800 dark:text-amber-400/90">
-                    {t(
-                      'cs2cap.guestLocalNotice',
-                      'Locally saved API key only works on the current browser. Sign in with Google to sync keys across all devices.'
-                    )}
-                  </p>
-                </div>
-              )}
-
-              {/* Info notice for Member */}
-              {isMember && (
-                <div className="flex items-start gap-3 rounded-xl border border-amber-500/15 bg-amber-500/5 px-3.5 py-3 transition hover:bg-amber-500/8">
-                  <Info className="mt-0.5 size-4.5 shrink-0 animate-pulse text-amber-600 dark:text-amber-500" />
-                  <p className="text-[11px] leading-relaxed font-semibold text-amber-800 dark:text-amber-400/90">
-                    {data?.hasCustomKey
-                      ? t(
-                          'cs2cap.customKeyActive',
-                          'The system is using your personal API Key to update prices.'
-                        )
-                      : t(
-                          'cs2cap.sharedKeyWarning',
-                          'You are using the shared default system key. Quota limit may apply.'
-                        )}
-                  </p>
-                </div>
-              )}
+              <CS2CapModeNotice t={t} isMember={isMember} hasCustomKey={data?.hasCustomKey} />
 
               {/* Default System Key badge for Guest (no local key, but server has default) */}
               {!isMember && !guestKeyPrefix && hasDefaultKey && (
@@ -505,36 +463,7 @@ export function CS2CapModal({ open, onOpenChange, mode = 'auto' }: CS2CapModalPr
               {((isMember && data) ||
                 (!isMember && guestKeyPrefix) ||
                 (!isMember && !guestKeyPrefix && defaultTier)) && (
-                <div className="grid grid-cols-2 gap-3.5">
-                  <div className="flex items-center gap-3 rounded-xl border border-stone-800/80 bg-stone-950/45 p-3.5 shadow-sm transition hover:border-stone-700/60">
-                    <div className="flex size-10 shrink-0 items-center justify-center rounded-lg border border-emerald-500/20 bg-emerald-500/10 text-emerald-400">
-                      <Award className="size-5" />
-                    </div>
-                    <div className="min-w-0 flex-1">
-                      <span className="block font-mono text-[10px] leading-none font-bold tracking-wider text-stone-500 uppercase">
-                        {t('cs2cap.currentPlan', 'Current plan')}
-                      </span>
-                      <span className="text-foreground mt-1 block truncate font-sans text-sm leading-none font-black tracking-wide uppercase">
-                        {getTierDisplayName((tier ?? defaultTier)?.display_name)}
-                      </span>
-                    </div>
-                  </div>
-
-                  <div className="flex items-center gap-3 rounded-xl border border-stone-800/80 bg-stone-950/45 p-3.5 shadow-sm transition hover:border-stone-700/60">
-                    <div className="flex size-10 shrink-0 items-center justify-center rounded-lg border border-blue-500/20 bg-blue-500/10 text-blue-400">
-                      <Zap className="size-5" />
-                    </div>
-                    <div className="min-w-0 flex-1">
-                      <span className="block font-mono text-[10px] leading-none font-bold tracking-wider text-stone-500 uppercase">
-                        {t('cs2cap.requestsPerMin', 'Reqs/min')}
-                      </span>
-                      <span className="text-foreground mt-1 block truncate font-sans text-sm leading-none font-black tracking-wide">
-                        {(tier ?? defaultTier)?.rate_requests_per_minute || 20}{' '}
-                        {t('cs2cap.reqMinSuffix', 'req/m')}
-                      </span>
-                    </div>
-                  </div>
-                </div>
+                <CS2CapPlanOverview tier={tier ?? defaultTier} />
               )}
 
               {/* 2. Usage Stats — personal key (member or guest with local key) */}
@@ -547,168 +476,34 @@ export function CS2CapModal({ open, onOpenChange, mode = 'auto' }: CS2CapModalPr
 
               {/* 3. API Key List and Input Form */}
               <div className="space-y-3.5 pt-2">
-                {/* Active Key Display for Guest */}
                 {!isMember && guestKeyPrefix && (
-                  <div className="flex items-center justify-between rounded-xl border border-emerald-500/25 bg-emerald-500/5 p-3.5 shadow-sm">
-                    <div className="flex min-w-0 items-center gap-3">
-                      <div className="flex size-8 shrink-0 items-center justify-center rounded-lg border border-emerald-500/20 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400">
-                        <Lock className="size-4" />
-                      </div>
-                      <div className="flex min-w-0 flex-col gap-0.5">
-                        <span className="font-mono text-[9px] leading-none font-bold tracking-wider text-stone-500 uppercase">
-                          {t('cs2cap.activeGuestKey', 'Active guest key')}
-                        </span>
-                        <span className="mt-0.5 truncate font-mono text-xs font-black tracking-wide text-emerald-600 dark:text-emerald-400">
-                          {guestKeyPrefix}
-                        </span>
-                      </div>
-                    </div>
-                    <button
-                      type="button"
-                      onClick={() => confirmDelete()}
-                      disabled={saving}
-                      className="flex cursor-pointer items-center gap-1.5 rounded-lg border border-rose-500/20 bg-rose-500/5 px-3 py-1.5 text-xs font-bold text-rose-500 transition duration-150 hover:border-rose-500/30 hover:bg-rose-500/10 disabled:opacity-50"
-                    >
-                      <Trash2 className="size-3.5" />
-                      <span>{t('common.delete', 'Delete')}</span>
-                    </button>
-                  </div>
+                  <CS2CapGuestKeyCard
+                    t={t}
+                    guestKeyPrefix={guestKeyPrefix}
+                    saving={saving}
+                    onDelete={() => confirmDelete()}
+                  />
                 )}
 
-                {/* Saved API Keys List for Member */}
-                {isMember && data?.keys && data.keys.length > 0 && (
-                  <div className="space-y-2">
-                    <span className="block text-xs font-bold text-stone-400">
-                      {t('cs2cap.myPersonalApiKeys', 'Your personal API Keys ({{count}})', {
-                        count: data.keys.length,
-                      })}
-                    </span>
-                    <div className="custom-scrollbar max-h-48 space-y-2 overflow-y-auto pr-1">
-                      {data.keys.map((k) => (
-                        <div
-                          key={k.prefix}
-                          className={cn(
-                            'flex items-center justify-between rounded-xl border p-3.5 shadow-sm transition-all duration-250',
-                            k.isActive
-                              ? 'border-emerald-500/25 bg-emerald-500/5'
-                              : 'border-stone-800 bg-stone-950/20 hover:border-stone-700/60'
-                          )}
-                        >
-                          <div className="flex min-w-0 items-center gap-3">
-                            <div
-                              className={cn(
-                                'flex size-8 shrink-0 items-center justify-center rounded-lg border',
-                                k.isActive
-                                  ? 'border-emerald-500/20 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400'
-                                  : 'border-stone-850 bg-stone-900 text-stone-400'
-                              )}
-                            >
-                              <Lock className="size-4" />
-                            </div>
-                            <div className="flex min-w-0 flex-col gap-0.5">
-                              <span className="font-mono text-[9px] leading-none font-bold tracking-wider text-stone-500 uppercase">
-                                {k.isActive
-                                  ? t('cs2cap.statusActive', 'Active')
-                                  : t('cs2cap.statusArchive', 'Archived')}
-                              </span>
-                              <span className="mt-0.5 truncate font-mono text-xs font-black tracking-wide text-stone-300">
-                                {k.prefix}
-                              </span>
-                            </div>
-                          </div>
-
-                          <div className="flex shrink-0 items-center gap-2.5">
-                            {!k.isActive && (
-                              <button
-                                type="button"
-                                onClick={() => handleSelect(k.prefix)}
-                                disabled={saving}
-                                className="border-accent/20 bg-accent/5 hover:bg-accent/15 text-accent cursor-pointer rounded-lg border px-3 py-1.5 text-xs font-bold transition duration-150 disabled:opacity-50"
-                              >
-                                {t('cs2cap.useButton', 'Use')}
-                              </button>
-                            )}
-                            <button
-                              type="button"
-                              onClick={() => confirmDelete(k.prefix)}
-                              disabled={saving}
-                              className="flex size-8 cursor-pointer items-center justify-center rounded-lg border border-rose-500/20 bg-rose-500/5 text-rose-500 transition duration-150 hover:border-rose-500/30 hover:bg-rose-500/15 disabled:opacity-50"
-                            >
-                              <Trash2 className="size-4" />
-                            </button>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
+                {isMember && data?.keys && (
+                  <CS2CapMemberKeysList
+                    t={t}
+                    keys={data.keys}
+                    saving={saving}
+                    onSelect={handleSelect}
+                    onDelete={confirmDelete}
+                  />
                 )}
 
-                {/* Add new key form */}
-                <form onSubmit={handleSave} className="space-y-3 pt-1">
-                  <div className="space-y-2.5">
-                    <div className="flex items-center justify-between">
-                      <label
-                        htmlFor="cs2cap-api-key"
-                        className="flex items-center gap-1.5 text-xs font-bold text-stone-400"
-                      >
-                        <Key className="text-accent size-3.5" />
-                        {t('cs2cap.apiKeyLabel', 'CS2Cap API Key')}
-                      </label>
-                      <a
-                        href="https://cs2cap.com/account/api-keys"
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="text-accent hover:text-accent-hover flex cursor-pointer items-center gap-1 text-xs font-bold transition-colors hover:underline"
-                      >
-                        {t('cs2cap.createKeyLink', 'Get API Key at CS2Cap')}
-                        <ExternalLink className="size-3" />
-                      </a>
-                    </div>
-
-                    <div className="flex gap-2">
-                      <div className="relative flex flex-1 items-center">
-                        <Input
-                          id="cs2cap-api-key"
-                          type={showKey ? 'text' : 'password'}
-                          autoComplete="new-password"
-                          placeholder={t(
-                            'cs2cap.apiKeyPlaceholder',
-                            'Enter your cs2cap API key (sk_live_...)'
-                          )}
-                          value={apiKey}
-                          onChange={(e) => setApiKey(e.target.value)}
-                          disabled={saving}
-                          className="w-full pr-10 font-mono text-xs"
-                        />
-                        <button
-                          type="button"
-                          onClick={() => setShowKey(!showKey)}
-                          className="absolute right-3 cursor-pointer text-stone-500 transition-colors hover:text-stone-300 focus:outline-none"
-                        >
-                          {showKey ? <EyeOff className="size-4" /> : <Eye className="size-4" />}
-                        </button>
-                      </div>
-                      <Button
-                        type="submit"
-                        variant="primary"
-                        disabled={saving || !apiKey.trim()}
-                        className="h-10 shrink-0 cursor-pointer px-4 text-xs font-semibold"
-                      >
-                        {saving ? (
-                          <Loader2 className="size-3.5 animate-spin" />
-                        ) : (
-                          t('common.save', 'Save')
-                        )}
-                      </Button>
-                    </div>
-                    <p className="mt-1.5 text-[10.5px] leading-relaxed font-normal text-stone-500">
-                      {t(
-                        'cs2cap.buff163PriceNotice',
-                        "Usually you don't need a personal API Key. This is only necessary if you want to fetch prices directly from BUFF163 or need more call quota."
-                      )}
-                    </p>
-                  </div>
-                </form>
+                <CS2CapApiKeyForm
+                  t={t}
+                  apiKey={apiKey}
+                  setApiKey={setApiKey}
+                  showKey={showKey}
+                  setShowKey={setShowKey}
+                  saving={saving}
+                  onSubmit={handleSave}
+                />
               </div>
             </div>
           )}

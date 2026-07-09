@@ -19,7 +19,7 @@ export function PostAnalyzer() {
   const { isAdmin } = useSession();
 
   const {
-    // States
+    // Các state
     text,
     setText,
     analysis,
@@ -47,14 +47,14 @@ export function PostAnalyzer() {
     historyOpen,
     setHistoryOpen,
 
-    // Computed
+    // Giá trị tính toán
     history,
     historyErrorMessage,
     selectedHistory,
     historyQuery,
     analyzeMutation,
 
-    // Handlers
+    // Các handler
     handleSubmit,
     handleImageChange,
     handlePaste,
@@ -85,9 +85,9 @@ export function PostAnalyzer() {
       )}
 
       <div className="rounded-xl border border-stone-800 bg-stone-950/25 p-6 shadow-sm">
-        {/* Top bar with tabs and history */}
+        {/* Thanh trên với tab và lịch sử */}
         <div className="border-stone-850 mb-6 flex flex-col gap-4 border-b pb-5 sm:flex-row sm:items-center sm:justify-between">
-          {/* Tab Selector */}
+          {/* Bộ chọn tab */}
           <div className="relative flex h-10 w-full shrink-0 items-center rounded-lg border border-stone-800 bg-stone-950 p-1 shadow-inner select-none sm:w-auto">
             <button
               type="button"

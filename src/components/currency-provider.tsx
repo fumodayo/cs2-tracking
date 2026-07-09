@@ -1,15 +1,9 @@
 /* eslint-disable react-refresh/only-export-components */
-"use client";
+'use client';
 
-import React, {
-  createContext,
-  useContext,
-  useState,
-  useEffect,
-  useMemo,
-} from "react";
+import React, { createContext, useContext, useState, useEffect, useMemo } from 'react';
 
-export type Currency = "USD" | "VND";
+export type Currency = 'USD' | 'VND';
 
 type CurrencyContextValue = {
   currency: Currency;
@@ -19,15 +13,15 @@ type CurrencyContextValue = {
 };
 
 const CurrencyContext = createContext<CurrencyContextValue | null>(null);
-const STORAGE_KEY = "cs2t_currency";
-const USD_TO_VND_RATE = 25000; // Standard exchange rate for display
+const STORAGE_KEY = 'cs2t_currency';
+const USD_TO_VND_RATE = 25000; // Tỷ giá chuẩn để hiển thị
 
 export function CurrencyProvider({ children }: { children: React.ReactNode }) {
-  const [currency, setCurrencyState] = useState<Currency>("VND");
+  const [currency, setCurrencyState] = useState<Currency>('VND');
 
   useEffect(() => {
     const saved = localStorage.getItem(STORAGE_KEY);
-    if (saved === "USD" || saved === "VND") {
+    if (saved === 'USD' || saved === 'VND') {
       setCurrencyState(saved);
     }
   }, []);
@@ -40,20 +34,20 @@ export function CurrencyProvider({ children }: { children: React.ReactNode }) {
   const formatCurrency = useMemo(() => {
     return (value: number | null | undefined): string => {
       if (value === null || value === undefined || Number.isNaN(value)) {
-        return "--";
+        return '--';
       }
 
-      if (currency === "USD") {
+      if (currency === 'USD') {
         const usdValue = value / USD_TO_VND_RATE;
-        return new Intl.NumberFormat("en-US", {
-          style: "currency",
-          currency: "USD",
+        return new Intl.NumberFormat('en-US', {
+          style: 'currency',
+          currency: 'USD',
           maximumFractionDigits: 2,
         }).format(usdValue);
       } else {
-        return new Intl.NumberFormat("vi-VN", {
-          style: "currency",
-          currency: "VND",
+        return new Intl.NumberFormat('vi-VN', {
+          style: 'currency',
+          currency: 'VND',
           maximumFractionDigits: 0,
         }).format(value);
       }
@@ -67,20 +61,16 @@ export function CurrencyProvider({ children }: { children: React.ReactNode }) {
       formatCurrency,
       usdToVndRate: USD_TO_VND_RATE,
     }),
-    [currency, formatCurrency],
+    [currency, formatCurrency]
   );
 
-  return (
-    <CurrencyContext.Provider value={value}>
-      {children}
-    </CurrencyContext.Provider>
-  );
+  return <CurrencyContext.Provider value={value}>{children}</CurrencyContext.Provider>;
 }
 
 export function useCurrency() {
   const context = useContext(CurrencyContext);
   if (!context) {
-    throw new Error("useCurrency must be used inside CurrencyProvider");
+    throw new Error('useCurrency must be used inside CurrencyProvider');
   }
   return context;
 }

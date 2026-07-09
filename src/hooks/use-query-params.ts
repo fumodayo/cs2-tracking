@@ -1,5 +1,5 @@
-import { useEffect, useState, useRef, useMemo } from "react";
-import { useRouter, usePathname, useSearchParams } from "next/navigation";
+import { useEffect, useState, useRef, useMemo } from 'react';
+import { useRouter, usePathname, useSearchParams } from 'next/navigation';
 
 export interface ParamConfig<T> {
   defaultValue: T;
@@ -19,24 +19,22 @@ export type QueryParamsConfig = Record<
 >;
 
 export type QueryParamsState<T extends QueryParamsConfig> = {
-  [K in keyof T]: T[K]["defaultValue"];
+  [K in keyof T]: T[K]['defaultValue'];
 };
 
 export type QueryParamsSetters<T extends QueryParamsConfig> = {
   [K in keyof T]: (
-    value:
-      | T[K]["defaultValue"]
-      | ((prev: T[K]["defaultValue"]) => T[K]["defaultValue"]),
+    value: T[K]['defaultValue'] | ((prev: T[K]['defaultValue']) => T[K]['defaultValue'])
   ) => void;
 };
 
-// Helper to check array equality (order-sensitive check for filters)
+// Helper kiểm tra array bằng nhau, có xét thứ tự cho filter
 const isArrayEqual = (a: unknown[], b: unknown[]) => {
   if (a.length !== b.length) return false;
   return a.every((v, i) => v === b[i]);
 };
 
-// Helper to compare values deeply enough for our primitive/array settings
+// Helper so sánh đủ sâu cho cấu hình primitive/array
 const isValueEqual = (a: unknown, b: unknown) => {
   if (Array.isArray(a) && Array.isArray(b)) {
     return isArrayEqual(a, b);
@@ -45,33 +43,35 @@ const isValueEqual = (a: unknown, b: unknown) => {
 };
 
 /**
- * A highly reusable React hook to synchronize multiple states with Next.js URL query parameters.
- * Complies with SOLID principles by remaining decoupled from specific business logic, open to configuration,
- * and single-focused on URL state synchronization.
  *
- * Includes support for:
- * - Parsing custom types (numbers, arrays, strings)
- * - Serializing states back to URL strings (cleaning up defaults)
- * - Debouncing high-frequency updates (e.g. search query typing) to keep browser history clean
- * - Correctly handling browser back/forward navigation.
+ * React hook tái sử dụng cao để đồng bộ nhiều state với query parameter URL của Next.js.
+ * Tuân thủ SOLID bằng cách tách khỏi logic nghiệp vụ cụ thể, mở cho cấu hình,
+ * và chỉ tập trung vào đồng bộ state với URL.
+ *
+ * Hỗ trợ:
+ * - Parse kiểu tùy chỉnh (number, array, string)
+ * - Serialize state ngược về chuỗi URL và dọn giá trị mặc định
+ * - Debounce cập nhật tần suất cao (ví dụ gõ query tìm kiếm) để lịch sử trình duyệt gọn
+ * - Xử lý đúng điều hướng back/forward của trình duyệt.
+ *
  */
 export function useQueryParamsState<T extends QueryParamsConfig>(
-  config: T,
+  config: T
 ): [QueryParamsState<T>, QueryParamsSetters<T>, QueryParamsState<T>] {
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
 
-  // Reference to configuration to prevent dependency loop re-runs when config object is recreated inline
+  // Tham chiếu tới cấu hình để tránh vòng dependency chạy lại khi object config được tạo inline
   const configRef = useRef(config);
   useEffect(() => {
     configRef.current = config;
   }, [config]);
 
-  // Keys string dependency for tracking changes to the configuration structure
-  const configKeysStr = useMemo(() => Object.keys(config).join(","), [config]);
+  // Chuỗi key dependency để theo dõi thay đổi cấu trúc cấu hình
+  const configKeysStr = useMemo(() => Object.keys(config).join(','), [config]);
 
-  // Initialize local states from URL query parameters or default value
+  // Khởi tạo state local từ query parameter URL hoặc giá trị mặc định
   const [states, setStates] = useState<QueryParamsState<T>>(() => {
     const initial = {} as QueryParamsState<T>;
     for (const key in config) {
@@ -81,17 +81,16 @@ export function useQueryParamsState<T extends QueryParamsConfig>(
     return initial;
   });
 
-  // 2. Debounce states changes (for search inputs and fast typers)
-  const [debouncedStates, setDebouncedStates] =
-    useState<QueryParamsState<T>>(states);
+  // 2. Debounce thay đổi state cho ô tìm kiếm và người gõ nhanh
+  const [debouncedStates, setDebouncedStates] = useState<QueryParamsState<T>>(states);
 
-  // Keep a ref to debouncedStates to check if URL updates are just catching up with our own debounces
+  // Giữ ref tới debouncedStates để kiểm tra update URL có chỉ đang bắt kịp debounce của chính ta không
   const debouncedStatesRef = useRef<QueryParamsState<T>>(debouncedStates);
   useEffect(() => {
     debouncedStatesRef.current = debouncedStates;
   }, [debouncedStates]);
 
-  // 1. Sync URL searchParams updates (e.g. back/forward navigation) back to local state
+  // 1. Đồng bộ update searchParams URL (ví dụ back/forward) về state local
   useEffect(() => {
     setStates((prev) => {
       let changed = false;
@@ -102,7 +101,7 @@ export function useQueryParamsState<T extends QueryParamsConfig>(
       for (const key in currentConfig) {
         const urlValue = searchParams.get(key);
         const parsed = currentConfig[key].parse(urlValue);
-        // Only update local state if the URL value differs from both the current state AND the debounced state
+        // Chỉ cập nhật state local nếu giá trị URL khác cả state hiện tại và state đã debounce
         if (!isValueEqual(next[key], parsed) && !isValueEqual(currentDebounced[key], parsed)) {
           (next as Record<string, unknown>)[key] = parsed;
           changed = true;
@@ -149,7 +148,7 @@ export function useQueryParamsState<T extends QueryParamsConfig>(
     };
   }, [states, configKeysStr, debouncedStates]);
 
-  // 3. Sync debounced states back into Next.js router URL query params
+  // 3. Đồng bộ state đã debounce ngược vào query parameter URL của router Next.js
   useEffect(() => {
     const params = new URLSearchParams(searchParams.toString());
     let urlChanged = false;
@@ -175,15 +174,15 @@ export function useQueryParamsState<T extends QueryParamsConfig>(
     }
 
     if (urlChanged) {
-      // Use replace and scroll: false to avoid jumping or pushing duplicate browser history entries
+      // Dùng replace và scroll: false để tránh nhảy trang hoặc thêm bản ghi lịch sử trùng
       router.replace(`${pathname}?${params.toString()}`, { scroll: false });
     }
   }, [debouncedStates, pathname, router, searchParams, configKeysStr]);
 
-  // 4. Generate stable memoized setters for callers to update individual states
+  // 4. Tạo setter memo ổn định để caller cập nhật từng state riêng
   const setters = useMemo(() => {
     const s = {} as QueryParamsSetters<T>;
-    const keys = configKeysStr.split(",");
+    const keys = configKeysStr.split(',');
 
     for (const key of keys) {
       (s as Record<string, (value: unknown) => void>)[key] = (value: unknown) => {

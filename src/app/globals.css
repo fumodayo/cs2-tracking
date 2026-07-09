@@ -42,7 +42,7 @@
   --animate-fade-slide-in: fade-slide-in 0.25s cubic-bezier(0.25, 0.25, 0, 1) both;
   --animate-reset-flash: reset-flash 0.4s cubic-bezier(0.16, 1, 0.3, 1) both;
 
-  /* CS2 Theme: Custom stone and blue color tokens mapped to theme variables to fix hovers and borders globally */
+  /* Giao diện CS2: token màu stone và blue tùy chỉnh được ánh xạ vào biến theme để sửa hover và viền toàn cục */
   --color-stone-50: var(--foreground);
   --color-stone-100: var(--foreground);
   --color-stone-200: var(--foreground);
@@ -322,7 +322,7 @@ button:disabled {
   }
 }
 
-/* React Day Picker custom styles */
+/* Kiểu hiển thị tùy chỉnh cho React Day Picker */
 .rdp-root {
   --rdp-day-width: 36px !important;
   --rdp-day-height: 36px !important;

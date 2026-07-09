@@ -252,10 +252,10 @@ export function DonateDialog({
               transition={{ duration: 0.2 }}
               className="flex flex-col gap-4"
             >
-              {/* Dialog Header */}
+              {/* Phần đầu hộp thoại */}
               <DialogHeader className="flex flex-col items-center pb-2 text-center">
                 <DialogTitle className="flex flex-col items-center gap-2">
-                  {/* Beating Heart Icon */}
+                  {/* Icon trái tim động */}
                   <motion.div
                     animate={{ scale: [1, 1.12, 1] }}
                     transition={{ duration: 2, repeat: Infinity, ease: 'easeInOut' }}
@@ -282,7 +282,7 @@ export function DonateDialog({
                 </p>
               </DialogHeader>
 
-              {/* Tab Switcher */}
+              {/* Bộ chuyển tab */}
               <div className="bg-card-alt/80 border-border/80 relative flex rounded-xl border p-1">
                 {tabs.map((tab) => (
                   <button
@@ -308,7 +308,7 @@ export function DonateDialog({
                 ))}
               </div>
 
-              {/* Tab Body */}
+              {/* Nội dung tab */}
               <AnimatePresence mode="wait">
                 {activeTab === 'bank' ? (
                   <motion.div

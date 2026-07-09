@@ -38,11 +38,11 @@ export function DataTableColumnHeader<TData, TValue>({
 
   const handleSort = () => {
     if (!isSorted) {
-      column.toggleSorting(true); // 1st click: Descending
+      column.toggleSorting(true); // Lần bấm 1: giảm dần
     } else if (isSorted === 'desc') {
-      column.toggleSorting(false); // 2nd click: Ascending
+      column.toggleSorting(false); // Lần bấm 2: tăng dần
     } else {
-      column.clearSorting(); // 3rd click: Clear
+      column.clearSorting(); // Lần bấm 3: xóa sắp xếp
     }
   };
 

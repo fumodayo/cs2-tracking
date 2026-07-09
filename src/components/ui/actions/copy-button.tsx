@@ -1,11 +1,11 @@
-"use client";
+'use client';
 
-import React, { useState, useEffect, useRef } from "react";
-import { Copy, Check } from "lucide-react";
-import { AnimatePresence, motion } from "framer-motion";
-import { cn } from "@/utils/cn";
+import React, { useState, useEffect, useRef } from 'react';
+import { Copy, Check } from 'lucide-react';
+import { AnimatePresence, motion } from 'framer-motion';
+import { cn } from '@/utils/cn';
 
-import { useTranslation } from "react-i18next";
+import { useTranslation } from 'react-i18next';
 
 interface CopyButtonProps {
   value: string | number;
@@ -50,8 +50,8 @@ export function CopyButton({ value, className, children }: CopyButtonProps) {
       type="button"
       onClick={handleCopyToClipboard}
       className={cn(
-        "group relative inline-flex cursor-pointer items-center gap-1 transition-all select-none hover:text-foreground active:scale-95 border-none bg-transparent p-0 font-normal text-stone-400 text-left",
-        className,
+        'group hover:text-foreground relative inline-flex cursor-pointer items-center gap-1 border-none bg-transparent p-0 text-left font-normal text-stone-400 transition-all select-none active:scale-95',
+        className
       )}
       onMouseEnter={() => !copied && setShowTooltip(true)}
       onMouseLeave={() => !copied && setShowTooltip(false)}
@@ -83,20 +83,20 @@ export function CopyButton({ value, className, children }: CopyButtonProps) {
         </AnimatePresence>
       </div>
 
-      {/* Premium Micro Tooltip */}
+      {/* Chú giải nổi nhỏ cao cấp */}
       <AnimatePresence>
         {showTooltip && (
           <motion.div
             initial={{ opacity: 0, y: 4, scale: 0.9 }}
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{ opacity: 0, y: 4, scale: 0.9 }}
-            transition={{ duration: 0.15, ease: "easeOut" }}
+            transition={{ duration: 0.15, ease: 'easeOut' }}
             className={cn(
-              "pointer-events-none absolute bottom-full left-1/2 z-50 mb-2 -translate-x-1/2 rounded border border-stone-800/80 bg-stone-950 px-2 py-1 text-[10px] font-bold whitespace-nowrap text-stone-200 shadow-xl",
-              copied ? "border-emerald-500/20 text-emerald-400" : "",
+              'pointer-events-none absolute bottom-full left-1/2 z-50 mb-2 -translate-x-1/2 rounded border border-stone-800/80 bg-stone-950 px-2 py-1 text-[10px] font-bold whitespace-nowrap text-stone-200 shadow-xl',
+              copied ? 'border-emerald-500/20 text-emerald-400' : ''
             )}
           >
-            {copied ? t("common.copied", "Copied") : t("common.copy", "Copy")}
+            {copied ? t('common.copied', 'Copied') : t('common.copy', 'Copy')}
           </motion.div>
         )}
       </AnimatePresence>

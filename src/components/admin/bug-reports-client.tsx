@@ -37,7 +37,7 @@ export function AdminBugReportsClient() {
   const [activeTab, setActiveTab] = useState<'unresolved' | 'resolved'>('unresolved');
   const [selectedImage, setSelectedImage] = useState<string | null>(null);
 
-  // Poll for realtime updates every 5 seconds
+  // Polling cập nhật realtime mỗi 5 giây
   const {
     data: reports = [],
     isLoading,
@@ -60,7 +60,7 @@ export function AdminBugReportsClient() {
       }
       const data = await res.json();
 
-      // If activeTab is "resolved", show resolved reports, otherwise show unresolved (no status or status !== resolved)
+      // Nếu activeTab là "resolved" thì hiển thị report đã xử lý, ngược lại hiển thị report chưa xử lý
       if (activeTab === 'resolved') {
         return (data as BugReport[]).filter((r: BugReport) => r.status === 'resolved');
       }
@@ -69,7 +69,7 @@ export function AdminBugReportsClient() {
     refetchInterval: 5000, // 5s polling
   });
 
-  // Mutation to update report status (e.g. resolve it)
+  // Mutation để cập nhật trạng thái report (ví dụ đánh dấu đã xử lý)
   const resolveMutation = useMutation({
     mutationFn: async ({ id, status }: { id: string; status: string }) => {
       const res = await fetch('/api/bug-report', {
@@ -187,7 +187,7 @@ export function AdminBugReportsClient() {
             <p className="text-xs text-red-300">{(error as Error).message}</p>
           </div>
         ) : reports.length === 0 ? (
-          /* Empty State */
+          /* Trạng thái rỗng */
           <motion.div
             initial={{ opacity: 0, y: 10 }}
             animate={{ opacity: 1, y: 0 }}
@@ -210,7 +210,7 @@ export function AdminBugReportsClient() {
             </div>
           </motion.div>
         ) : (
-          /* Reports Grid */
+          /* Lưới report */
           <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
             <AnimatePresence mode="popLayout">
               {reports.map((report) => (

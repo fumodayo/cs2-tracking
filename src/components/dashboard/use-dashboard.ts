@@ -1,42 +1,37 @@
-import { useQuery } from "@tanstack/react-query";
-import { useState, useMemo } from "react";
-import { useSession } from "@/components/auth/use-session";
-import { useTranslation } from "react-i18next";
-import { useRecentImports } from "./recent-imports-popover";
-import {
-  useBuffPricing,
-  usePortfolioMutations,
-  useExcelImport,
-} from "./hooks";
-import { buildPortfolioTableRows } from "@/components/portfolio";
-import type { PortfolioTableRow } from "@/components/portfolio";
-import {
-  PORTFOLIO_QUERY_KEY,
-  fetchPortfolioReport,
-} from "@/lib/api-client/portfolio-api";
-import { fetchSteamAccounts, STEAM_ACCOUNTS_QUERY_KEY } from "@/lib/api-client/steam-accounts-api";
+import { useQuery } from '@tanstack/react-query';
+import { useState, useMemo } from 'react';
+import { useSession } from '@/components/auth/use-session';
+import { useTranslation } from 'react-i18next';
+import { useRecentImports } from './recent-imports-popover';
+import { usePortfolioRealtime } from '@/hooks/use-portfolio-realtime';
+import { useBuffPricing, usePortfolioMutations, useExcelImport } from './hooks';
+import { buildPortfolioTableRows } from '@/components/portfolio';
+import type { PortfolioTableRow } from '@/components/portfolio';
+import { PORTFOLIO_QUERY_KEY, fetchPortfolioReport } from '@/lib/api-client/portfolio-api';
+import { fetchSteamAccounts, STEAM_ACCOUNTS_QUERY_KEY } from '@/lib/api-client/steam-accounts-api';
 
 export function useDashboard() {
   const [dialogOpen, setDialogOpen] = useState(false);
   const [error, setError] = useState<string | null>(() =>
-    typeof window === "undefined"
+    typeof window === 'undefined'
       ? null
-      : new URLSearchParams(window.location.search).get("authError")
+      : new URLSearchParams(window.location.search).get('authError')
   );
-  
+
   const recentImportsState = useRecentImports();
   const [filteredRows, setFilteredRows] = useState<PortfolioTableRow[] | null>(null);
 
-  const { user, googleConfigured } = useSession();
+  const { user, googleConfigured, loading: sessionLoading } = useSession();
   const { t } = useTranslation();
+  usePortfolioRealtime(Boolean(user), user ? `google:${user.id}` : undefined);
 
-  // Sub-hooks
-  const buff = useBuffPricing();
-  
+  // Các sub-hook
+  const buff = useBuffPricing({ user, sessionLoading });
+
   const mutations = usePortfolioMutations({
     buffPricesCny: buff.pricesCny,
     buffCnyToVndRate: buff.cnyToVndRate,
-    setBuffPricesCny: buff.setPricesCny,
+    mergeBuffPrices: buff.mergePrices,
     setDialogOpen,
     setError,
   });
@@ -50,12 +45,14 @@ export function useDashboard() {
     queryKey: PORTFOLIO_QUERY_KEY,
     queryFn: fetchPortfolioReport,
     staleTime: 5 * 60 * 1000,
+    refetchOnWindowFocus: 'always',
+    refetchOnReconnect: 'always',
     enabled: !!user,
   });
 
   const accountsQuery = useQuery({
     queryKey: STEAM_ACCOUNTS_QUERY_KEY,
-    queryFn: () => fetchSteamAccounts(t("dashboard.cannotLoadAccounts")),
+    queryFn: () => fetchSteamAccounts(t('dashboard.cannotLoadAccounts')),
     staleTime: 5 * 60 * 1000,
     enabled: !!user,
   });
@@ -68,16 +65,11 @@ export function useDashboard() {
 
   const computedTransactionRows = useMemo(() => {
     if (!report) return [];
-    return buildPortfolioTableRows(
-      report,
-      "transactions",
-      buff.pricesCny,
-      buff.cnyToVndRate
-    );
+    return buildPortfolioTableRows(report, 'transactions', buff.pricesCny, buff.cnyToVndRate);
   }, [report, buff.pricesCny, buff.cnyToVndRate]);
 
   return {
-    // Core data
+    // Dữ liệu lõi
     report,
     loading,
     error,
@@ -86,13 +78,13 @@ export function useDashboard() {
     googleConfigured,
     t,
 
-    // Dialog state
+    // Trạng thái dialog
     dialog: {
       open: dialogOpen,
       setOpen: setDialogOpen,
     },
 
-    // Buff pricing
+    // Định giá Buff
     buff: {
       pricesCny: buff.pricesCny,
       cnyToVndRate: buff.cnyToVndRate,
@@ -100,7 +92,7 @@ export function useDashboard() {
       updateRate: buff.updateRate,
     },
 
-    // Excel import
+    // Import Excel
     excel: {
       busy: excel.importBusy,
       status: excel.importStatus,
@@ -113,7 +105,7 @@ export function useDashboard() {
       handleConfirm: excel.handleConfirmExcelImport,
     },
 
-    // Mapping state
+    // Trạng thái mapping
     mapping: {
       data: excel.mappingDialogData,
       close: () => excel.setMappingDialogData(null),
@@ -123,13 +115,13 @@ export function useDashboard() {
       suggestedMapping: excel.suggestedMapping,
     },
 
-    // Recent imports
+    // Các lần import gần đây
     recentImports: {
       list: recentImportsState.recentImports,
       remove: recentImportsState.removeRecentImport,
     },
 
-    // Table state
+    // Trạng thái bảng
     table: {
       filteredRows,
       setFilteredRows,
@@ -137,7 +129,7 @@ export function useDashboard() {
       deletingId,
     },
 
-    // Queries & Mutations
+    // Query và mutation
     reportQuery,
     accountsQuery,
     mutations: {

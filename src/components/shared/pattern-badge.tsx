@@ -55,7 +55,7 @@ export function DopplerBadge({ phase }: { phase: string }) {
 }
 
 export function FadeBadge({ percentage }: { percentage: number }) {
-  // Gradient from yellow->pink->purple based on %
+  // Gradient từ vàng->hồng->tím theo %
   const hue = Math.round(60 - (percentage - 80) * 2.5); // 60(yellow) to ~10(red)
   return (
     <span className="inline-flex items-center gap-1 rounded border border-amber-500/35 bg-gradient-to-r from-amber-500/15 to-pink-500/15 px-1.5 py-0.5 text-[10px] font-bold tracking-wider text-amber-700 dark:border-amber-500/20 dark:from-amber-500/10 dark:to-pink-500/10 dark:text-amber-300">

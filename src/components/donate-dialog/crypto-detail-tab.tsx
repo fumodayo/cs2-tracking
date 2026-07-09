@@ -1,13 +1,13 @@
-"use client";
+'use client';
 
-import React, { useState, useEffect } from "react";
-import { useTranslation } from "react-i18next";
-import { ChevronLeft } from "lucide-react";
-import { FaCopy, FaCheck } from "react-icons/fa6";
-import { AnimatePresence, motion } from "framer-motion";
-import { cn } from "@/utils/cn";
-import type { CryptoItem, NetworkOption } from "./donate-types";
-import QRCode from "qrcode";
+import React, { useState, useEffect } from 'react';
+import { useTranslation } from 'react-i18next';
+import { ChevronLeft } from 'lucide-react';
+import { FaCopy, FaCheck } from 'react-icons/fa6';
+import { AnimatePresence, motion } from 'framer-motion';
+import { cn } from '@/utils/cn';
+import type { CryptoItem, NetworkOption } from './donate-types';
+import QRCode from 'qrcode';
 
 interface CryptoDetailTabProps {
   selectedCrypto: CryptoItem;
@@ -27,7 +27,7 @@ export function CryptoDetailTab({
   onCopy,
 }: CryptoDetailTabProps) {
   const { t } = useTranslation();
-  const [qrCodeUrl, setQrCodeUrl] = useState<string>("");
+  const [qrCodeUrl, setQrCodeUrl] = useState<string>('');
   const activeRef = React.useRef<HTMLButtonElement>(null);
   const containerRef = React.useRef<HTMLDivElement>(null);
 
@@ -36,9 +36,9 @@ export function CryptoDetailTab({
   useEffect(() => {
     if (activeRef.current) {
       activeRef.current.scrollIntoView({
-        behavior: "smooth",
-        block: "nearest",
-        inline: "center",
+        behavior: 'smooth',
+        block: 'nearest',
+        inline: 'center',
       });
     }
   }, [selectedNetwork]);
@@ -91,20 +91,20 @@ export function CryptoDetailTab({
       }
     };
 
-    el.addEventListener("wheel", handleWheel, { passive: false });
-    el.addEventListener("mousedown", handleMouseDown);
-    el.addEventListener("mouseleave", handleMouseLeave);
-    el.addEventListener("mouseup", handleMouseUp);
-    el.addEventListener("mousemove", handleMouseMove);
-    el.addEventListener("click", handleClickCapture, true);
+    el.addEventListener('wheel', handleWheel, { passive: false });
+    el.addEventListener('mousedown', handleMouseDown);
+    el.addEventListener('mouseleave', handleMouseLeave);
+    el.addEventListener('mouseup', handleMouseUp);
+    el.addEventListener('mousemove', handleMouseMove);
+    el.addEventListener('click', handleClickCapture, true);
 
     return () => {
-      el.removeEventListener("wheel", handleWheel);
-      el.removeEventListener("mousedown", handleMouseDown);
-      el.removeEventListener("mouseleave", handleMouseLeave);
-      el.removeEventListener("mouseup", handleMouseUp);
-      el.removeEventListener("mousemove", handleMouseMove);
-      el.removeEventListener("click", handleClickCapture, true);
+      el.removeEventListener('wheel', handleWheel);
+      el.removeEventListener('mousedown', handleMouseDown);
+      el.removeEventListener('mouseleave', handleMouseLeave);
+      el.removeEventListener('mouseup', handleMouseUp);
+      el.removeEventListener('mousemove', handleMouseMove);
+      el.removeEventListener('click', handleClickCapture, true);
     };
   }, []);
 
@@ -113,48 +113,52 @@ export function CryptoDetailTab({
       QRCode.toDataURL(address, {
         margin: 1,
         width: 512,
-        errorCorrectionLevel: "M",
+        errorCorrectionLevel: 'M',
       })
         .then((url) => setQrCodeUrl(url))
-        .catch((err) => console.error("Error generating Crypto QR:", err));
+        .catch((err) => console.error('Error generating Crypto QR:', err));
     }
   }, [address]);
 
   return (
-    <div className="flex flex-col w-full">
-      {/* Header with Back button */}
-      <div className="flex items-center justify-between border-b border-border pb-4 mb-4">
+    <div className="flex w-full flex-col">
+      {/* Phần đầu với nút quay lại */}
+      <div className="border-border mb-4 flex items-center justify-between border-b pb-4">
         <button
           type="button"
           onClick={onBack}
-          className="flex items-center gap-1.5 text-xs font-bold text-muted-foreground hover:text-foreground transition cursor-pointer bg-transparent border-none outline-none"
+          className="text-muted-foreground hover:text-foreground flex cursor-pointer items-center gap-1.5 border-none bg-transparent text-xs font-bold transition outline-none"
         >
           <ChevronLeft className="size-4" />
-          <span>{t("donate.back", "Back")}</span>
+          <span>{t('donate.back', 'Back')}</span>
         </button>
         <div className="flex items-center gap-2">
-          <span className="text-xs font-extrabold text-foreground">
+          <span className="text-foreground text-xs font-extrabold">
             {selectedCrypto.name} ({selectedCrypto.symbol})
           </span>
-          <div className="flex size-6 items-center justify-center rounded-full overflow-hidden">
-            <img src={selectedCrypto.iconUrl} alt={selectedCrypto.name} className="size-full object-contain" />
+          <div className="flex size-6 items-center justify-center overflow-hidden rounded-full">
+            <img
+              src={selectedCrypto.iconUrl}
+              alt={selectedCrypto.name}
+              className="size-full object-contain"
+            />
           </div>
         </div>
       </div>
 
-      {/* Two-Column Grid */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 w-full items-start">
-        {/* Left Column: Networks & Address */}
+      {/* Lưới hai cột */}
+      <div className="grid w-full grid-cols-1 items-start gap-6 sm:grid-cols-2">
+        {/* Cột trái: network và địa chỉ */}
         <div className="flex flex-col gap-5 text-left">
-          {/* Available Networks */}
+          {/* Các network khả dụng */}
           {selectedCrypto.networks && selectedCrypto.networks.length > 0 ? (
             <div className="flex w-full flex-col gap-2">
-              <span className="text-[10px] font-bold tracking-wider text-muted-foreground uppercase">
-                {t("donate.availableNetworks", "Available Networks")}
+              <span className="text-muted-foreground text-[10px] font-bold tracking-wider uppercase">
+                {t('donate.availableNetworks', 'Available Networks')}
               </span>
               <div
                 ref={containerRef}
-                className="flex items-center gap-1.5 rounded-full border border-border bg-card-alt/60 p-1 w-fit max-w-full overflow-x-auto no-scrollbar cursor-grab active:cursor-grabbing select-none"
+                className="border-border bg-card-alt/60 no-scrollbar flex w-fit max-w-full cursor-grab items-center gap-1.5 overflow-x-auto rounded-full border p-1 select-none active:cursor-grabbing"
               >
                 {selectedCrypto.networks.map((net) => {
                   const isSelected = selectedNetwork?.networkName === net.networkName;
@@ -165,33 +169,33 @@ export function CryptoDetailTab({
                       type="button"
                       onClick={() => setSelectedNetwork(net)}
                       className={cn(
-                        "relative flex h-8 items-center justify-center gap-1.5 rounded-full px-3.5 text-xs font-bold transition-all cursor-pointer select-none group/net whitespace-nowrap outline-none border border-transparent bg-transparent duration-300",
-                        isSelected
-                          ? "text-accent"
-                          : "text-muted-foreground hover:text-foreground"
+                        'group/net relative flex h-8 cursor-pointer items-center justify-center gap-1.5 rounded-full border border-transparent bg-transparent px-3.5 text-xs font-bold whitespace-nowrap transition-all duration-300 outline-none select-none',
+                        isSelected ? 'text-accent' : 'text-muted-foreground hover:text-foreground'
                       )}
                     >
                       {isSelected && (
                         <motion.span
                           layoutId="active-net-pill"
-                          className="absolute inset-0 rounded-full border border-accent/20 bg-accent/10 shadow-sm"
-                          transition={{ type: "spring", stiffness: 380, damping: 30 }}
+                          className="border-accent/20 bg-accent/10 absolute inset-0 rounded-full border shadow-sm"
+                          transition={{ type: 'spring', stiffness: 380, damping: 30 }}
                         />
                       )}
 
                       <span className="relative z-10 flex items-center gap-2">
                         {net.icon ? (
-                          <span className={cn(
-                            "flex size-3.5 items-center justify-center transition-all duration-200",
-                            isSelected ? "opacity-100 scale-100" : "opacity-60 grayscale-[10%]"
-                          )}>
+                          <span
+                            className={cn(
+                              'flex size-3.5 items-center justify-center transition-all duration-200',
+                              isSelected ? 'scale-100 opacity-100' : 'opacity-60 grayscale-[10%]'
+                            )}
+                          >
                             {net.icon}
                           </span>
                         ) : (
                           <span
                             className="size-2 rounded-full"
                             style={{
-                              backgroundColor: net.color || "var(--color-accent)",
+                              backgroundColor: net.color || 'var(--color-accent)',
                             }}
                           />
                         )}
@@ -204,27 +208,27 @@ export function CryptoDetailTab({
             </div>
           ) : (
             <div className="flex w-full flex-col gap-2">
-              <span className="text-[10px] font-bold tracking-wider text-muted-foreground uppercase">
-                {t("donate.availableNetworks", "Available Networks")}
+              <span className="text-muted-foreground text-[10px] font-bold tracking-wider uppercase">
+                {t('donate.availableNetworks', 'Available Networks')}
               </span>
-              <div className="flex items-center gap-1 rounded-full border border-border bg-card-alt/60 p-1 w-fit max-w-full">
-                <div className="flex items-center gap-2 rounded-full border border-accent/20 bg-accent/10 px-3.5 py-1.5 text-xs font-bold text-accent shadow-sm">
-                  <div className={cn("size-2 rounded-full", selectedCrypto.color)} />
+              <div className="border-border bg-card-alt/60 flex w-fit max-w-full items-center gap-1 rounded-full border p-1">
+                <div className="border-accent/20 bg-accent/10 text-accent flex items-center gap-2 rounded-full border px-3.5 py-1.5 text-xs font-bold shadow-sm">
+                  <div className={cn('size-2 rounded-full', selectedCrypto.color)} />
                   <span>{selectedCrypto.network}</span>
                 </div>
               </div>
             </div>
           )}
 
-          {/* Deposit Address Box */}
+          {/* Khung địa chỉ nạp */}
           <div className="w-full">
-            <span className="text-[10px] font-bold tracking-wider text-muted-foreground uppercase">
-              {t("donate.depositAddress", "Deposit Address")}
+            <span className="text-muted-foreground text-[10px] font-bold tracking-wider uppercase">
+              {t('donate.depositAddress', 'Deposit Address')}
             </span>
             <button
               type="button"
               onClick={() => onCopy(address)}
-              className="relative mt-2 flex w-full items-center justify-between rounded-xl border border-border bg-card-alt/50 px-4 py-3 cursor-pointer hover:border-accent/40 hover:bg-card-alt hover:shadow-sm active:scale-[0.99] transition-all duration-200 group/address select-none"
+              className="border-border bg-card-alt/50 hover:border-accent/40 hover:bg-card-alt group/address relative mt-2 flex w-full cursor-pointer items-center justify-between rounded-xl border px-4 py-3 transition-all duration-200 select-none hover:shadow-sm active:scale-[0.99]"
             >
               <AnimatePresence>
                 {copied && (
@@ -232,19 +236,19 @@ export function CryptoDetailTab({
                     initial={{ opacity: 0, y: 5, scale: 0.95 }}
                     animate={{ opacity: 1, y: 0, scale: 1 }}
                     exit={{ opacity: 0, y: 5, scale: 0.95 }}
-                    transition={{ duration: 0.15, ease: "easeOut" }}
-                    className="pointer-events-none absolute bottom-full left-1/2 z-50 mb-2 -translate-x-1/2 rounded-md border border-border bg-card px-2.5 py-1 text-[10px] font-bold whitespace-nowrap text-foreground shadow-xl"
+                    transition={{ duration: 0.15, ease: 'easeOut' }}
+                    className="border-border bg-card text-foreground pointer-events-none absolute bottom-full left-1/2 z-50 mb-2 -translate-x-1/2 rounded-md border px-2.5 py-1 text-[10px] font-bold whitespace-nowrap shadow-xl"
                   >
-                    {t("donate.copied", "Copied")}
+                    {t('donate.copied', 'Copied')}
                   </motion.div>
                 )}
               </AnimatePresence>
 
-              <span className="break-all font-mono text-xs leading-relaxed text-foreground pr-2">
+              <span className="text-foreground pr-2 font-mono text-xs leading-relaxed break-all">
                 {address}
               </span>
 
-              <div className="flex items-center gap-1.5 text-xs font-bold text-muted-foreground group-hover/address:text-foreground transition-all ml-3 flex-shrink-0">
+              <div className="text-muted-foreground group-hover/address:text-foreground ml-3 flex flex-shrink-0 items-center gap-1.5 text-xs font-bold transition-all">
                 {copied ? (
                   <>
                     <FaCheck className="size-3 text-emerald-400" />
@@ -261,37 +265,40 @@ export function CryptoDetailTab({
           </div>
         </div>
 
-        {/* Right Column: QR Code & Warning */}
-        <div className="flex flex-col items-center gap-4 w-full">
-          {/* QR Code */}
-          <div className="relative flex size-48 sm:size-52 items-center justify-center rounded-2xl border border-border bg-white p-3 shadow-md shadow-black/5 group/crypto-qr transition hover:scale-[1.02]">
-            <div className="absolute -top-[1px] -left-[1px] h-3.5 w-3.5 rounded-tl-xl border-t-2 border-l-2 border-accent" />
-            <div className="absolute -top-[1px] -right-[1px] h-3.5 w-3.5 rounded-tr-xl border-t-2 border-r-2 border-accent" />
-            <div className="absolute -bottom-[1px] -left-[1px] h-3.5 w-3.5 rounded-bl-xl border-b-2 border-l-2 border-accent" />
-            <div className="absolute -bottom-[1px] -right-[1px] h-3.5 w-3.5 rounded-br-xl border-b-2 border-r-2 border-accent" />
+        {/* Cột phải: mã QR và cảnh báo */}
+        <div className="flex w-full flex-col items-center gap-4">
+          {/* Mã QR */}
+          <div className="border-border group/crypto-qr relative flex size-48 items-center justify-center rounded-2xl border bg-white p-3 shadow-md shadow-black/5 transition hover:scale-[1.02] sm:size-52">
+            <div className="border-accent absolute -top-[1px] -left-[1px] h-3.5 w-3.5 rounded-tl-xl border-t-2 border-l-2" />
+            <div className="border-accent absolute -top-[1px] -right-[1px] h-3.5 w-3.5 rounded-tr-xl border-t-2 border-r-2" />
+            <div className="border-accent absolute -bottom-[1px] -left-[1px] h-3.5 w-3.5 rounded-bl-xl border-b-2 border-l-2" />
+            <div className="border-accent absolute -right-[1px] -bottom-[1px] h-3.5 w-3.5 rounded-br-xl border-r-2 border-b-2" />
 
             {qrCodeUrl ? (
               <img
                 src={qrCodeUrl}
-                alt={t("donate.cryptoAddressQrAlt", "{{name}} address QR Code", { name: selectedCrypto.name })}
+                alt={t('donate.cryptoAddressQrAlt', '{{name}} address QR Code', {
+                  name: selectedCrypto.name,
+                })}
                 className="size-full rounded-lg object-contain"
               />
             ) : (
-              <div className="size-full animate-pulse bg-stone-100 dark:bg-stone-850 rounded-lg" />
+              <div className="dark:bg-stone-850 size-full animate-pulse rounded-lg bg-stone-100" />
             )}
           </div>
 
-          {/* Warning note */}
-          <div className="rounded-xl border border-amber-500/20 bg-amber-500/5 p-4 text-left w-full">
-            <p className="text-xs font-bold text-amber-500 flex items-center gap-1.5">
-              ⚠️ {t("donate.warningLabel", "Only send {{name}} to this address", {
+          {/* Ghi chú cảnh báo */}
+          <div className="w-full rounded-xl border border-amber-500/20 bg-amber-500/5 p-4 text-left">
+            <p className="flex items-center gap-1.5 text-xs font-bold text-amber-500">
+              ⚠️{' '}
+              {t('donate.warningLabel', 'Only send {{name}} to this address', {
                 name: selectedCrypto.name,
               })}
             </p>
-            <p className="mt-1 text-[10px] text-muted-foreground leading-relaxed">
+            <p className="text-muted-foreground mt-1 text-[10px] leading-relaxed">
               {t(
-                "donate.warningDesc",
-                "Only send {{name}} using the {{network}} network. Sending any other asset will result in permanent loss.",
+                'donate.warningDesc',
+                'Only send {{name}} using the {{network}} network. Sending any other asset will result in permanent loss.',
                 {
                   name: selectedCrypto.name,
                   network: selectedNetwork ? selectedNetwork.networkName : selectedCrypto.network,

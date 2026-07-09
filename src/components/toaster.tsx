@@ -42,7 +42,7 @@ function ToastItem({ toast }: { toast: Toast }) {
   };
 
   const handleToastClick = (e: React.MouseEvent) => {
-    // If the click is inside a button or link, ignore it
+    // Nếu cú nhấp nằm trong nút hoặc liên kết thì bỏ qua.
     if ((e.target as HTMLElement).closest('button, a')) {
       return;
     }
