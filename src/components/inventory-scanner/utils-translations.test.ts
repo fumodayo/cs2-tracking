@@ -10,6 +10,7 @@ const translations: Record<string, string> = {
   'inventoryScanner.apiErrors.cannotReadScanProgress': 'Cannot read progress',
   'inventoryScanner.apiErrors.scanTimeout': 'Scan timed out',
   'inventoryScanner.apiErrors.steamHttpError': 'Steam HTTP {{status}}',
+  'inventoryScanner.apiErrors.steamRateLimited': 'Steam server rate limited',
   'inventoryScanner.apiErrors.tooManyRequests': 'Too many requests',
 };
 
@@ -40,6 +41,7 @@ describe('inventory scanner translations', () => {
 
   it('translates steam HTTP errors directly', () => {
     expect(translateAccountError('steamHttpError:status=500', t)).toBe('Steam HTTP 500');
+    expect(translateAccountError('steamRateLimited', t)).toBe('Steam server rate limited');
   });
 
   it('falls back to raw backend messages instead of exposing missing i18n keys', () => {

@@ -1,5 +1,6 @@
 import { getDatabase } from '@/infrastructure/db/mongo-client';
 import { updateScanJob } from '@/services/scan-job-store';
+import { fetchSteamWithRateLimitRetry } from '@/services/steam-fetch-retry';
 import { fetchWithTimeout } from '@/utils/fetch-with-timeout';
 
 const STEAM_INVENTORY_FETCH_TIMEOUT_MS = 25_000;
@@ -137,6 +138,7 @@ export async function fetchSteamInventorySnapshot({
       }
 
       const response = await fetchInventoryPage({
+        jobId,
         inventoryUrl,
         steamHeaders,
         contextId,
@@ -162,6 +164,9 @@ export async function fetchSteamInventorySnapshot({
           break;
         }
         if (assets.length > 0) break;
+        if (response.status === 429) {
+          throw new Error('steamRateLimited');
+        }
         throw new Error(`steamHttpError:status=${response.status}`);
       }
 
@@ -212,21 +217,35 @@ export async function fetchSteamInventorySnapshot({
 }
 
 async function fetchInventoryPage({
+  jobId,
   inventoryUrl,
   steamHeaders,
   contextId,
   hasPartialResults,
 }: {
+  jobId: string;
   inventoryUrl: string;
   steamHeaders: Record<string, string>;
   contextId: number;
   hasPartialResults: boolean;
 }): Promise<Response | null> {
   try {
-    return await fetchWithTimeout(
+    return await fetchSteamWithRateLimitRetry(
       inventoryUrl,
       { headers: steamHeaders },
-      STEAM_INVENTORY_FETCH_TIMEOUT_MS
+      STEAM_INVENTORY_FETCH_TIMEOUT_MS,
+      {
+        onRateLimitRetry: ({ nextAttempt, maxAttempts, delayMs }) => {
+          updateScanJob(jobId, {
+            message: 'steamRateLimitRetry',
+            detail: {
+              attempt: nextAttempt,
+              max: maxAttempts,
+              seconds: Math.ceil(delayMs / 1_000),
+            },
+          });
+        },
+      }
     );
   } catch (err) {
     if (contextId === 16) {
