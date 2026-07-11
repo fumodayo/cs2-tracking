@@ -1,7 +1,7 @@
 import { useState, useMemo, useRef, useCallback } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
-import { useLocalStorage } from '@/hooks/use-local-storage';
+import type { ClientSessionUser } from '@/components/auth/use-session';
 import { useImportStore, importStore, toast } from '@/stores';
 import { getErrorMessage } from '@/utils/error';
 import {
@@ -11,15 +11,23 @@ import {
 } from '@/components/portfolio';
 import type { PortfolioImportRow, ColumnMapping, MappingTemplate } from '@/components/portfolio';
 import { PORTFOLIO_QUERY_KEY, importPortfolioRows } from '@/lib/api-client/portfolio-api';
-import type { RecentImport } from '../recent-imports-popover';
+import type { RecentImport } from '@/types/recent-import';
 import { translateAccountError } from '@/components/inventory-scanner/utils';
+import { useSyncedExcelMappingTemplates } from './use-user-preferences';
 
 interface UseExcelImportProps {
+  user: ClientSessionUser | null;
+  sessionLoading: boolean;
   addRecentImport: (item: RecentImport) => void;
   setError: (error: string | null) => void;
 }
 
-export function useExcelImport({ addRecentImport, setError }: UseExcelImportProps) {
+export function useExcelImport({
+  user,
+  sessionLoading,
+  addRecentImport,
+  setError,
+}: UseExcelImportProps) {
   const queryClient = useQueryClient();
   const { t } = useTranslation();
   const importInputRef = useRef<HTMLInputElement | null>(null);
@@ -40,10 +48,10 @@ export function useExcelImport({ addRecentImport, setError }: UseExcelImportProp
     return autoSuggestMapping(mappingDialogData.headers);
   }, [mappingDialogData]);
 
-  const [savedTemplates, setSavedTemplates] = useLocalStorage<MappingTemplate[]>(
-    'cs2t_excelMappingTemplates',
-    []
-  );
+  const [savedTemplates, setSavedTemplates] = useSyncedExcelMappingTemplates({
+    user,
+    sessionLoading,
+  });
 
   const importMutation = useMutation({
     mutationFn: (rows: PortfolioImportRow[]) =>

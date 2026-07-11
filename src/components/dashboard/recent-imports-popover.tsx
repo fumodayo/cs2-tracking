@@ -1,12 +1,27 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { History, Loader2, RotateCcw, Info } from 'lucide-react';
 import * as Popover from '@radix-ui/react-popover';
-import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { formatRelative } from '@/utils/date';
 import { PORTFOLIO_QUERY_KEY } from '@/lib/api-client/portfolio-api';
+import type { ClientSessionUser } from '@/components/auth/use-session';
+import {
+  clearUserRecentImports,
+  deleteUserRecentImport,
+  fetchUserRecentImports,
+  mergeUserRecentImports,
+  saveUserRecentImport,
+  USER_RECENT_IMPORTS_QUERY_KEY,
+} from '@/lib/api-client/user-recent-imports-api';
+import { subscribeUserRecentImportsChanges } from '@/lib/api-client/user-recent-imports-realtime';
+import {
+  normalizeRecentImports,
+  type RecentImport,
+  type RecentImportItemDetail,
+} from '@/types/recent-import';
 
 import { Button } from '@/components/ui/button';
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
@@ -18,61 +33,174 @@ import {
   DialogDescription,
 } from '@/components/ui/dialog';
 
-export type RecentImportItemDetail = {
-  name: string;
-  quantity: number;
-  buyPrice: number;
-  buyDate?: string;
-  note?: string;
-  createdAt?: string;
-};
+export type { RecentImport, RecentImportItemDetail };
 
-export type RecentImport = {
-  id: string;
-  fileName: string;
-  date: string;
-  importedCount: number;
-  importedIds: string[];
-  items?: RecentImportItemDetail[];
+const LOCAL_RECENT_IMPORTS_KEY = 'cs2t_recentImports';
+
+type UseRecentImportsOptions = {
+  user: ClientSessionUser | null;
+  sessionLoading: boolean;
 };
 
 // eslint-disable-next-line react-refresh/only-export-components
-export function useRecentImports() {
-  const [recentImports, setRecentImports] = useState<RecentImport[]>([]);
+export function useRecentImports({ user, sessionLoading }: UseRecentImportsOptions) {
+  const queryClient = useQueryClient();
+  const userId = user?.id ?? null;
+  const [localRecentImports, setLocalRecentImports] = useState<RecentImport[]>(() =>
+    readLocalRecentImports()
+  );
+  const migratedForUserRef = useRef<string | null>(null);
+  const setRecentImports = setLocalRecentImports;
 
   useEffect(() => {
     try {
-      const saved = localStorage.getItem('cs2t_recentImports');
-      if (saved) {
-        setRecentImports(JSON.parse(saved));
-      }
+      setRecentImports(readLocalRecentImports());
     } catch {
       // Bỏ qua lỗi đọc lịch sử import đã lưu.
     }
-  }, []);
+  }, [setRecentImports]);
+
+  const recentImportsQuery = useQuery({
+    queryKey: USER_RECENT_IMPORTS_QUERY_KEY,
+    queryFn: fetchUserRecentImports,
+    enabled: Boolean(userId) && !sessionLoading,
+    staleTime: 60 * 1000,
+    retry: false,
+  });
+
+  const serverRecentImports = useMemo(
+    () => recentImportsQuery.data ?? [],
+    [recentImportsQuery.data]
+  );
+  const recentImports = userId ? serverRecentImports : localRecentImports;
+
+  useEffect(() => {
+    if (!userId || sessionLoading) return;
+
+    return subscribeUserRecentImportsChanges(() => {
+      void fetchUserRecentImports()
+        .then((items) => {
+          queryClient.setQueryData(USER_RECENT_IMPORTS_QUERY_KEY, items);
+        })
+        .catch((error) => {
+          console.error('Failed to refresh realtime recent imports:', error);
+          void queryClient.invalidateQueries({ queryKey: USER_RECENT_IMPORTS_QUERY_KEY });
+        });
+    });
+  }, [queryClient, sessionLoading, userId]);
+
+  useEffect(() => {
+    if (!userId || sessionLoading || recentImportsQuery.data === undefined) return;
+    if (migratedForUserRef.current === userId) return;
+    migratedForUserRef.current = userId;
+
+    const local = readLocalRecentImports();
+    if (local.length === 0) return;
+
+    const merged = mergeRecentImports(serverRecentImports, local);
+    window.localStorage.removeItem(LOCAL_RECENT_IMPORTS_KEY);
+    setLocalRecentImports([]);
+    queryClient.setQueryData(USER_RECENT_IMPORTS_QUERY_KEY, merged);
+
+    void mergeUserRecentImports(local)
+      .then((items) => {
+        queryClient.setQueryData(USER_RECENT_IMPORTS_QUERY_KEY, items);
+      })
+      .catch((error) => {
+        console.error('Failed to migrate recent imports:', error);
+      });
+  }, [queryClient, recentImportsQuery.data, serverRecentImports, sessionLoading, userId]);
 
   const addRecentImport = (newImport: RecentImport) => {
+    if (userId) {
+      queryClient.setQueryData<RecentImport[]>(USER_RECENT_IMPORTS_QUERY_KEY, (prev = []) =>
+        mergeRecentImports([newImport], prev)
+      );
+
+      void saveUserRecentImport(newImport)
+        .then((items) => {
+          queryClient.setQueryData(USER_RECENT_IMPORTS_QUERY_KEY, items);
+        })
+        .catch((error) => {
+          console.error('Failed to persist recent import:', error);
+        });
+      return;
+    }
+
     setRecentImports((prev) => {
       const next = [newImport, ...prev].slice(0, 10); // Giữ 10 lần gần nhất
-      localStorage.setItem('cs2t_recentImports', JSON.stringify(next));
+      writeLocalRecentImports(next);
       return next;
     });
   };
 
   const removeRecentImport = (id: string) => {
+    if (userId) {
+      queryClient.setQueryData<RecentImport[]>(USER_RECENT_IMPORTS_QUERY_KEY, (prev = []) =>
+        prev.filter((x) => x.id !== id)
+      );
+
+      void deleteUserRecentImport(id)
+        .then((items) => {
+          queryClient.setQueryData(USER_RECENT_IMPORTS_QUERY_KEY, items);
+        })
+        .catch((error) => {
+          console.error('Failed to remove recent import:', error);
+        });
+      return;
+    }
+
     setRecentImports((prev) => {
       const next = prev.filter((x) => x.id !== id);
-      localStorage.setItem('cs2t_recentImports', JSON.stringify(next));
+      writeLocalRecentImports(next);
       return next;
     });
   };
 
   const clearAll = () => {
+    if (userId) {
+      queryClient.setQueryData(USER_RECENT_IMPORTS_QUERY_KEY, []);
+      void clearUserRecentImports()
+        .then((items) => {
+          queryClient.setQueryData(USER_RECENT_IMPORTS_QUERY_KEY, items);
+        })
+        .catch((error) => {
+          console.error('Failed to clear recent imports:', error);
+        });
+      return;
+    }
+
     setRecentImports([]);
-    localStorage.removeItem('cs2t_recentImports');
+    window.localStorage.removeItem(LOCAL_RECENT_IMPORTS_KEY);
   };
 
   return { recentImports, addRecentImport, removeRecentImport, clearAll };
+}
+
+function readLocalRecentImports(): RecentImport[] {
+  if (typeof window === 'undefined') return [];
+
+  try {
+    const saved = window.localStorage.getItem(LOCAL_RECENT_IMPORTS_KEY);
+    return saved ? normalizeRecentImports(JSON.parse(saved)) : [];
+  } catch {
+    return [];
+  }
+}
+
+function writeLocalRecentImports(items: RecentImport[]): void {
+  if (typeof window === 'undefined') return;
+  window.localStorage.setItem(LOCAL_RECENT_IMPORTS_KEY, JSON.stringify(items));
+}
+
+function mergeRecentImports(...groups: RecentImport[][]): RecentImport[] {
+  const byId = new Map<string, RecentImport>();
+
+  for (const item of groups.flat()) {
+    byId.set(item.id, item);
+  }
+
+  return normalizeRecentImports(Array.from(byId.values()));
 }
 
 export function RecentImportsPopover({
