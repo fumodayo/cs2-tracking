@@ -17,6 +17,7 @@ import { FadeIn } from '@/components/ui/animation';
 import { RecentImportsPopover } from './recent-imports-popover';
 import { SteamAccountsCard } from '@/components/steam-accounts';
 import { Button } from '@/components/ui/button';
+import { HeroBackground } from '@/components/ui/hero-background';
 
 export function Dashboard() {
   const router = useRouter();
@@ -131,10 +132,7 @@ export function Dashboard() {
   return (
     <div>
       <section className="relative min-h-[21rem] overflow-hidden border-b border-stone-800">
-        <div
-          className="absolute inset-0 bg-cover bg-center opacity-55"
-          style={{ backgroundImage: "url('/assets/dashboard-banner.png')" }}
-        />
+        <HeroBackground opacityClassName="opacity-55" />
         <div className="from-hero-scrim via-hero-scrim absolute inset-0 bg-gradient-to-r to-transparent" />
         <div className="relative mx-auto flex max-w-7xl flex-col justify-end px-4 pt-16 pb-8 sm:px-6 lg:px-8">
           <div className="max-w-3xl">

@@ -8,6 +8,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { CheckCircle, Clock, User, Eye, RefreshCw, AlertCircle, Check } from 'lucide-react';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
+import { HeroBackground } from '@/components/ui/hero-background';
 import {
   Dialog,
   DialogContent,
@@ -164,10 +165,7 @@ export function AdminBugReportsClient() {
     <main className="min-h-screen pb-16">
       {/* Banner / Header */}
       <section className="relative min-h-[12rem] overflow-hidden border-b border-stone-800">
-        <div
-          className="absolute inset-0 bg-cover bg-center opacity-30"
-          style={{ backgroundImage: "url('/assets/dashboard-banner.png')" }}
-        />
+        <HeroBackground opacityClassName="opacity-30" />
         <div className="from-hero-scrim via-hero-scrim absolute inset-0 bg-gradient-to-r to-transparent" />
         <div className="relative mx-auto flex max-w-7xl flex-col justify-end px-4 pt-12 pb-6 sm:px-6 lg:px-8">
           <div className="max-w-3xl">

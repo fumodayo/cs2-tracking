@@ -57,7 +57,7 @@ const nextConfig: NextConfig = {
           },
           {
             key: 'Content-Security-Policy',
-            value: `default-src 'self'; ${scriptSrc} style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://cdn.jsdelivr.net; img-src 'self' data: blob: https://community.cloudflare.steamstatic.com https://avatars.steamstatic.com https://avatars.akamai.steamstatic.com https://res.cloudinary.com https://*.googleusercontent.com; font-src 'self' https://fonts.gstatic.com https://cdn.jsdelivr.net; connect-src 'self' https://api.cs2c.app https://api.coingecko.com https://*.ably.io wss://*.ably.io; frame-src 'none'; object-src 'none'; base-uri 'self'; form-action 'self';`,
+            value: `default-src 'self'; ${scriptSrc} style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; img-src 'self' data: blob: https://community.cloudflare.steamstatic.com https://avatars.steamstatic.com https://avatars.akamai.steamstatic.com https://res.cloudinary.com https://*.googleusercontent.com; font-src 'self' https://fonts.gstatic.com; connect-src 'self' https://api.cs2c.app https://api.coingecko.com https://*.ably.io wss://*.ably.io; frame-src 'none'; object-src 'none'; base-uri 'self'; form-action 'self';`,
           },
         ],
       },
