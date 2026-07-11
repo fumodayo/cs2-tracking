@@ -5,6 +5,8 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
 import { toast } from '@/stores';
 import { getErrorMessage } from '@/utils/error';
+import { PORTFOLIO_QUERY_KEY } from '@/lib/api-client/portfolio-api';
+import { translateAccountError } from '@/components/inventory-scanner/utils';
 import {
   fetchSteamAccounts,
   addSteamAccount,
@@ -63,22 +65,24 @@ export function useAccountCRUD({ reportQuery }: UseAccountCRUDProps) {
     },
     onError: (err) => {
       toast.error(t('dashboard.accountLinkError'), {
-        description: getErrorMessage(err),
+        description: translateAccountError(getErrorMessage(err), t),
       });
     },
   });
 
   const deleteAccountMutation = useMutation({
     mutationFn: (id: string) => deleteSteamAccount(id, t('dashboard.cannotDeleteAccount')),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: STEAM_ACCOUNTS_QUERY_KEY });
-      queryClient.invalidateQueries({ queryKey: ['portfolio-storage-units'] });
-      reportQuery.refetch();
+    onSuccess: async () => {
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: STEAM_ACCOUNTS_QUERY_KEY }),
+        queryClient.invalidateQueries({ queryKey: ['portfolio-storage-units'] }),
+        queryClient.invalidateQueries({ queryKey: PORTFOLIO_QUERY_KEY }),
+      ]);
       toast.success(t('dashboard.accountUnlinked'));
     },
     onError: (err) => {
       toast.error(t('dashboard.accountUnlinkError'), {
-        description: getErrorMessage(err),
+        description: translateAccountError(getErrorMessage(err), t),
       });
     },
   });

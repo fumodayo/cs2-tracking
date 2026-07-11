@@ -18,6 +18,7 @@ import { RecentImportsPopover } from './recent-imports-popover';
 import { SteamAccountsCard } from '@/components/steam-accounts';
 import { Button } from '@/components/ui/button';
 import { HeroBackground } from '@/components/ui/hero-background';
+import { getCurrentFilteredRows } from './summary-rows';
 
 export function Dashboard() {
   const router = useRouter();
@@ -85,6 +86,10 @@ export function Dashboard() {
     if (!accountsQuery.data) return 0;
     return accountsQuery.data.reduce((sum, acc) => sum + (acc.walletBalanceVnd ?? 0), 0);
   }, [accountsQuery.data]);
+  const currentFilteredRows = useMemo(
+    () => getCurrentFilteredRows(report, filteredRows),
+    [report, filteredRows]
+  );
 
   const [isDragOver, setIsDragOver] = useState(false);
   const [redirecting, setRedirecting] = useState(false);
@@ -278,8 +283,8 @@ export function Dashboard() {
             <SummaryCards
               user={user}
               sessionLoading={sessionLoading}
-              computedRows={filteredRows ?? undefined}
-              summary={filteredRows === null ? report.summary : undefined}
+              computedRows={currentFilteredRows ?? undefined}
+              summary={currentFilteredRows === null ? report.summary : undefined}
               steamWalletTotal={steamWalletTotal}
               buffCnyToVndRate={buffCnyToVndRate}
               onUpdateBuffRate={handleUpdateBuffRate}

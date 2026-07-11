@@ -4,7 +4,7 @@ import { useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import { toast } from '@/stores';
 import { ScanResultItem } from '../types';
-import { getLocalApiKey } from '../utils';
+import { getLocalApiKey, translateAccountError } from '../utils';
 import { ScannerState, ScannerAction } from '../scanner-reducer';
 import { updateUserBuffPrice } from '@/lib/api-client/user-buff-prices-api';
 
@@ -97,7 +97,7 @@ export function useBuffPricing({
         if (!response.ok) {
           throw new Error(
             data.message
-              ? t(`inventoryScanner.apiErrors.${data.message}`) || data.message
+              ? translateAccountError(data.message, t)
               : t('inventoryScanner.apiErrors.buffGeneric', 'Cannot fetch BUFF163 price.')
           );
         }

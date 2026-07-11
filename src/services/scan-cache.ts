@@ -2,6 +2,7 @@ import { getDatabase } from '@/infrastructure/db/mongo-client';
 import type { StorageUnitInfo } from '@/domain/storage-unit';
 import type { PatternInfo } from '@/domain/pattern-info';
 import type { Cs2InventoryItemType } from '@/utils/cs2-item-type';
+import { SCAN_CACHE_STALE_RETENTION_SECONDS } from '@/services/scan-cache-policy';
 
 export type SteamProfile = {
   name: string;
@@ -86,11 +87,36 @@ export function getNextExpiry(): Date {
   return new Date(todayUtc14.getTime() + 24 * 60 * 60 * 1000); // Ngày mai lúc 14:00 giờ VN.
 }
 
-export async function ensureCacheIndexes() {
+export async function ensureCacheIndexes(): Promise<void> {
   const db = await getDatabase();
   const col = db.collection(COLLECTION_NAME);
-  // Index TTL — MongoDB kiểm tra khoảng mỗi 60s và xóa document có expiresAt < now
-  await col.createIndex({ expiresAt: 1 }, { expireAfterSeconds: 0 }).catch(() => {});
+
+  try {
+    const indexes = await col
+      .listIndexes()
+      .toArray()
+      .catch(() => []);
+    const expiryIndex = indexes.find(
+      (index) => index.key?.expiresAt === 1 && Object.keys(index.key).length === 1
+    );
+
+    if (
+      expiryIndex?.name &&
+      expiryIndex.expireAfterSeconds !== SCAN_CACHE_STALE_RETENTION_SECONDS
+    ) {
+      await col.dropIndex(expiryIndex.name);
+    }
+
+    if (expiryIndex?.expireAfterSeconds !== SCAN_CACHE_STALE_RETENTION_SECONDS) {
+      await col.createIndex(
+        { expiresAt: 1 },
+        { expireAfterSeconds: SCAN_CACHE_STALE_RETENTION_SECONDS }
+      );
+    }
+  } catch (error) {
+    console.warn('[MongoDB] Failed to ensure inventory scan cache TTL index:', error);
+  }
+
   await col.createIndex({ steamId64: 1 }).catch(() => {});
   await col.createIndex({ cacheKey: 1 }).catch(() => {});
   await col.createIndex({ ownerId: 1, steamId64: 1, hasCookie: 1 }).catch(() => {});

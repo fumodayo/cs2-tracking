@@ -4,12 +4,21 @@ type ProgressDetail = Record<string, string | number | boolean | undefined>;
 
 function parseStructuredParams(value: string): Record<string, string> {
   const params: Record<string, string> = {};
+  let currentKey: string | null = null;
+
   for (const part of value.split(',')) {
-    const [key, paramValue] = part.split('=');
-    if (key && paramValue) {
+    const separatorIndex = part.indexOf('=');
+    const key = separatorIndex > 0 ? part.slice(0, separatorIndex).trim() : '';
+
+    if (separatorIndex > 0 && /^[A-Za-z][A-Za-z0-9_]*$/.test(key)) {
+      const paramValue = part.slice(separatorIndex + 1);
       params[key] = paramValue;
+      currentKey = key;
+    } else if (currentKey) {
+      params[currentKey] += `,${part}`;
     }
   }
+
   return params;
 }
 

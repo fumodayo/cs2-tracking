@@ -1,4 +1,5 @@
 import { Db } from 'mongodb';
+import { SCAN_CACHE_STALE_RETENTION_SECONDS } from '@/services/scan-cache-policy';
 
 export async function ensureIndexes(db: Db): Promise<void> {
   console.log('[MongoDB] Bootstrapping indexes...');
@@ -32,7 +33,11 @@ export async function ensureIndexes(db: Db): Promise<void> {
     createSafeIndex('portfolio_realtime_events', { createdAt: 1 }, { expireAfterSeconds: 3600 }),
     createSafeIndex('bug_reports', { createdAt: -1 }),
     createSafeIndex('bug_reports', { status: 1 }),
-    createSafeIndex('inventory_scan_cache', { expiresAt: 1 }, { expireAfterSeconds: 0 }),
+    createSafeIndex(
+      'inventory_scan_cache',
+      { expiresAt: 1 },
+      { expireAfterSeconds: SCAN_CACHE_STALE_RETENTION_SECONDS }
+    ),
     createSafeIndex('inventory_scan_cache', { steamId64: 1 }),
     createSafeIndex('inventory_scan_cache', { cacheKey: 1 }),
     createSafeIndex('inventory_scan_cache', { ownerId: 1, steamId64: 1, hasCookie: 1 }),

@@ -1,0 +1,1 @@
+export const SCAN_CACHE_STALE_RETENTION_SECONDS = 24 * 60 * 60;

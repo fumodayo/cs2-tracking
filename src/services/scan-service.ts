@@ -18,6 +18,7 @@ import {
   persistScanAccountCookieError,
   persistSuccessfulScanAccountState,
 } from '@/services/scan-service-account-state';
+import { buildFailedLiveScanFallbackScopes } from '@/services/scan-cache-fallback';
 import { analyzeSteamInventoryItems } from '@/services/scan-service-inventory-analysis';
 import {
   buildSteamCookieHeader,
@@ -342,25 +343,30 @@ export async function runScanJob(
     if (steamId64) {
       try {
         // Nếu fetch Steam trực tiếp fail, trả cache hết hạn gần nhất để UI vẫn dùng được.
-        const expiredCache = await getCachedScan(
-          { steamId64, ownerId, hasCookie: requestHasCookie },
-          { ignoreExpiry: true }
-        );
-        if (expiredCache) {
-          console.warn(
-            `[InventoryScanner] Live scan failed, falling back to cache for ${steamId64}. Error:`,
-            err
-          );
-          updateScanJob(jobId, {
-            status: 'done',
-            percent: 100,
-            message: 'fallbackToCache',
-            result: buildCachedScanJobResult({
-              cached: expiredCache,
-              includePrivateFields: requestHasCookie,
-            }),
-          });
-          return;
+        const fallbackScopes = buildFailedLiveScanFallbackScopes({
+          steamId64,
+          ownerId,
+          requestHasCookie,
+        });
+
+        for (const fallback of fallbackScopes) {
+          const expiredCache = await getCachedScan(fallback.scope, { ignoreExpiry: true });
+          if (expiredCache) {
+            console.warn(
+              `[InventoryScanner] Live scan failed, falling back to cache for ${steamId64}. Error:`,
+              err
+            );
+            updateScanJob(jobId, {
+              status: 'done',
+              percent: 100,
+              message: 'fallbackToCache',
+              result: buildCachedScanJobResult({
+                cached: expiredCache,
+                includePrivateFields: fallback.includePrivateFields,
+              }),
+            });
+            return;
+          }
         }
       } catch (fallbackErr) {
         console.error('Failed to fetch expired cache fallback:', fallbackErr);
