@@ -1,4 +1,4 @@
-﻿import { useMemo, useState, memo } from 'react';
+import { useMemo, useState, memo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Loader2, Trash2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -131,31 +131,31 @@ export const SellSelectedDialogItemRow = memo(
 
     return (
       <div
-        className={`relative flex gap-4 overflow-hidden rounded-[2px] border py-3.5 pr-4 pl-4 transition-all duration-300 ${
+        className={`relative flex gap-4 overflow-hidden rounded-xl border py-4 pr-4 pl-4 transition-all duration-300 ${
           isLoading
-            ? 'pointer-events-none border-rose-500/10 bg-stone-950/20 opacity-40'
+            ? 'pointer-events-none border-stone-900 bg-stone-950/20 opacity-40'
             : hasBuff
-              ? 'border-stone-850 bg-stone-900/10 hover:border-amber-500/40 hover:bg-stone-900/15 hover:shadow-[0_0_15px_rgba(245,158,11,0.03)]'
+              ? 'border-amber-500/10 bg-amber-500/[0.02] hover:border-amber-500/35 hover:bg-amber-500/[0.04] hover:shadow-[0_0_20px_rgba(245,158,11,0.04)]'
               : isFullSell
-                ? 'border-stone-850 bg-stone-900/10 hover:border-rose-500/40 hover:bg-stone-900/15 hover:shadow-[0_0_15px_rgba(244,63,94,0.03)]'
-                : 'border-stone-850 bg-stone-900/10 hover:border-blue-500/40 hover:bg-stone-900/15 hover:shadow-[0_0_15px_rgba(59,130,246,0.03)]'
+                ? 'border-rose-500/10 bg-rose-500/[0.02] hover:border-rose-500/35 hover:bg-rose-500/[0.04] hover:shadow-[0_0_20px_rgba(244,63,94,0.04)]'
+                : 'border-blue-500/10 bg-blue-500/[0.02] hover:border-blue-500/35 hover:bg-blue-500/[0.04] hover:shadow-[0_0_20px_rgba(59,130,246,0.04)]'
         }`}
       >
         {/* Custom decorative technical indicator line */}
         <div
-          className={`absolute top-0 bottom-0 left-0 w-[3px] transition-all ${
+          className={`absolute top-0 bottom-0 left-0 w-1 rounded-r-md transition-all duration-300 ${
             isLoading
-              ? 'bg-stone-800'
+              ? 'bg-stone-850'
               : hasBuff
-                ? 'bg-gradient-to-b from-amber-500 to-amber-600/30'
+                ? 'bg-amber-500 shadow-[2px_0_12px_rgba(245,158,11,0.3)]'
                 : isFullSell
-                  ? 'bg-gradient-to-b from-rose-500 to-rose-600/30'
-                  : 'bg-gradient-to-b from-blue-500 to-blue-600/30'
+                  ? 'bg-rose-500 shadow-[2px_0_12px_rgba(244,63,94,0.3)]'
+                  : 'bg-blue-500 shadow-[2px_0_12px_rgba(59,130,246,0.3)]'
           }`}
         />
 
         {/* Left Column: Big Thumbnail */}
-        <div className="group border-stone-850 relative mt-0.5 flex h-[72px] w-[72px] shrink-0 items-center justify-center self-start rounded-[2px] border bg-stone-950 p-1.5 shadow-inner">
+        <div className="group relative mt-0.5 flex h-[72px] w-[72px] shrink-0 items-center justify-center self-start rounded-lg border border-stone-800/80 bg-stone-950 p-1.5 shadow-inner transition-colors hover:border-stone-700">
           <CaseThumbnail imageUrl={item.case.imageUrl} name={item.case.name} size="lg" />
         </div>
 
@@ -163,7 +163,7 @@ export const SellSelectedDialogItemRow = memo(
         <div className="flex min-w-0 flex-1 flex-col gap-3">
           {/* Row 1: Item Header (Name, Sell Button, Profit Badge and Exclude Button) */}
           <div className="flex items-center justify-between gap-4">
-            {/* Left: Name, Sell button, and LÃ£i/Lá»— rÃ²ng badge */}
+            {/* Left: Name, Sell button, and Lãi/Lỗ ròng badge */}
             <div className="flex min-w-0 flex-1 items-center gap-3">
               <p
                 className="truncate text-xs leading-tight font-extrabold tracking-wide text-stone-200 transition-colors hover:text-blue-400 sm:text-sm"
@@ -184,7 +184,7 @@ export const SellSelectedDialogItemRow = memo(
                     itemName: item.case.name,
                   });
                 }}
-                className={`bg-card/50 h-7 shrink-0 rounded-[2px] border px-2.5 font-mono text-[10px] font-bold tracking-wider uppercase transition-all duration-200 ${
+                className={`bg-card/50 h-7 shrink-0 rounded-lg border px-3 font-mono text-[10px] font-bold tracking-wider uppercase transition-all duration-200 ${
                   hasBuff
                     ? 'border-amber-500/20 text-amber-400 hover:border-amber-500/40 hover:bg-amber-500/10 hover:text-amber-300'
                     : isFullSell
@@ -201,10 +201,10 @@ export const SellSelectedDialogItemRow = memo(
 
               {/* Item Profit/Loss Badge */}
               <div
-                className={`flex h-6 shrink-0 items-center justify-center rounded-[2px] border px-2.5 font-mono text-[10px] font-black shadow-sm transition-all duration-300 select-none ${
+                className={`flex h-6 shrink-0 items-center justify-center rounded-full border px-2.5 font-mono text-[9px] font-black shadow-sm transition-all duration-300 select-none ${
                   rowProfitPositive
-                    ? 'bg-emerald-955/20 border-emerald-500/30 text-emerald-400 shadow-[0_0_8px_rgba(16,185,129,0.06)]'
-                    : 'bg-rose-955/20 border-rose-500/30 text-rose-400 shadow-[0_0_8px_rgba(244,63,94,0.06)]'
+                    ? 'bg-emerald-955/20 border-emerald-500/25 text-emerald-400 shadow-[0_0_8px_rgba(16,185,129,0.06)]'
+                    : 'bg-rose-955/20 border-rose-500/25 text-rose-400 shadow-[0_0_8px_rgba(244,63,94,0.06)]'
                 }`}
               >
                 {rowProfitPositive ? '+' : ''}
@@ -218,7 +218,7 @@ export const SellSelectedDialogItemRow = memo(
                 type="button"
                 onClick={() => excludeItem(item.id)}
                 title={t('portfolio.deselectItem', 'Deselect Item')}
-                className="border-stone-850 bg-card/50 hover:bg-rose-955/20 flex h-8 w-8 cursor-pointer items-center justify-center rounded-[2px] border text-stone-500 transition-all hover:border-rose-500/30 hover:text-rose-400"
+                className="border-stone-850 hover:bg-rose-955/20 flex h-8 w-8 cursor-pointer items-center justify-center rounded-lg border bg-stone-950/40 text-stone-500 transition-all hover:border-rose-500/30 hover:text-rose-400"
               >
                 <Trash2 className="size-3.5" />
               </button>
@@ -239,7 +239,7 @@ export const SellSelectedDialogItemRow = memo(
 
           {/* Account Ownership breakdown */}
           {allocatedAccounts.length > 0 && (
-            <div className="flex flex-col gap-1 border-t border-stone-900 pt-2.5">
+            <div className="flex flex-col gap-1.5 border-t border-stone-900/60 pt-2.5">
               <span className="font-mono text-[9px] font-bold tracking-widest text-stone-500">
                 {t('portfolio.owningAccountsShort', 'Account')}
               </span>
@@ -255,7 +255,7 @@ export const SellSelectedDialogItemRow = memo(
                   return (
                     <div
                       key={acc.steamId64}
-                      className="bg-card/30 flex items-center gap-1.5 rounded-[2px] border border-stone-800 px-2.5 py-1 text-[9px] shadow-sm select-none"
+                      className="bg-stone-955/30 border-stone-850 flex items-center gap-1.5 rounded-lg border px-2.5 py-1 text-[9px] shadow-sm select-none"
                     >
                       <span className="font-sans font-bold text-stone-300">{acc.name}</span>
                       <span className="text-stone-800">|</span>
@@ -265,7 +265,7 @@ export const SellSelectedDialogItemRow = memo(
                       </span>
                       {onMarket > 0 && (
                         <>
-                          <span className="text-stone-800">â€¢</span>
+                          <span className="text-stone-800">•</span>
                           <span className="font-mono text-stone-500">
                             {t('portfolio.onMarket', 'On Market')}:{' '}
                             <strong className="font-extrabold text-blue-400">{onMarket}</strong>
@@ -274,7 +274,7 @@ export const SellSelectedDialogItemRow = memo(
                       )}
                       {hold > 0 && (
                         <>
-                          <span className="text-stone-850">â€¢</span>
+                          <span className="text-stone-850">•</span>
                           <span className="font-mono text-stone-500">
                             {t('portfolio.hold', 'Hold')}:{' '}
                             <strong className="font-extrabold text-rose-400">{hold}</strong>
@@ -296,15 +296,15 @@ export const SellSelectedDialogItemRow = memo(
           />
 
           {/* Row 3: The Equation Flow */}
-          <div className="flex flex-wrap items-end justify-start gap-1.5 pt-1">
+          <div className="flex flex-wrap items-end justify-start gap-2 pt-1.5">
             {hasBuff ? (
               <>
                 {/* Input CNY Price */}
-                <div className="flex w-[7.5rem] flex-col gap-1">
+                <div className="flex w-[8rem] flex-col gap-1.5">
                   <label className="font-mono text-[9px] font-bold tracking-widest text-stone-500">
                     {t('portfolio.buffCnyPrice', 'BUFF Price (CNY)')}
                   </label>
-                  <div className="bg-card/50 flex h-8 items-center rounded-[2px] border border-stone-800 px-2.5 shadow-inner transition-all focus-within:border-amber-500/50 focus-within:ring-1 focus-within:ring-amber-500/20">
+                  <div className="flex h-9 items-center rounded-lg border border-stone-800 bg-stone-950/40 px-3 shadow-inner transition-all focus-within:border-amber-500/50 focus-within:ring-1 focus-within:ring-amber-500/20">
                     <input
                       type="number"
                       step="0.01"
@@ -317,22 +317,22 @@ export const SellSelectedDialogItemRow = memo(
                       }
                       className="w-full [appearance:textfield] bg-transparent text-right font-mono text-xs font-bold text-stone-100 outline-none [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
                     />
-                    <span className="ml-1.5 font-mono text-[9px] font-black text-amber-500 select-none">
-                      Â¥
+                    <span className="ml-2 font-mono text-[9px] font-black text-amber-500 select-none">
+                      ¥
                     </span>
                   </div>
                 </div>
 
-                <span className="flex h-8 items-center justify-center px-1 font-mono text-[10px] font-bold text-stone-600 select-none">
-                  Ã—
+                <span className="flex h-9 items-center justify-center px-1 font-mono text-[10px] font-bold text-stone-600 select-none">
+                  ×
                 </span>
 
                 {/* Input Rate CNY */}
-                <div className="flex w-[7.5rem] flex-col gap-1">
+                <div className="flex w-[8rem] flex-col gap-1.5">
                   <label className="font-mono text-[9px] font-bold tracking-widest text-stone-500">
-                    {t('portfolio.cnyRate', 'Tá»· giÃ¡ CNY')}
+                    {t('portfolio.cnyRate', 'Tỷ giá CNY')}
                   </label>
-                  <div className="bg-card/50 flex h-8 items-center rounded-[2px] border border-stone-800 px-2.5 shadow-inner transition-all focus-within:border-amber-500/50 focus-within:ring-1 focus-within:ring-amber-500/20">
+                  <div className="flex h-9 items-center rounded-lg border border-stone-800 bg-stone-950/40 px-3 shadow-inner transition-all focus-within:border-amber-500/50 focus-within:ring-1 focus-within:ring-amber-500/20">
                     <input
                       type="number"
                       value={buffRates[item.id] !== undefined ? buffRates[item.id] : ''}
@@ -344,8 +344,8 @@ export const SellSelectedDialogItemRow = memo(
                       }
                       className="text-stone-150 w-full [appearance:textfield] bg-transparent text-right font-mono text-xs font-bold outline-none [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
                     />
-                    <span className="ml-1.5 font-mono text-[9px] font-bold text-stone-500 select-none">
-                      Ä‘
+                    <span className="ml-2 font-mono text-[9px] font-bold text-stone-500 select-none">
+                      đ
                     </span>
                   </div>
                 </div>
@@ -353,14 +353,14 @@ export const SellSelectedDialogItemRow = memo(
                 {/* Sticker Rate Input Box (for BUFF items) */}
                 {stickerScanTotalPrice > 0 && (
                   <>
-                    <span className="flex h-8 items-center justify-center px-1 font-mono text-[10px] font-bold text-stone-600 select-none">
+                    <span className="flex h-9 items-center justify-center px-1 font-mono text-[10px] font-bold text-stone-600 select-none">
                       +
                     </span>
-                    <div className="flex w-[8.5rem] flex-col gap-1">
+                    <div className="flex w-[8.5rem] flex-col gap-1.5">
                       <label className="font-mono text-[9px] font-bold tracking-widest text-stone-500">
                         Sticker ({formatCurrency(stickerScanTotalPrice)})
                       </label>
-                      <div className="bg-card/50 flex h-8 items-center rounded-[2px] border border-stone-800 px-2.5 shadow-inner transition-all focus-within:border-emerald-500/50 focus-within:ring-1 focus-within:ring-emerald-500/20">
+                      <div className="flex h-9 items-center rounded-lg border border-stone-800 bg-stone-950/40 px-3 shadow-inner transition-all focus-within:border-emerald-500/50 focus-within:ring-1 focus-within:ring-emerald-500/20">
                         <input
                           type="number"
                           min="0"
@@ -370,7 +370,7 @@ export const SellSelectedDialogItemRow = memo(
                           disabled={isLoading}
                           className="text-stone-150 w-full [appearance:textfield] bg-transparent text-right font-mono text-xs font-black outline-none [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
                         />
-                        <span className="ml-1 text-[9px] font-bold text-stone-500 select-none">
+                        <span className="ml-2 text-[9px] font-bold text-stone-500 select-none">
                           %
                         </span>
                       </div>
@@ -378,34 +378,34 @@ export const SellSelectedDialogItemRow = memo(
                   </>
                 )}
 
-                <span className="flex h-8 items-center justify-center px-1 font-mono text-[10px] font-bold text-stone-600 select-none">
+                <span className="flex h-9 items-center justify-center px-1 font-mono text-[10px] font-bold text-stone-600 select-none">
                   =
                 </span>
 
                 {/* Calculated Unit Price VND */}
-                <div className="flex w-[7.5rem] flex-col gap-1">
+                <div className="flex w-[8rem] flex-col gap-1.5">
                   <label className="font-mono text-[9px] font-bold tracking-widest text-stone-500">
-                    {t('portfolio.sellPriceVnd', 'GiÃ¡ bÃ¡n')}
+                    {t('portfolio.sellPriceVnd', 'Giá bán')}
                   </label>
-                  <div className="flex h-8 items-center justify-end px-1 font-mono text-xs font-bold text-amber-400 select-none">
+                  <div className="flex h-9 items-center justify-end px-1 font-mono text-xs font-bold text-amber-400 select-none">
                     {formatCurrency(unitSell)}
                   </div>
                 </div>
 
                 {sellQty > 1 && (
                   <>
-                    <span className="flex h-8 items-center justify-center px-1 font-mono text-[10px] font-bold text-stone-600 select-none">
-                      â†’
+                    <span className="flex h-9 items-center justify-center px-1 font-mono text-[10px] font-bold text-stone-600 select-none">
+                      →
                     </span>
 
                     {/* Total calculated price for BUFF row */}
-                    <div className="flex w-[8.5rem] flex-col gap-1">
+                    <div className="flex w-[9.5rem] flex-col gap-1.5">
                       <label className="font-mono text-[9px] font-bold tracking-widest text-stone-500">
-                        {t('portfolio.totalQtyMoney', 'Tá»•ng tiá»n ({{count}})', {
+                        {t('portfolio.totalQtyMoney', 'Tổng tiền ({{count}})', {
                           count: sellQty,
                         })}
                       </label>
-                      <div className="flex h-8 items-center justify-end rounded-[2px] border border-amber-500/10 bg-amber-500/5 px-2.5 font-black text-amber-400 shadow-[0_2px_8px_rgba(245,158,11,0.05)] select-none">
+                      <div className="flex h-9 items-center justify-end rounded-lg border border-amber-500/15 bg-amber-500/5 px-3 font-black text-amber-400 shadow-[0_2px_8px_rgba(245,158,11,0.05)] select-none">
                         <span className="font-mono text-xs">{formatCurrency(rowCurrentValue)}</span>
                       </div>
                     </div>
@@ -415,28 +415,28 @@ export const SellSelectedDialogItemRow = memo(
             ) : (
               <>
                 {/* Price 1 Unit */}
-                <div className="flex w-[7.5rem] flex-col gap-1">
+                <div className="flex w-[8rem] flex-col gap-1.5">
                   <label className="font-mono text-[9px] font-bold tracking-widest text-stone-500">
-                    {t('portfolio.currentPrice', 'GiÃ¡ hiá»‡n táº¡i')}
+                    {t('portfolio.currentPrice', 'Giá hiện tại')}
                   </label>
-                  <div className="flex h-8 items-center justify-end px-1 font-mono text-xs font-semibold text-stone-300 select-none">
+                  <div className="flex h-9 items-center justify-end px-1 font-mono text-xs font-semibold text-stone-300 select-none">
                     {formatCurrency(unitCurrent)}
                   </div>
                 </div>
 
-                <span className="flex h-8 items-center justify-center px-1 font-mono text-[10px] font-bold text-stone-600 select-none">
-                  Ã—
+                <span className="flex h-9 items-center justify-center px-1 font-mono text-[10px] font-bold text-stone-600 select-none">
+                  ×
                 </span>
 
                 {/* Active Rate Input Box */}
-                <div className="flex w-[7.5rem] flex-col gap-1">
+                <div className="flex w-[8rem] flex-col gap-1.5">
                   <label className="font-mono text-[9px] font-bold tracking-widest text-stone-500">
                     {isFullSell
-                      ? t('portfolio.bulkRatePct', 'Tá»· lá»‡ bÃ¡n sá»‰ %')
-                      : t('portfolio.retailRatePct', 'Tá»· lá»‡ bÃ¡n láº» %')}
+                      ? t('portfolio.bulkRatePct', 'Tỷ lệ bán sỉ %')
+                      : t('portfolio.retailRatePct', 'Tỷ lệ bán lẻ %')}
                   </label>
                   <div
-                    className={`bg-card/50 flex h-8 items-center rounded-[2px] border px-2.5 shadow-inner transition-all ${
+                    className={`flex h-9 items-center rounded-lg border bg-stone-950/40 px-3 shadow-inner transition-all ${
                       isFullSell
                         ? 'border-stone-800 focus-within:border-rose-500/50 focus-within:ring-1 focus-within:ring-rose-500/20'
                         : 'border-stone-800 focus-within:border-blue-500/50 focus-within:ring-1 focus-within:ring-blue-500/20'
@@ -463,14 +463,14 @@ export const SellSelectedDialogItemRow = memo(
                 {/* Sticker Rate Input Box (for non-BUFF items) */}
                 {stickerScanTotalPrice > 0 && (
                   <>
-                    <span className="flex h-8 items-center justify-center px-1 font-mono text-[10px] font-bold text-stone-600 select-none">
+                    <span className="flex h-9 items-center justify-center px-1 font-mono text-[10px] font-bold text-stone-600 select-none">
                       +
                     </span>
-                    <div className="flex w-[8.5rem] flex-col gap-1">
+                    <div className="flex w-[8.5rem] flex-col gap-1.5">
                       <label className="font-mono text-[9px] font-bold tracking-widest text-stone-500">
                         Sticker ({formatCurrency(stickerScanTotalPrice)})
                       </label>
-                      <div className="bg-card/50 flex h-8 items-center rounded-[2px] border border-stone-800 px-2.5 shadow-inner transition-all focus-within:border-emerald-500/50 focus-within:ring-1 focus-within:ring-emerald-500/20">
+                      <div className="flex h-9 items-center rounded-lg border border-stone-800 bg-stone-950/40 px-3 shadow-inner transition-all focus-within:border-emerald-500/50 focus-within:ring-1 focus-within:ring-emerald-500/20">
                         <input
                           type="number"
                           min="0"
@@ -480,7 +480,7 @@ export const SellSelectedDialogItemRow = memo(
                           disabled={isLoading}
                           className="text-stone-150 w-full [appearance:textfield] bg-transparent text-right font-mono text-xs font-black outline-none [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
                         />
-                        <span className="ml-1 text-[9px] font-bold text-stone-500 select-none">
+                        <span className="ml-2 text-[9px] font-bold text-stone-500 select-none">
                           %
                         </span>
                       </div>
@@ -488,17 +488,17 @@ export const SellSelectedDialogItemRow = memo(
                   </>
                 )}
 
-                <span className="flex h-8 items-center justify-center px-1 font-mono text-[10px] font-bold text-stone-600 select-none">
+                <span className="flex h-9 items-center justify-center px-1 font-mono text-[10px] font-bold text-stone-600 select-none">
                   =
                 </span>
 
                 {/* Calculated Sell Price VND */}
-                <div className="flex w-[7.5rem] flex-col gap-1">
+                <div className="flex w-[8rem] flex-col gap-1.5">
                   <label className="font-mono text-[9px] font-bold tracking-widest text-stone-500">
-                    {t('portfolio.sellPriceVnd', 'GiÃ¡ bÃ¡n')}
+                    {t('portfolio.sellPriceVnd', 'Giá bán')}
                   </label>
                   <div
-                    className={`flex h-8 items-center justify-end px-1 font-mono text-xs font-bold select-none ${
+                    className={`flex h-9 items-center justify-end px-1 font-mono text-xs font-bold select-none ${
                       isFullSell ? 'text-rose-400' : 'text-blue-400'
                     }`}
                   >
@@ -508,22 +508,22 @@ export const SellSelectedDialogItemRow = memo(
 
                 {sellQty > 1 && (
                   <>
-                    <span className="flex h-8 items-center justify-center px-1 font-mono text-[10px] font-bold text-stone-600 select-none">
-                      â†’
+                    <span className="flex h-9 items-center justify-center px-1 font-mono text-[10px] font-bold text-stone-600 select-none">
+                      →
                     </span>
 
                     {/* Total calculated price for the row */}
-                    <div className="flex w-[8.5rem] flex-col gap-1">
+                    <div className="flex w-[9.5rem] flex-col gap-1.5">
                       <label className="font-mono text-[9px] font-bold tracking-widest text-stone-500">
-                        {t('portfolio.totalQtyMoney', 'Tá»•ng tiá»n ({{count}})', {
+                        {t('portfolio.totalQtyMoney', 'Tổng tiền ({{count}})', {
                           count: sellQty,
                         })}
                       </label>
                       <div
-                        className={`flex h-8 items-center justify-end rounded-[2px] border px-2.5 select-none ${
+                        className={`flex h-9 items-center justify-end rounded-lg border px-3 select-none ${
                           isFullSell
-                            ? 'border-rose-500/10 bg-rose-500/5 font-black text-rose-400 shadow-[0_2px_8px_rgba(244,63,94,0.05)]'
-                            : 'border-blue-500/10 bg-blue-500/5 font-black text-blue-400 shadow-[0_2px_8px_rgba(59,130,246,0.05)]'
+                            ? 'border-rose-500/15 bg-rose-500/5 font-black text-rose-400 shadow-[0_2px_8px_rgba(244,63,94,0.05)]'
+                            : 'border-blue-500/15 bg-blue-500/5 font-black text-blue-400 shadow-[0_2px_8px_rgba(59,130,246,0.05)]'
                         }`}
                       >
                         <span className="font-mono text-xs">{formatCurrency(rowCurrentValue)}</span>

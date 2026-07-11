@@ -1,9 +1,9 @@
-"use client";
+'use client';
 
-import { AlertCircle } from "lucide-react";
-import type { PortfolioTableRow } from "../../portfolio-table-model";
-import { SellSelectedDialogItemRow } from "../../sell-selected-dialog-item-row";
-import { motion, AnimatePresence } from "framer-motion";
+import { AlertCircle } from 'lucide-react';
+import type { PortfolioTableRow } from '../../portfolio-table-model';
+import { SellSelectedDialogItemRow } from '../../sell-selected-dialog-item-row';
+import { motion, AnimatePresence } from 'framer-motion';
 
 interface SellSelectedListProps {
   activeItems: PortfolioTableRow[];
@@ -66,13 +66,11 @@ export function SellSelectedList({
   const itemsCount = activeItems.length;
 
   return (
-    <div className="flex-1 overflow-y-auto min-h-0 scrollbar-thin scrollbar-thumb-stone-900 pr-1 space-y-2.5 pb-24">
+    <div className="min-h-0 flex-1 scrollbar-thin scrollbar-thumb-stone-900 space-y-2.5 overflow-y-auto pr-1 pb-24">
       {itemsCount === 0 ? (
-        <div className="flex flex-col items-center justify-center rounded-[2px] border border-dashed border-stone-800 bg-stone-955/20 py-20 text-center">
+        <div className="bg-stone-955/20 flex flex-col items-center justify-center rounded-xl border border-dashed border-stone-800 py-20 text-center">
           <AlertCircle className="mb-2 size-8 text-stone-600" />
-          <p className="text-sm font-semibold text-stone-300">
-            Không có vật phẩm nào được chọn
-          </p>
+          <p className="text-sm font-semibold text-stone-300">Không có vật phẩm nào được chọn</p>
           <p className="mt-1 font-mono text-xs text-stone-500">
             Đóng hộp thoại và tích chọn vật phẩm trên bảng chính để bắt đầu
           </p>
@@ -82,7 +80,8 @@ export function SellSelectedList({
           <AnimatePresence initial={false} mode="popLayout">
             {activeItems.map((item) => {
               const maxQty = item.quantity;
-              const sellQty = sellQuantities[item.id] !== undefined ? sellQuantities[item.id] : maxQty;
+              const sellQty =
+                sellQuantities[item.id] !== undefined ? sellQuantities[item.id] : maxQty;
               const isLoading = loadingIds.has(item.id);
 
               return (
@@ -93,7 +92,7 @@ export function SellSelectedList({
                   animate={{ opacity: 1, y: 0, scale: 1 }}
                   exit={{ opacity: 0, scale: 0.95, y: 15 }}
                   transition={{
-                    type: "spring",
+                    type: 'spring',
                     stiffness: 500,
                     damping: 38,
                     mass: 1,

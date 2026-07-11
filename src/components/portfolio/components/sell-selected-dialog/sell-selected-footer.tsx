@@ -28,7 +28,7 @@ export function SellSelectedFooter({
   if (itemsCount === 0) return null;
 
   return (
-    <div className="bg-card/95 absolute right-3 bottom-3 left-3 z-10 flex items-center justify-between gap-4 rounded-[2px] border border-stone-800 p-4 shadow-[0_8px_32px_rgba(0,0,0,0.15)] backdrop-blur-md dark:shadow-[0_8px_32px_rgba(0,0,0,0.8)]">
+    <div className="bg-card/95 border-stone-850 absolute right-3 bottom-3 left-3 z-10 flex items-center justify-between gap-4 rounded-xl border p-4 shadow-[0_8px_32px_rgba(0,0,0,0.25)] backdrop-blur-md dark:shadow-[0_8px_32px_rgba(0,0,0,0.85)]">
       <div className="flex items-center gap-6">
         {/* Chỉ số tổng giá trị hiện tại */}
         <div className="flex flex-col">
@@ -60,7 +60,7 @@ export function SellSelectedFooter({
                 .trim()}
             </span>
             <span
-              className={`rounded-[2px] border px-1.5 py-0.5 font-mono text-[9px] font-black ${
+              className={`rounded-full border px-2 py-0.5 font-mono text-[9px] font-black ${
                 metrics.profitAmount >= 0
                   ? 'bg-emerald-955/20 text-emerald-450 border-emerald-500/20'
                   : 'bg-rose-955/20 text-rose-450 border-rose-500/20'
@@ -77,7 +77,7 @@ export function SellSelectedFooter({
       <button
         onClick={onConfirmBulk}
         disabled={bulkLoading}
-        className="pointer-events-auto flex h-11 cursor-pointer items-center justify-center gap-2 rounded-[2px] border border-blue-500/30 bg-gradient-to-r from-blue-700 to-blue-600 px-6 text-white shadow-[0_4px_20px_rgba(37,99,235,0.15)] transition-all duration-300 hover:from-blue-600 hover:to-blue-500 hover:shadow-[0_4px_25px_rgba(37,99,235,0.3)] active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-40"
+        className="pointer-events-auto flex h-11 cursor-pointer items-center justify-center gap-2 rounded-lg border border-blue-500/30 bg-gradient-to-r from-blue-700 to-blue-600 px-6 text-white shadow-[0_4px_20px_rgba(37,99,235,0.15)] transition-all duration-300 hover:from-blue-600 hover:to-blue-500 hover:shadow-[0_4px_25px_rgba(37,99,235,0.3)] active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-40"
       >
         {bulkLoading ? (
           <Loader2 className="size-4 animate-spin text-white" />

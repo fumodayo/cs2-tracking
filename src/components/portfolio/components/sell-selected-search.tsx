@@ -83,27 +83,27 @@ export function SellSelectedSearch({
   return (
     <div
       ref={containerRef}
-      className="bg-card relative z-20 mb-3 rounded-[2px] border border-stone-800 p-3 shadow-[inset_0_1px_3px_rgba(0,0,0,0.15)] dark:shadow-[inset_0_1px_3px_rgba(0,0,0,0.5)]"
+      className="relative z-20 mb-4 rounded-xl border border-stone-800/80 bg-stone-900/30 p-3.5 shadow-inner backdrop-blur-sm"
     >
-      <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
-        <label className="font-mono text-[9px] font-extrabold tracking-widest text-stone-400 dark:text-stone-500">
+      <div className="mb-2.5 flex flex-wrap items-center justify-between gap-2">
+        <label className="font-sans text-sm font-extrabold tracking-wide text-stone-100 dark:text-stone-200">
           {t('portfolio.quickAddItem', 'Quick add items from Portfolio')}
         </label>
 
         {/* Bộ lọc phân khúc định giá */}
-        <div className="bg-card relative flex items-center gap-0.5 rounded-[2px] border border-stone-800 p-0.5 shadow-inner">
+        <div className="relative flex items-center gap-1 rounded-lg border border-stone-800/80 bg-stone-950/60 p-1 shadow-inner">
           <button
             type="button"
             onMouseDown={(e) => e.preventDefault()}
             onClick={() => setPriceFilter('all')}
-            className={`relative z-10 flex cursor-pointer items-center gap-1 rounded-[2px] px-2.5 py-0.5 font-mono text-[9px] font-bold transition-all ${
+            className={`relative z-10 flex cursor-pointer items-center gap-1 rounded-md px-3 py-1 font-mono text-[9px] font-bold transition-all ${
               priceFilter === 'all' ? 'text-blue-400' : 'text-stone-500 hover:text-stone-300'
             }`}
           >
             {priceFilter === 'all' && (
               <motion.div
                 layoutId="activePricingFilterBg"
-                className="bg-blue-955/40 absolute inset-0 -z-10 rounded-[2px] border border-blue-500/30 shadow-[0_0_8px_rgba(59,130,246,0.15)]"
+                className="bg-blue-955/40 absolute inset-0 -z-10 rounded-md border border-blue-500/30 shadow-[0_0_8px_rgba(59,130,246,0.15)]"
                 transition={{ type: 'spring', stiffness: 380, damping: 30 }}
               />
             )}
@@ -113,14 +113,14 @@ export function SellSelectedSearch({
             type="button"
             onMouseDown={(e) => e.preventDefault()}
             onClick={() => setPriceFilter('buff')}
-            className={`relative z-10 flex cursor-pointer items-center gap-1 rounded-[2px] px-2.5 py-0.5 font-mono text-[9px] font-bold transition-all ${
+            className={`relative z-10 flex cursor-pointer items-center gap-1 rounded-md px-3 py-1 font-mono text-[9px] font-bold transition-all ${
               priceFilter === 'buff' ? 'text-amber-400' : 'text-stone-500 hover:text-stone-300'
             }`}
           >
             {priceFilter === 'buff' && (
               <motion.div
                 layoutId="activePricingFilterBg"
-                className="bg-amber-955/40 absolute inset-0 -z-10 rounded-[2px] border border-amber-500/30 shadow-[0_0_8px_rgba(245,158,11,0.15)]"
+                className="bg-amber-955/40 absolute inset-0 -z-10 rounded-md border border-amber-500/30 shadow-[0_0_8px_rgba(245,158,11,0.15)]"
                 transition={{ type: 'spring', stiffness: 380, damping: 30 }}
               />
             )}
@@ -133,14 +133,14 @@ export function SellSelectedSearch({
             type="button"
             onMouseDown={(e) => e.preventDefault()}
             onClick={() => setPriceFilter('steam')}
-            className={`relative z-10 flex cursor-pointer items-center gap-1 rounded-[2px] px-2.5 py-0.5 font-mono text-[9px] font-bold transition-all ${
+            className={`relative z-10 flex cursor-pointer items-center gap-1 rounded-md px-3 py-1 font-mono text-[9px] font-bold transition-all ${
               priceFilter === 'steam' ? 'text-sky-400' : 'text-stone-500 hover:text-stone-300'
             }`}
           >
             {priceFilter === 'steam' && (
               <motion.div
                 layoutId="activePricingFilterBg"
-                className="bg-sky-955/40 absolute inset-0 -z-10 rounded-[2px] border border-sky-500/30 shadow-[0_0_8px_rgba(14,165,233,0.15)]"
+                className="bg-sky-955/40 absolute inset-0 -z-10 rounded-md border border-sky-500/30 shadow-[0_0_8px_rgba(14,165,233,0.15)]"
                 transition={{ type: 'spring', stiffness: 380, damping: 30 }}
               />
             )}
@@ -164,7 +164,7 @@ export function SellSelectedSearch({
             'portfolio.searchPlaceholderQuickAdd',
             'Enter item name in stock to add...'
           )}
-          className="bg-card text-foreground w-full rounded-[2px] border border-stone-800 py-2 pr-9 pl-9 font-mono text-xs font-medium transition-all outline-none placeholder:text-stone-500 focus:border-blue-500/40 focus:shadow-[0_0_10px_rgba(59,130,246,0.1)]"
+          className="border-stone-850 text-foreground w-full rounded-lg border bg-stone-950/40 py-2.5 pr-10 pl-10 font-mono text-xs font-medium transition-all outline-none placeholder:text-stone-500 focus:border-blue-500/40 focus:shadow-[0_0_10px_rgba(59,130,246,0.1)] focus:ring-1 focus:ring-blue-500/20"
         />
         {searchQuery && (
           <button
@@ -179,7 +179,7 @@ export function SellSelectedSearch({
 
       {/* Search Results Dropdown */}
       {isSearchFocused && searchQuery.trim() && (
-        <div className="bg-card absolute right-3 left-3 z-50 mt-1 max-h-60 scrollbar-thin scrollbar-thumb-stone-800 divide-y divide-stone-800 overflow-y-auto rounded-[2px] border border-stone-800 pr-0.5 shadow-2xl">
+        <div className="absolute right-3 left-3 z-50 mt-1 max-h-60 scrollbar-thin scrollbar-thumb-stone-800 divide-y divide-stone-800/60 overflow-y-auto rounded-lg border border-stone-800 bg-stone-950 pr-0.5 shadow-2xl">
           {searchResults.length === 0 ? (
             <div className="p-3 text-center font-mono text-xs text-stone-500">
               {t('portfolio.noValidPriceItemsFound', 'No items found with a valid price')}
@@ -195,10 +195,10 @@ export function SellSelectedSearch({
                     onAddItem(item);
                     setSearchQuery('');
                   }}
-                  className="flex w-full cursor-pointer items-center justify-between border-none bg-transparent p-2.5 text-left transition-colors hover:bg-stone-900/30"
+                  className="flex w-full cursor-pointer items-center justify-between border-none bg-transparent p-3 text-left transition-colors hover:bg-stone-900/30"
                 >
                   <div className="flex min-w-0 items-center gap-3">
-                    <div className="border-stone-850 flex size-9 shrink-0 items-center justify-center rounded-[2px] border bg-stone-950 p-0.5 shadow-inner">
+                    <div className="flex size-9 shrink-0 items-center justify-center rounded-lg border border-stone-800 bg-stone-950 p-0.5 shadow-inner">
                       <CaseThumbnail
                         imageUrl={item.case.imageUrl}
                         name={item.case.name}
@@ -212,7 +212,7 @@ export function SellSelectedSearch({
                       >
                         {item.case.name}
                       </div>
-                      <div className="text-stone-550 mt-0.5 flex gap-2 font-mono text-[10px]">
+                      <div className="mt-1 flex gap-2 font-mono text-[10px] text-stone-500">
                         <span>
                           {t('portfolio.stockShort', 'Stock')}:{' '}
                           <strong className="text-stone-400">{item.quantity}</strong>
@@ -228,7 +228,7 @@ export function SellSelectedSearch({
                     </div>
                   </div>
                   <div
-                    className={`inline-flex h-6 shrink-0 items-center justify-center gap-2 rounded-[2px] px-2.5 font-mono text-[9px] font-black font-medium tracking-wider uppercase transition-all ${
+                    className={`inline-flex h-6 shrink-0 items-center justify-center gap-2 rounded-md px-3 font-mono text-[9px] font-black tracking-wider uppercase transition-all ${
                       isAlreadyAdded
                         ? 'border border-blue-500/25 bg-blue-950/20 text-blue-400 hover:bg-blue-950/40'
                         : 'border border-emerald-500/25 bg-emerald-950/20 text-emerald-400 hover:bg-emerald-500 hover:text-stone-950'

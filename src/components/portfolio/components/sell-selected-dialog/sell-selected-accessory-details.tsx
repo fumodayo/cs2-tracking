@@ -37,10 +37,10 @@ export function SellSelectedAccessoryDetails({
           return (
             <div
               key={`detail-acc-${accessory.id ?? index}-${accessory.slot ?? index}`}
-              className="border-stone-850 flex items-center justify-between gap-3 rounded-[2px] border bg-stone-950/40 p-2 text-[10px] shadow-inner"
+              className="flex items-center justify-between gap-3 rounded-lg border border-stone-800/80 bg-stone-950/40 p-2.5 text-[10px] shadow-inner transition-colors hover:border-stone-700/60"
             >
               <div className="flex min-w-0 items-center gap-2">
-                <div className="relative flex h-8 w-8 shrink-0 items-center justify-center rounded border border-stone-800 bg-stone-950 p-0.5">
+                <div className="relative flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-stone-800 bg-stone-950 p-0.5">
                   {accessory.imageUrl ? (
                     <img
                       src={proxySteamUrl(accessory.imageUrl)}
@@ -52,7 +52,7 @@ export function SellSelectedAccessoryDetails({
                     <div className="size-4 rounded bg-stone-800" />
                   )}
                   {wearPercent ? (
-                    <span className="absolute inset-x-0 bottom-0 bg-black/75 px-0.5 py-0.5 text-center text-[7px] leading-none font-bold text-white">
+                    <span className="absolute inset-x-0 bottom-0 rounded-b-lg bg-black/75 px-0.5 py-0.5 text-center text-[7px] leading-none font-bold text-white">
                       {wearPercent}
                     </span>
                   ) : null}
@@ -64,7 +64,7 @@ export function SellSelectedAccessoryDetails({
                   >
                     {accessory.name}
                   </span>
-                  <span className="font-mono text-[9px] text-stone-500">
+                  <span className="mt-0.5 font-mono text-[9px] text-stone-500">
                     {wearPercent
                       ? t('portfolio.remainingWearPercent', 'Remaining {{wear}}', {
                           wear: wearPercent,
@@ -75,7 +75,7 @@ export function SellSelectedAccessoryDetails({
                 </div>
               </div>
               {price !== undefined && (
-                <span className="shrink-0 rounded border border-emerald-500/10 bg-emerald-500/5 px-1.5 py-0.5 font-mono font-bold text-emerald-400">
+                <span className="shrink-0 rounded-md border border-emerald-500/15 bg-emerald-500/5 px-2 py-0.5 font-mono font-bold text-emerald-400">
                   {formatCurrency(price)}
                 </span>
               )}

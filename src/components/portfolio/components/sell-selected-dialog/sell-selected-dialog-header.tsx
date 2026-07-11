@@ -12,7 +12,7 @@ export function SellSelectedDialogHeader({ itemsCount }: SellSelectedDialogHeade
   return (
     <DialogHeader className="mb-4 border-b border-stone-800 pb-4">
       <div className="flex items-center gap-3">
-        <div className="bg-blue-955/20 flex size-10 items-center justify-center rounded-[2px] border border-blue-500/25 text-blue-400 shadow-inner">
+        <div className="bg-blue-955/20 flex size-10 items-center justify-center rounded-lg border border-blue-500/25 text-blue-400 shadow-inner">
           <ShoppingBag className="size-5" />
         </div>
         <div>

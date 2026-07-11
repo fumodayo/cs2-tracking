@@ -37,12 +37,12 @@ export function SellSelectedItemQuantitySelector({
         {t('portfolio.sellQtyLabel', 'Sell Qty')}
       </label>
       <div className="flex flex-wrap items-center gap-2">
-        <div className="bg-card/50 flex h-8 w-24 items-center overflow-hidden rounded-[2px] border border-stone-800 shadow-inner transition-all duration-200 focus-within:border-stone-600 focus-within:ring-1 focus-within:ring-stone-600/30">
+        <div className="flex h-9 w-28 items-center overflow-hidden rounded-lg border border-stone-800 bg-stone-950/40 shadow-inner transition-all duration-200 focus-within:border-stone-600 focus-within:ring-1 focus-within:ring-stone-600/30">
           <button
             type="button"
             onClick={() => handleQuantityChange(itemId, sellQty - 1, maxQty)}
             disabled={sellQty <= 1 || isLoading}
-            className="flex h-full w-8 items-center justify-center text-stone-400 transition-colors hover:bg-stone-900/50 hover:text-stone-200 disabled:cursor-not-allowed disabled:opacity-25"
+            className="flex h-full w-9 items-center justify-center text-stone-400 transition-colors hover:bg-stone-900/50 hover:text-stone-200 disabled:cursor-not-allowed disabled:opacity-25"
           >
             <Minus className="size-3" />
           </button>
@@ -59,7 +59,7 @@ export function SellSelectedItemQuantitySelector({
             type="button"
             onClick={() => handleQuantityChange(itemId, sellQty + 1, maxQty)}
             disabled={sellQty >= maxQty || isLoading}
-            className="flex h-full w-8 items-center justify-center text-stone-400 transition-colors hover:bg-stone-900/50 hover:text-stone-200 disabled:cursor-not-allowed disabled:opacity-25"
+            className="flex h-full w-9 items-center justify-center text-stone-400 transition-colors hover:bg-stone-900/50 hover:text-stone-200 disabled:cursor-not-allowed disabled:opacity-25"
           >
             <Plus className="size-3" />
           </button>
@@ -72,12 +72,12 @@ export function SellSelectedItemQuantitySelector({
             handleQuantityChange(itemId, targetQty, maxQty);
           }}
           disabled={isLoading || totalTradableQty === 0}
-          className={`disabled:border-stone-850 disabled:text-stone-650 bg-card/50 flex h-8 items-center justify-center rounded-[2px] border px-3 font-mono text-[10px] font-bold tracking-wider transition-all duration-200 active:scale-[0.97] disabled:cursor-not-allowed disabled:bg-stone-950/20 ${
+          className={`disabled:border-stone-850 disabled:text-stone-650 flex h-9 items-center justify-center rounded-lg border bg-stone-950/40 px-3.5 font-mono text-[10px] font-bold tracking-wider transition-all duration-200 active:scale-[0.97] disabled:cursor-not-allowed disabled:bg-stone-950/20 ${
             hasBuff
-              ? 'border-amber-500/20 text-amber-400 hover:border-amber-500/40 hover:bg-amber-500/10 hover:text-amber-300'
+              ? 'border-amber-500/20 text-amber-400 hover:border-amber-500/45 hover:bg-amber-500/10 hover:text-amber-300'
               : isFullSell
-                ? 'border-rose-500/20 text-rose-400 hover:border-rose-500/40 hover:bg-rose-500/10 hover:text-rose-300'
-                : 'border-blue-500/20 text-blue-400 hover:border-blue-500/40 hover:bg-blue-500/10 hover:text-blue-300'
+                ? 'border-rose-500/20 text-rose-400 hover:border-rose-500/45 hover:bg-rose-500/10 hover:text-rose-300'
+                : 'border-blue-500/20 text-blue-400 hover:border-blue-500/45 hover:bg-blue-500/10 hover:text-blue-300'
           }`}
           title={t(
             'portfolio.setAllTradableTooltip',

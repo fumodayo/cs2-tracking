@@ -490,7 +490,7 @@ export function SellSelectedDialog({
   return (
     <>
       <Dialog open={open} onOpenChange={(val) => !bulkLoading && !val && onClose()}>
-        <DialogContent className="bg-card text-foreground shadow-soft flex max-h-[92vh] max-w-7xl flex-col overflow-hidden rounded-[2px] border border-stone-800 p-6 backdrop-blur-3xl dark:shadow-[0_20px_50px_rgba(0,0,0,0.95)]">
+        <DialogContent className="bg-card text-foreground shadow-soft flex max-h-[92vh] max-w-7xl flex-col overflow-hidden rounded-xl border border-stone-800 p-6 backdrop-blur-3xl dark:shadow-[0_20px_50px_rgba(0,0,0,0.95)]">
           {bulkLoading && <SellSelectedLoadingOverlay />}
           <SellSelectedDialogHeader itemsCount={itemsCount} />
 
