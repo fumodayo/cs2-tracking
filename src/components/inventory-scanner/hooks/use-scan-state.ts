@@ -1,17 +1,14 @@
 'use client';
 
-import * as Ably from 'ably';
-import { useCallback, useEffect, useRef } from 'react';
+import { useCallback, useEffect, useMemo, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import { toast } from '@/stores';
 import { AccountEntry, ScanProgress } from '../types';
-import {
-  SCAN_PROGRESS_IDLE_TIMEOUT_MS,
-  SCAN_REQUEST_TIMEOUT_MS,
-  extractSteamKey,
-  translateAccountError,
-} from '../utils';
+import { extractSteamKey, translateAccountError } from '../utils';
 import { ScannerState, ScannerAction } from '../scanner-reducer';
+import { createScanProgressClient } from '../scan-progress-client';
+import { createScanStartClient } from '../scan-start-client';
+import { waitForAbortableDelay } from '../abortable-delay';
 
 interface UseScanStateProps {
   state: ScannerState;
@@ -19,27 +16,20 @@ interface UseScanStateProps {
   scanAbortControllerRef: React.MutableRefObject<AbortController | null>;
 }
 
-type ScanRealtimeTokenResponse = {
-  tokenDetails?: Ably.TokenDetails;
-  channelName?: string;
-};
-
-type ScanRealtimePayload = {
-  type?: 'scan.progress';
-  status?: ScanProgress['status'];
-  stage?: string;
-  message?: string;
-  percent?: number;
-  detail?: Record<string, number | string>;
-  error?: string;
-  updatedAt?: string;
-};
-
-const ABLY_PROGRESS_IDLE_FALLBACK_MS = 15_000;
-
 export function useScanState({ state, dispatch, scanAbortControllerRef }: UseScanStateProps) {
   const { t } = useTranslation();
   const activePollKeysRef = useRef<Set<string>>(new Set());
+  const scanProgressClient = useMemo(
+    () =>
+      createScanProgressClient({
+        t,
+        onProgress: (accountId, progress) => {
+          dispatch({ type: 'UPDATE_SCAN_PROGRESS', accountId, progress });
+        },
+      }),
+    [dispatch, t]
+  );
+  const scanStartClient = useMemo(() => createScanStartClient({ t }), [t]);
   const updateAccountUrl = useCallback(
     (id: string, url: string) => {
       dispatch({ type: 'UPDATE_ACCOUNT_URL', id, url });
@@ -91,234 +81,6 @@ export function useScanState({ state, dispatch, scanAbortControllerRef }: UseSca
     [dispatch]
   );
 
-  const fetchScanProgress = useCallback(
-    async (jobId: string, signal?: AbortSignal): Promise<ScanProgress> => {
-      const response = await fetch(`/api/inventory/scan?jobId=${encodeURIComponent(jobId)}`, {
-        cache: 'no-store',
-        signal,
-      });
-
-      const responseText = await response.text();
-      let progress: ScanProgress;
-      try {
-        progress = JSON.parse(responseText) as ScanProgress;
-      } catch {
-        throw new Error(
-          t('inventoryScanner.apiErrors.pricingServerConnection', {
-            status: response.status,
-            defaultValue: `Cannot connect to pricing server (HTTP ${response.status}).`,
-          })
-        );
-      }
-
-      if (!response.ok) {
-        throw new Error(
-          progress.message ??
-            t('inventoryScanner.apiErrors.errReadProgress', 'Cannot read scan progress.')
-        );
-      }
-
-      return progress;
-    },
-    [t]
-  );
-
-  const waitForAblyScanProgress = useCallback(
-    async (jobId: string, accountId: string, signal?: AbortSignal): Promise<ScanProgress> => {
-      const tokenResponse = await fetch(
-        `/api/realtime/ably-token?scanJobId=${encodeURIComponent(jobId)}`,
-        { cache: 'no-store', signal }
-      );
-      if (!tokenResponse.ok) {
-        throw new Error('ablyUnavailable');
-      }
-
-      const realtimeConfig = (await tokenResponse.json()) as ScanRealtimeTokenResponse;
-      if (!realtimeConfig.tokenDetails || !realtimeConfig.channelName) {
-        throw new Error('ablyUnavailable');
-      }
-
-      return await new Promise<ScanProgress>((resolve, reject) => {
-        let settled = false;
-        const startedAt = Date.now();
-        let lastProgressAt = startedAt;
-        let timeoutId: ReturnType<typeof setInterval> | null = null;
-        let client: Ably.Realtime | null = null;
-        let channel: Ably.RealtimeChannel | null = null;
-
-        const cleanup = () => {
-          if (timeoutId) clearInterval(timeoutId);
-          signal?.removeEventListener('abort', onAbort);
-          if (channel) {
-            void channel.unsubscribe('scan.progress', onMessage);
-          }
-          client?.close();
-        };
-
-        const settleResolve = (progress: ScanProgress) => {
-          if (settled) return;
-          settled = true;
-          cleanup();
-          resolve(progress);
-        };
-
-        const settleReject = (error: unknown) => {
-          if (settled) return;
-          settled = true;
-          cleanup();
-          reject(error);
-        };
-
-        const onAbort = () => {
-          settleReject(new DOMException('Aborted', 'AbortError'));
-        };
-
-        const handleProgress = async (progress: ScanProgress) => {
-          if (settled) return;
-          lastProgressAt = Date.now();
-          dispatch({ type: 'UPDATE_SCAN_PROGRESS', accountId, progress });
-
-          if (progress.status !== 'done' && progress.status !== 'error') {
-            return;
-          }
-
-          if (progress.status === 'done' && progress.result) {
-            settleResolve(progress);
-            return;
-          }
-
-          try {
-            const latestProgress = await fetchScanProgress(jobId, signal);
-            dispatch({ type: 'UPDATE_SCAN_PROGRESS', accountId, progress: latestProgress });
-            settleResolve(latestProgress);
-          } catch (error) {
-            if (progress.status === 'error') {
-              settleResolve(progress);
-              return;
-            }
-            settleReject(error);
-          }
-        };
-
-        const onMessage = (message: Ably.Message) => {
-          const progress = parseScanRealtimeProgress(message.data);
-          if (!progress) return;
-          void handleProgress(progress);
-        };
-
-        const start = async () => {
-          if (signal?.aborted) {
-            throw new DOMException('Aborted', 'AbortError');
-          }
-
-          signal?.addEventListener('abort', onAbort, { once: true });
-          client = new Ably.Realtime({ tokenDetails: realtimeConfig.tokenDetails });
-          channel = client.channels.get(realtimeConfig.channelName!);
-
-          timeoutId = setInterval(() => {
-            const elapsed = Date.now() - startedAt;
-            const idle = Date.now() - lastProgressAt;
-            if (idle >= ABLY_PROGRESS_IDLE_FALLBACK_MS) {
-              settleReject(new Error('ablyIdleFallback'));
-              return;
-            }
-            if (elapsed >= SCAN_REQUEST_TIMEOUT_MS || idle >= SCAN_PROGRESS_IDLE_TIMEOUT_MS) {
-              settleReject(
-                new Error(
-                  t(
-                    'inventoryScanner.apiErrors.errScanTimeout',
-                    'Inventory scan took too long. Please try again.'
-                  )
-                )
-              );
-            }
-          }, 1000);
-
-          await channel.subscribe('scan.progress', onMessage);
-          const currentProgress = await fetchScanProgress(jobId, signal);
-          await handleProgress(currentProgress);
-        };
-
-        void start().catch(settleReject);
-      });
-    },
-    [dispatch, fetchScanProgress, t]
-  );
-
-  /**
-   * Định kỳ polling tiến độ trên server cho job quét nền đang xếp hàng.
-   */
-  const pollScanProgress = useCallback(
-    async (jobId: string, accountId: string, signal?: AbortSignal): Promise<ScanProgress> => {
-      try {
-        return await waitForAblyScanProgress(jobId, accountId, signal);
-      } catch (error) {
-        if (error instanceof DOMException && error.name === 'AbortError') {
-          throw error;
-        }
-      }
-
-      const startedAt = Date.now();
-      let lastProgressAt = startedAt;
-      let lastProgressSignature = '';
-
-      while (
-        Date.now() - startedAt < SCAN_REQUEST_TIMEOUT_MS &&
-        Date.now() - lastProgressAt < SCAN_PROGRESS_IDLE_TIMEOUT_MS
-      ) {
-        if (signal?.aborted) {
-          throw new DOMException('Aborted', 'AbortError');
-        }
-
-        const progress = await fetchScanProgress(jobId, signal);
-        dispatch({ type: 'UPDATE_SCAN_PROGRESS', accountId, progress });
-        if (progress.status === 'done' || progress.status === 'error') {
-          return progress;
-        }
-
-        const progressSignature = JSON.stringify({
-          percent: progress.percent,
-          message: progress.message,
-          detail: progress.detail,
-          updatedAt: progress.updatedAt,
-        });
-        if (progressSignature !== lastProgressSignature) {
-          lastProgressSignature = progressSignature;
-          lastProgressAt = Date.now();
-        }
-
-        await new Promise<void>((resolve, reject) => {
-          const timeout = setTimeout(() => {
-            if (signal) signal.removeEventListener('abort', onAbort);
-            resolve();
-          }, 900);
-
-          const onAbort = () => {
-            clearTimeout(timeout);
-            if (signal) signal.removeEventListener('abort', onAbort);
-            reject(new DOMException('Aborted', 'AbortError'));
-          };
-
-          if (signal) {
-            if (signal.aborted) {
-              onAbort();
-            } else {
-              signal.addEventListener('abort', onAbort);
-            }
-          }
-        });
-      }
-
-      throw new Error(
-        t(
-          'inventoryScanner.apiErrors.errScanTimeout',
-          'Inventory scan took too long. Please try again.'
-        )
-      );
-    },
-    [dispatch, fetchScanProgress, t, waitForAblyScanProgress]
-  );
-
   const getScanProgressError = useCallback(
     (scanProgress: ScanProgress) => {
       const rawErr = scanProgress.error ?? scanProgress.message;
@@ -345,7 +107,11 @@ export function useScanState({ state, dispatch, scanAbortControllerRef }: UseSca
 
       void (async () => {
         try {
-          const scanProgress = await pollScanProgress(jobId, account.id, controller.signal);
+          const scanProgress = await scanProgressClient.pollScanProgress(
+            jobId,
+            account.id,
+            controller.signal
+          );
           if (scanProgress.status === 'error' || !scanProgress.result) {
             dispatch({
               type: 'SCAN_FAILURE',
@@ -382,7 +148,14 @@ export function useScanState({ state, dispatch, scanAbortControllerRef }: UseSca
         }
       })();
     }
-  }, [dispatch, getScanProgressError, pollScanProgress, scanAbortControllerRef, state.accounts, t]);
+  }, [
+    dispatch,
+    getScanProgressError,
+    scanProgressClient,
+    scanAbortControllerRef,
+    state.accounts,
+    t,
+  ]);
 
   const doScan = useCallback(
     async (
@@ -428,65 +201,20 @@ export function useScanState({ state, dispatch, scanAbortControllerRef }: UseSca
       try {
         if (activeSignal?.aborted) throw new DOMException('Aborted', 'AbortError');
 
-        const res = await fetch('/api/inventory/scan', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            steamUrl: account.url.trim(),
-            steamCookie: account.steamCookie?.trim() || undefined,
-            steamSessionId: account.steamSessionId?.trim() || undefined,
-            forceRefresh,
-            progress: true,
-          }),
+        const jobId = await scanStartClient.startInventoryScan({
+          steamUrl: account.url,
+          steamCookie: account.steamCookie,
+          steamSessionId: account.steamSessionId,
+          forceRefresh,
           signal: activeSignal,
         });
-
-        const resText = await res.text();
-        interface ScanStartResponse {
-          message?: string;
-          jobId?: string | number;
-        }
-        let data: ScanStartResponse;
-        try {
-          data = JSON.parse(resText) as ScanStartResponse;
-        } catch {
-          throw new Error(
-            t('inventoryScanner.apiErrors.errScanRequestHttp', {
-              status: res.status,
-              defaultValue: `Scan request failed (HTTP ${res.status}).`,
-            })
-          );
-        }
-        if (!res.ok) {
-          if (res.status === 401) {
-            throw new Error(
-              t(
-                'inventoryScanner.apiErrors.errLoginRequired',
-                'Login required. Please log in to scan.'
-              )
-            );
-          }
-          const errorMsg = data.message ? translateAccountError(data.message, t) : null;
-          throw new Error(
-            errorMsg ||
-              t('inventoryScanner.apiErrors.errScanRequestGeneric', 'Scan request failed.')
-          );
-        }
-
-        if (!data.jobId) {
-          throw new Error(
-            t('inventoryScanner.apiErrors.errReadProgress', 'Cannot read scan progress.')
-          );
-        }
-
-        const jobId = String(data.jobId);
         const pollKey = `${accountId}:${jobId}`;
         activePollKeysRef.current.add(pollKey);
         dispatch({ type: 'REGISTER_SCAN_JOB', accountId, jobId });
 
         let scanProgress: ScanProgress;
         try {
-          scanProgress = await pollScanProgress(jobId, accountId, activeSignal);
+          scanProgress = await scanProgressClient.pollScanProgress(jobId, accountId, activeSignal);
         } finally {
           activePollKeysRef.current.delete(pollKey);
         }
@@ -548,7 +276,15 @@ export function useScanState({ state, dispatch, scanAbortControllerRef }: UseSca
         }
       }
     },
-    [dispatch, findUrlDuplicate, getScanProgressError, pollScanProgress, scanAbortControllerRef, t]
+    [
+      dispatch,
+      findUrlDuplicate,
+      getScanProgressError,
+      scanProgressClient,
+      scanStartClient,
+      scanAbortControllerRef,
+      t,
+    ]
   );
 
   const scanAll = useCallback(
@@ -576,24 +312,7 @@ export function useScanState({ state, dispatch, scanAbortControllerRef }: UseSca
           if (signal.aborted) break;
           await doScan(valid[i].id, forceRefresh, state.accounts, signal, true);
           if (i < valid.length - 1 && !signal.aborted) {
-            await new Promise<void>((resolve, reject) => {
-              const timeout = setTimeout(() => {
-                signal.removeEventListener('abort', onAbort);
-                resolve();
-              }, 500);
-
-              const onAbort = () => {
-                clearTimeout(timeout);
-                signal.removeEventListener('abort', onAbort);
-                reject(new DOMException('Aborted', 'AbortError'));
-              };
-
-              if (signal.aborted) {
-                onAbort();
-              } else {
-                signal.addEventListener('abort', onAbort);
-              }
-            });
+            await waitForAbortableDelay(500, signal);
           }
         }
 
@@ -650,49 +369,4 @@ export function useScanState({ state, dispatch, scanAbortControllerRef }: UseSca
     cancelScanAll,
     setExpandedAccId,
   };
-}
-
-function parseScanRealtimeProgress(value: unknown): ScanProgress | null {
-  if (!value || typeof value !== 'object' || Array.isArray(value)) {
-    return null;
-  }
-
-  const payload = value as ScanRealtimePayload;
-  if (
-    payload.type !== 'scan.progress' ||
-    !isScanStatus(payload.status) ||
-    typeof payload.message !== 'string' ||
-    typeof payload.percent !== 'number'
-  ) {
-    return null;
-  }
-
-  return {
-    status: payload.status,
-    stage: typeof payload.stage === 'string' ? payload.stage : payload.status,
-    message: payload.message,
-    percent: payload.percent,
-    detail: normalizeRealtimeDetail(payload.detail),
-    error: typeof payload.error === 'string' ? payload.error : undefined,
-    updatedAt: typeof payload.updatedAt === 'string' ? payload.updatedAt : undefined,
-  };
-}
-
-function isScanStatus(value: unknown): value is ScanProgress['status'] {
-  return value === 'queued' || value === 'running' || value === 'done' || value === 'error';
-}
-
-function normalizeRealtimeDetail(value: unknown): Record<string, number | string> | undefined {
-  if (!value || typeof value !== 'object' || Array.isArray(value)) {
-    return undefined;
-  }
-
-  const detail: Record<string, number | string> = {};
-  for (const [key, entry] of Object.entries(value)) {
-    if (typeof entry === 'number' || typeof entry === 'string') {
-      detail[key] = entry;
-    }
-  }
-
-  return Object.keys(detail).length > 0 ? detail : undefined;
 }

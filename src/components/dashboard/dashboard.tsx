@@ -105,7 +105,7 @@ export function Dashboard() {
     e.preventDefault();
     setIsDragOver(false);
     const file = e.dataTransfer.files[0];
-    if (file && /\.(csv|tsv|txt)$/i.test(file.name)) {
+    if (file && /\.(xlsx|csv|tsv|txt)$/i.test(file.name)) {
       await handleExcelSource(file, file.name);
     }
   };
@@ -161,7 +161,7 @@ export function Dashboard() {
           <div className="pointer-events-none absolute inset-0 z-50 flex flex-col items-center justify-center rounded-lg border-2 border-dashed border-blue-500/80 bg-[#0c0f17]/90 backdrop-blur-sm">
             <Upload className="mx-auto size-12 animate-bounce text-blue-400" />
             <p className="mt-4 text-lg font-bold text-stone-100">
-              {t('excelMapping.dropFileHere', 'Drop CSV file here')}
+              {t('excelMapping.dropFileHere', 'Drop Excel file here')}
             </p>
             <p className="mt-1 text-sm text-stone-400">
               {t('excelMapping.pasteHint', 'Or copy cells from Excel or Sheets and press Ctrl+V')}
@@ -211,7 +211,11 @@ export function Dashboard() {
               <div className="flex flex-wrap items-center gap-2">
                 <Button
                   variant="outline"
-                  onClick={() => report && exportPortfolioToExcel(report)}
+                  onClick={() => {
+                    if (report) {
+                      void exportPortfolioToExcel(report);
+                    }
+                  }}
                   disabled={!report || report.rows.length === 0}
                 >
                   <Download className="size-4 text-emerald-400" />
@@ -228,16 +232,16 @@ export function Dashboard() {
                     <Upload className="size-4 text-blue-400" />
                   )}
                   {importStatus.phase === 'reading'
-                    ? t('dashboard.readingExcel', 'Reading CSV')
+                    ? t('dashboard.readingExcel', 'Reading Excel')
                     : importMutation.isPending
                       ? t('dashboard.importing')
-                      : t('dashboard.importExcel', 'Import CSV')}
+                      : t('dashboard.importExcel', 'Import Excel')}
                 </Button>
                 <RecentImportsPopover recentImports={recentImports} onRemove={removeRecentImport} />
                 <input
                   ref={importInputRef}
                   type="file"
-                  accept=".csv,.tsv,.txt"
+                  accept=".xlsx,.csv,.tsv,.txt"
                   className="sr-only"
                   onChange={handleImportFile}
                 />

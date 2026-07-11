@@ -126,9 +126,9 @@
     "loginPromptTitle": "Want to track your inventory value fluctuations daily?",
     "loginPromptDesc": "Log in now to automatically update and manage your item values daily.",
     "portfolio": "Portfolio",
-    "exportExcel": "Export CSV",
-    "importExcel": "Import CSV",
-    "readingExcel": "Reading CSV...",
+    "exportExcel": "Export Excel",
+    "importExcel": "Import Excel",
+    "readingExcel": "Reading Excel...",
     "importing": "Importing...",
     "addItem": "Add item",
     "addAccount": "Add account",
@@ -201,8 +201,8 @@
     "updatingItem": "Updating item...",
     "itemUpdated": "Item updated successfully!",
     "itemUpdateError": "Item update error",
-    "importSuccess": "CSV import successful: {{count}} rows.",
-    "importError": "CSV import error",
+    "importSuccess": "Excel import successful: {{count}} rows.",
+    "importError": "Excel import error",
     "saveCookie": "Save Cookie",
     "howToGetCookie": "How to get Cookie?",
     "unlink": "Unlink",
@@ -210,14 +210,18 @@
     "noAccounts": "No accounts linked.",
     "noAccountsDesc": "Enter a Steam profile link above to start tracking your inventory.",
     "emptyTitle": "No items yet",
-    "emptyDesc": "Start by adding items or importing from a CSV file.",
+    "emptyDesc": "Start by adding items or importing from an Excel file.",
     "viewMode": "Detail",
     "caseSummaryMode": "Group Cases",
     "importHistory": "Import History",
     "recentImportHistory": "Recent Import History",
     "noImportsYet": "No files imported yet.",
     "undoing": "Undoing...",
-    "undo": "Undo (Delete)"
+    "undo": "Undo",
+    "confirmUndoImportTitle": "Confirm Undo Import",
+    "confirmUndoImportDesc": "Are you sure you want to undo this import? All items added from the file \"{{fileName}}\" will be deleted from the system.",
+    "importedItemsDetails": "Imported Item Details",
+    "viewDetails": "View Details"
   },
   "portfolio": {
     "emptyStateTitle": "No cases in your portfolio yet",
@@ -451,15 +455,15 @@
     "reset": "Reset"
   },
   "importProgress": {
-    "readingExcel": "Reading CSV file...",
+    "readingExcel": "Reading Excel file...",
     "uploading": "Uploading to portfolio...",
-    "importComplete": "CSV import complete",
-    "importError": "CSV import error",
+    "importComplete": "Excel import complete",
+    "importError": "Excel import error",
     "undoing": "Undoing...",
     "undoImport": "Undo import"
   },
   "importExcelConfirm": {
-    "title": "Confirm CSV Import",
+    "title": "Confirm Excel Import",
     "description": "Review the items list from the file. You can select/deselect items to import and quickly edit their quantity or buy price.",
     "itemName": "Item Name",
     "quantity": "Quantity",
@@ -470,7 +474,12 @@
     "selectedCount": "Selected {{selected}} / {{total}} items",
     "confirmButton": "Confirm Import",
     "cancelButton": "Cancel",
-    "newStatus": "New"
+    "newStatus": "New",
+    "quantityShort": "QTY",
+    "buyPriceShort": "Buy Price",
+    "buyDate": "Buy Date",
+    "addedDate": "Date Added",
+    "note": "Note"
   },
   "scanner": {
     "title": "Steam Inventory Scanner",
@@ -639,10 +648,10 @@
     "autoAdded": "Auto-added to Portfolio"
   },
   "excelMapping": {
-    "title": "Map CSV Columns",
-    "description": "Drag CSV columns on the left to the matching fields on the right, or use dropdowns.",
-    "descriptionMobile": "Select the corresponding CSV columns for each system field from the dropdowns below.",
-    "excelColumns": "CSV Columns",
+    "title": "Map Excel Columns",
+    "description": "Drag Excel columns on the left to the matching fields on the right, or use dropdowns.",
+    "descriptionMobile": "Select the corresponding Excel columns for each system field from the dropdowns below.",
+    "excelColumns": "Excel Columns",
     "unnamedColumn": "Column {{letter}} (Unnamed)",
     "systemFields": "System Fields",
     "fieldName": "Item Name",
@@ -672,7 +681,7 @@
     "requiredFieldMissing": "Please map a column for \"Item Name\".",
     "emptyFile": "No columns found in the file.",
     "deleteTemplateTooltip": "Delete this template",
-    "dropFileHere": "Drop CSV file here",
+    "dropFileHere": "Drop Excel file here",
     "pasteHint": "Or copy cells from Excel and press Ctrl+V",
     "parsedRows": "{{count}} valid rows"
   },

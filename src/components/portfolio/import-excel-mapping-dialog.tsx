@@ -9,6 +9,7 @@ import {
   FaTrash,
   FaInfo,
   FaArrowRight,
+  FaXmark,
 } from 'react-icons/fa6';
 import { LayoutTemplate } from 'lucide-react';
 import { Select } from '@/components/ui/select';
@@ -179,10 +180,24 @@ export function ImportExcelMappingDialog({
   const handleFieldChange = (key: string, headerIndexVal: string) => {
     const index =
       headerIndexVal === '' || headerIndexVal === 'none' ? undefined : parseInt(headerIndexVal, 10);
-    setMapping((prev) => ({
-      ...prev,
-      [key]: index,
-    }));
+    setMapping((prev) => {
+      const next = { ...prev };
+      const typedKey = key as keyof ColumnMapping;
+      if (index === undefined) {
+        delete next[typedKey];
+      } else {
+        next[typedKey] = index;
+      }
+      return next;
+    });
+  };
+
+  const handleFieldClear = (key: string) => {
+    setMapping((prev) => {
+      const next = { ...prev };
+      delete next[key as keyof ColumnMapping];
+      return next;
+    });
   };
 
   const handleTemplateSelect = (id: string) => {
@@ -442,6 +457,18 @@ export function ImportExcelMappingDialog({
                           ))}
                         </Select.Content>
                       </Select>
+                      {currentMappedIdx !== undefined && (
+                        <Button
+                          type="button"
+                          variant="outline"
+                          onClick={() => handleFieldClear(field.key)}
+                          className="border-border text-muted-foreground hover:bg-surface-hover h-9 w-9 shrink-0 p-0"
+                          title={t('excelMapping.clearMappingTooltip', 'Bỏ liên kết cột này')}
+                          aria-label={t('excelMapping.clearMappingTooltip', 'Bỏ liên kết cột này')}
+                        >
+                          <FaXmark className="size-3" />
+                        </Button>
+                      )}
                     </div>
                   </div>
                 );

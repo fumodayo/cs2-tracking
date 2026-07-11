@@ -69,12 +69,25 @@ export function useExcelImport({ addRecentImport, setError }: UseExcelImportProp
         importedIds: report.importResult?.importedIds ?? [],
       });
       if (report.importResult?.importedIds && report.importResult.importedIds.length > 0) {
+        const importedIds = report.importResult.importedIds;
+        const itemsDetails = report.rows
+          .filter((row) => importedIds.includes(row.item.id))
+          .map((row) => ({
+            name: row.case?.name || row.item.note || 'Vật phẩm',
+            quantity: row.item.quantity,
+            buyPrice: row.item.buyPrice,
+            buyDate: row.item.buyDate,
+            note: row.item.note,
+            createdAt: row.item.createdAt,
+          }));
+
         addRecentImport({
           id: Date.now().toString(),
           fileName: current.phase === 'uploading' ? current.fileName || 'Excel' : 'Excel',
           date: new Date().toISOString(),
           importedCount: report.importResult.importedCount,
           importedIds: report.importResult.importedIds,
+          items: itemsDetails,
         });
       }
       setTimeout(() => {
@@ -143,6 +156,14 @@ export function useExcelImport({ addRecentImport, setError }: UseExcelImportProp
           mapping,
           mappingDialogData.headerRowIndex
         );
+        if (rows.length === 0) {
+          throw new Error(
+            t(
+              'excelMapping.noRowsAfterMapping',
+              'Không tìm thấy dòng hợp lệ sau khi liên kết. Hãy bỏ cột trống/null khỏi "Tên vật phẩm" và chọn đúng cột tên vật phẩm.'
+            )
+          );
+        }
         setExcelImportRows(rows);
         setExcelFileName(mappingDialogData.fileName);
         setMappingDialogData(null);

@@ -1,15 +1,9 @@
-"use client";
+'use client';
 
-import { useState } from "react";
-import { Loader2, AlertTriangle } from "lucide-react";
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogDescription,
-} from "./dialog";
-import { Button } from "./button";
+import { useState } from 'react';
+import { Loader2, AlertTriangle } from 'lucide-react';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from './dialog';
+import { Button } from './button';
 
 type ConfirmDialogProps = {
   open: boolean;
@@ -19,7 +13,7 @@ type ConfirmDialogProps = {
   description: string;
   confirmText?: string;
   cancelText?: string;
-  variant?: "primary" | "danger";
+  variant?: 'primary' | 'danger';
   children?: React.ReactNode;
 };
 
@@ -29,9 +23,9 @@ export function ConfirmDialog({
   onConfirm,
   title,
   description,
-  confirmText = "Confirm",
-  cancelText = "Cancel",
-  variant = "primary",
+  confirmText = 'Confirm',
+  cancelText = 'Cancel',
+  variant = 'primary',
   children,
 }: ConfirmDialogProps) {
   const [loading, setLoading] = useState(false);
@@ -42,7 +36,7 @@ export function ConfirmDialog({
       await onConfirm();
       onClose();
     } catch (error) {
-      console.error("Confirmation action failed:", error);
+      console.error('Confirmation action failed:', error);
     } finally {
       setLoading(false);
     }
@@ -53,8 +47,8 @@ export function ConfirmDialog({
       <DialogContent className="max-w-md border-stone-800 bg-stone-950 text-stone-100 shadow-[0_20px_50px_rgba(0,0,0,0.65)] backdrop-blur-xl">
         <DialogHeader className="flex flex-col gap-2">
           <div className="flex items-center gap-2.5">
-            {variant === "danger" && (
-              <div className="flex size-9 shrink-0 items-center justify-center rounded-lg border border-red-500/20 bg-red-950/40 text-red-400">
+            {variant === 'danger' && (
+              <div className="border-danger-border bg-danger-muted text-danger flex size-9 shrink-0 items-center justify-center rounded-lg border">
                 <AlertTriangle className="size-5" />
               </div>
             )}
@@ -79,14 +73,12 @@ export function ConfirmDialog({
             {cancelText}
           </Button>
           <Button
-            variant={variant === "danger" ? "danger" : "primary"}
+            variant={variant === 'danger' ? 'danger' : 'primary'}
             onClick={handleConfirm}
             disabled={loading}
             className="relative font-bold"
           >
-            {loading && (
-              <Loader2 className="mr-1.5 size-4 animate-spin text-current" />
-            )}
+            {loading && <Loader2 className="mr-1.5 size-4 animate-spin text-current" />}
             <span>{confirmText}</span>
           </Button>
         </div>

@@ -126,9 +126,9 @@
     "loginPromptTitle": "Bạn muốn theo dõi biến động giá trị kho đồ mỗi ngày?",
     "loginPromptDesc": "Đăng nhập ngay để tự động cập nhật và quản lý giá trị vật phẩm mỗi ngày.",
     "portfolio": "Portfolio",
-    "exportExcel": "Xuất CSV",
-    "importExcel": "Nhập CSV",
-    "readingExcel": "Đang đọc CSV...",
+    "exportExcel": "Xuất Excel",
+    "importExcel": "Nhập Excel",
+    "readingExcel": "Đang đọc Excel...",
     "importing": "Đang import...",
     "addItem": "Thêm vật phẩm",
     "addAccount": "Thêm tài khoản",
@@ -201,8 +201,8 @@
     "updatingItem": "Đang cập nhật vật phẩm...",
     "itemUpdated": "Đã cập nhật vật phẩm thành công!",
     "itemUpdateError": "Lỗi cập nhật vật phẩm",
-    "importSuccess": "Import CSV thành công {{count}} dòng.",
-    "importError": "Lỗi import CSV",
+    "importSuccess": "Import Excel thành công {{count}} dòng.",
+    "importError": "Lỗi import Excel",
     "saveCookie": "Lưu Cookie",
     "howToGetCookie": "Cách lấy Cookie?",
     "unlink": "Hủy liên kết",
@@ -210,14 +210,18 @@
     "noAccounts": "Chưa liên kết tài khoản nào.",
     "noAccountsDesc": "Nhập link profile Steam ở trên để bắt đầu theo dõi hòm đồ.",
     "emptyTitle": "Chưa có vật phẩm nào",
-    "emptyDesc": "Bắt đầu bằng cách thêm vật phẩm hoặc nhập từ file CSV.",
+    "emptyDesc": "Bắt đầu bằng cách thêm vật phẩm hoặc nhập từ file Excel.",
     "viewMode": "Chi tiết",
     "caseSummaryMode": "Gom vật phẩm",
     "importHistory": "Lịch sử Import",
     "recentImportHistory": "Lịch sử Import gần đây",
     "noImportsYet": "Chưa có file nào được import.",
     "undoing": "Đang xóa...",
-    "undo": "Hoàn tác (Xóa)"
+    "undo": "Hoàn tác",
+    "confirmUndoImportTitle": "Xác nhận hoàn tác",
+    "confirmUndoImportDesc": "Bạn có chắc chắn muốn hoàn tác lần nhập này? Tất cả vật phẩm được thêm từ file \"{{fileName}}\" sẽ bị xóa khỏi hệ thống.",
+    "importedItemsDetails": "Chi tiết vật phẩm đã nhập",
+    "viewDetails": "Xem chi tiết"
   },
   "portfolio": {
     "emptyStateTitle": "Chưa có case nào trong portfolio",
@@ -451,15 +455,15 @@
     "reset": "Xóa nháp"
   },
   "importProgress": {
-    "readingExcel": "Đang đọc file CSV...",
+    "readingExcel": "Đang đọc file Excel...",
     "uploading": "Đang tải lên portfolio...",
-    "importComplete": "Nhập CSV hoàn tất",
-    "importError": "Lỗi nhập CSV",
+    "importComplete": "Nhập Excel hoàn tất",
+    "importError": "Lỗi nhập Excel",
     "undoing": "Đang hoàn tác...",
     "undoImport": "Hoàn tác import"
   },
   "importExcelConfirm": {
-    "title": "Xác nhận nhập từ CSV",
+    "title": "Xác nhận nhập từ Excel",
     "description": "Kiểm tra lại danh sách vật phẩm từ file. Bạn có thể chọn/bỏ chọn các vật phẩm để nhập và chỉnh sửa nhanh số lượng hoặc giá mua.",
     "itemName": "Tên vật phẩm",
     "quantity": "Số lượng",
@@ -470,7 +474,12 @@
     "selectedCount": "Đã chọn {{selected}} / {{total}} vật phẩm",
     "confirmButton": "Xác nhận nhập",
     "cancelButton": "Hủy bỏ",
-    "newStatus": "Mới"
+    "newStatus": "Mới",
+    "quantityShort": "SL",
+    "buyPriceShort": "Giá mua",
+    "buyDate": "Ngày mua",
+    "addedDate": "Ngày thêm",
+    "note": "Ghi chú"
   },
   "scanner": {
     "title": "Quét & Định giá Kho đồ Steam",
@@ -639,10 +648,10 @@
     "autoAdded": "Tự động thêm vào Portfolio"
   },
   "excelMapping": {
-    "title": "Liên kết cột CSV",
-    "description": "Kéo thả cột CSV ở bên trái vào trường tương ứng ở bên phải, hoặc chọn trực tiếp từ danh sách.",
-    "descriptionMobile": "Chọn cột CSV tương ứng cho từng trường hệ thống ở danh sách bên dưới.",
-    "excelColumns": "Cột trong CSV",
+    "title": "Liên kết cột Excel",
+    "description": "Kéo thả cột Excel ở bên trái vào trường tương ứng ở bên phải, hoặc chọn trực tiếp từ danh sách.",
+    "descriptionMobile": "Chọn cột Excel tương ứng cho từng trường hệ thống ở danh sách bên dưới.",
+    "excelColumns": "Cột trong Excel",
     "unnamedColumn": "Cột {{letter}} (Trống)",
     "systemFields": "Trường hệ thống",
     "fieldName": "Tên vật phẩm",
@@ -672,7 +681,7 @@
     "requiredFieldMissing": "Vui lòng chọn cột cho trường \"Tên vật phẩm\".",
     "emptyFile": "Không tìm thấy cột nào trong file.",
     "deleteTemplateTooltip": "Xóa template này",
-    "dropFileHere": "Thả file CSV vào đây",
+    "dropFileHere": "Thả file Excel vào đây",
     "pasteHint": "Hoặc copy ô từ Excel rồi nhấn Ctrl+V",
     "parsedRows": "{{count}} dòng hợp lệ"
   },

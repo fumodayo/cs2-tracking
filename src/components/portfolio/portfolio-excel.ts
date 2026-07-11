@@ -1,3 +1,6 @@
+import readExcelFile, { readSheet } from 'read-excel-file/universal';
+import writeXlsxFile from 'write-excel-file/browser';
+import type { SheetData } from 'write-excel-file/browser';
 import type { PortfolioReportDto } from '@/types/report';
 import type { PortfolioImportRow } from '@/types/portfolio-import';
 export type { PortfolioImportRow } from '@/types/portfolio-import';
@@ -19,7 +22,7 @@ export type MappingTemplate = {
   createdAt: string;
 };
 
-const MAX_IMPORT_BYTES = 2 * 1024 * 1024;
+const MAX_TEXT_IMPORT_BYTES = 2 * 1024 * 1024;
 
 const EXPORT_COLUMNS = {
   caseId: 'Case ID',
@@ -49,19 +52,19 @@ const HEADER_ALIASES = {
   note: ['note', 'ghichu'],
 } as const;
 
-export function exportPortfolioToExcel(report: PortfolioReportDto) {
-  const rows = [
+export async function exportPortfolioToExcel(report: PortfolioReportDto) {
+  const rows: SheetData = [
     [
-      EXPORT_COLUMNS.caseId,
-      EXPORT_COLUMNS.caseName,
-      EXPORT_COLUMNS.marketHashName,
-      EXPORT_COLUMNS.quantity,
-      EXPORT_COLUMNS.buyPrice,
-      EXPORT_COLUMNS.buyDate,
-      EXPORT_COLUMNS.note,
+      { value: EXPORT_COLUMNS.caseId, fontWeight: 'bold' },
+      { value: EXPORT_COLUMNS.caseName, fontWeight: 'bold' },
+      { value: EXPORT_COLUMNS.marketHashName, fontWeight: 'bold' },
+      { value: EXPORT_COLUMNS.quantity, fontWeight: 'bold' },
+      { value: EXPORT_COLUMNS.buyPrice, fontWeight: 'bold' },
+      { value: EXPORT_COLUMNS.buyDate, fontWeight: 'bold' },
+      { value: EXPORT_COLUMNS.note, fontWeight: 'bold' },
     ],
     ...report.rows.map((row) => [
-      row.item.caseId,
+      row.item.caseId ?? '',
       row.case.name,
       row.case.marketHashName,
       row.item.quantity,
@@ -71,22 +74,27 @@ export function exportPortfolioToExcel(report: PortfolioReportDto) {
     ]),
   ];
 
-  const csv = serializeDelimitedRows(rows, ',');
-  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' });
-  const url = URL.createObjectURL(blob);
-  const anchor = document.createElement('a');
-  anchor.href = url;
-  anchor.download = `cs2-portfolio-${new Date().toISOString().slice(0, 10)}.csv`;
-  document.body.appendChild(anchor);
-  anchor.click();
-  anchor.remove();
-  URL.revokeObjectURL(url);
+  await writeXlsxFile(rows, {
+    sheet: 'Portfolio',
+    stickyRowsCount: 1,
+    columns: [
+      { width: 26 },
+      { width: 34 },
+      { width: 34 },
+      { width: 10 },
+      { width: 14 },
+      { width: 14 },
+      { width: 32 },
+    ],
+  }).toFile(`cs2-portfolio-${new Date().toISOString().slice(0, 10)}.xlsx`);
 }
 
 export async function parsePortfolioExcelFile(file: File): Promise<PortfolioImportRow[]> {
-  const text = await readSourceText(file);
-  const rows = parseDelimitedRows(text, detectDelimiter(text, file.name));
-  const parsedRows = parsePortfolioWorksheet(rows);
+  const parsedRows = isSpreadsheetFile(file)
+    ? (await readExcelFile(file, { trim: true })).flatMap((sheet) =>
+        parsePortfolioWorksheet(sheet.data)
+      )
+    : parsePortfolioWorksheet(await readSourceMatrix(file));
 
   if (parsedRows.length === 0) {
     throw new Error('File does not contain valid portfolio rows.');
@@ -144,8 +152,8 @@ function normalizeFlexibleImportRow(
         : normalizeExcelDate(row[columns.buyDate]),
     note:
       columns.note === undefined
-        ? 'Imported from CSV'
-        : stringifyCell(row[columns.note]) || 'Imported from CSV',
+        ? 'Imported from Excel'
+        : stringifyCell(row[columns.note]) || 'Imported from Excel',
   };
 }
 
@@ -183,9 +191,11 @@ function findHeaderIndex(headers: string[], aliases: readonly string[]): number 
 }
 
 function normalizeHeaderKey(value: unknown): string {
-  return stringifyCell(value)
+  return normalizeHeaderCell(value)
     .normalize('NFD')
     .replace(/[\u0300-\u036f]/g, '')
+    .replace(/đ/g, 'd')
+    .replace(/Đ/g, 'D')
     .replace(/[^a-zA-Z0-9]/g, '')
     .toLowerCase();
 }
@@ -196,6 +206,12 @@ function stringifyCell(value: unknown): string {
   }
 
   return String(value).trim();
+}
+
+function normalizeHeaderCell(value: unknown): string {
+  const text = stringifyCell(value);
+  const normalized = text.toLowerCase();
+  return normalized === 'null' || normalized === 'undefined' ? '' : text;
 }
 
 function normalizeMarketHashNameCell(value: unknown): string {
@@ -211,6 +227,8 @@ function isSummaryOrFormulaRow(name: string): boolean {
   const normalized = name
     .normalize('NFD')
     .replace(/[\u0300-\u036f]/g, '')
+    .replace(/đ/g, 'd')
+    .replace(/Đ/g, 'D')
     .replace(/[^a-zA-Z]/g, '')
     .toLowerCase();
 
@@ -269,17 +287,11 @@ function normalizeExcelDate(value: unknown): string {
 export async function readExcelHeaders(
   source: File | string
 ): Promise<{ headers: string[]; headerRowIndex: number; matrix: unknown[][] }> {
-  const text = await readSourceText(source);
-  const matrix = parseDelimitedRows(
-    text,
-    detectDelimiter(text, typeof source === 'string' ? '' : source.name)
-  );
+  const matrix = await readSourceMatrix(source);
 
   const headerRowIndex = matrix.findIndex((row) => {
     if (!Array.isArray(row)) return false;
-    const nonEmptyCells = row.filter(
-      (cell) => cell !== undefined && cell !== null && String(cell).trim() !== ''
-    );
+    const nonEmptyCells = row.filter((cell) => normalizeHeaderCell(cell) !== '');
     return nonEmptyCells.length >= 2;
   });
 
@@ -287,7 +299,7 @@ export async function readExcelHeaders(
     return { headers: [], headerRowIndex: -1, matrix: [] };
   }
 
-  const headers = matrix[headerRowIndex].map((cell) => String(cell).trim());
+  const headers = matrix[headerRowIndex].map((cell) => normalizeHeaderCell(cell));
   return { headers, headerRowIndex, matrix };
 }
 
@@ -296,11 +308,7 @@ export async function parseExcelWithMapping(
   mapping: ColumnMapping,
   headerRowIndex: number
 ): Promise<PortfolioImportRow[]> {
-  const text = await readSourceText(source);
-  const matrix = parseDelimitedRows(
-    text,
-    detectDelimiter(text, typeof source === 'string' ? '' : source.name)
-  );
+  const matrix = await readSourceMatrix(source);
   return parseMatrixWithMapping(matrix, mapping, headerRowIndex);
 }
 
@@ -341,8 +349,8 @@ export function parseMatrixWithMapping(
 
     const note =
       mapping.note !== undefined && mapping.note < row.length
-        ? stringifyCell(row[mapping.note]) || 'Imported from CSV'
-        : 'Imported from CSV';
+        ? stringifyCell(row[mapping.note]) || 'Imported from Excel'
+        : 'Imported from Excel';
 
     const caseId =
       mapping.caseId !== undefined && mapping.caseId < row.length
@@ -395,20 +403,38 @@ export function autoSuggestMapping(headers: string[]): Partial<ColumnMapping> {
   return mapping;
 }
 
+async function readSourceMatrix(source: File | string): Promise<unknown[][]> {
+  if (typeof source !== 'string' && isSpreadsheetFile(source)) {
+    return readSheet(source, { trim: true });
+  }
+
+  const text = await readSourceText(source);
+  return parseDelimitedRows(
+    text,
+    detectDelimiter(text, typeof source === 'string' ? '' : source.name)
+  );
+}
+
 async function readSourceText(source: File | string): Promise<string> {
   if (typeof source === 'string') {
     return source;
   }
 
-  if (source.size > MAX_IMPORT_BYTES) {
-    throw new Error('csvFileTooLarge');
+  if (source.size > MAX_TEXT_IMPORT_BYTES) {
+    throw new Error('textImportFileTooLarge');
   }
 
-  if (/\.(xlsx|xls)$/i.test(source.name)) {
-    throw new Error('binarySpreadsheetUnsupported');
+  if (/\.xls$/i.test(source.name)) {
+    throw new Error(
+      'Legacy .xls files are not supported. Please save the file as .xlsx and try again.'
+    );
   }
 
   return source.text();
+}
+
+function isSpreadsheetFile(file: File): boolean {
+  return /\.xlsx$/i.test(file.name);
 }
 
 function detectDelimiter(text: string, fileName: string): ',' | '\t' {
@@ -469,23 +495,4 @@ function parseDelimitedRows(text: string, delimiter: ',' | '\t'): string[][] {
   }
 
   return rows;
-}
-
-function serializeDelimitedRows(rows: unknown[][], delimiter: ',' | '\t'): string {
-  return rows
-    .map((row) => row.map((cell) => escapeDelimitedCell(cell, delimiter)).join(delimiter))
-    .join('\r\n');
-}
-
-function escapeDelimitedCell(value: unknown, delimiter: ',' | '\t'): string {
-  const text = stringifyCell(value);
-  if (
-    text.includes('"') ||
-    text.includes('\n') ||
-    text.includes('\r') ||
-    text.includes(delimiter)
-  ) {
-    return `"${text.replace(/"/g, '""')}"`;
-  }
-  return text;
 }
