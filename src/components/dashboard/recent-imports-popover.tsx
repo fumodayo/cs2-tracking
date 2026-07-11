@@ -42,6 +42,10 @@ type UseRecentImportsOptions = {
   sessionLoading: boolean;
 };
 
+type RemoveRecentImportOptions = {
+  syncToServer?: boolean;
+};
+
 // eslint-disable-next-line react-refresh/only-export-components
 export function useRecentImports({ user, sessionLoading }: UseRecentImportsOptions) {
   const queryClient = useQueryClient();
@@ -134,11 +138,16 @@ export function useRecentImports({ user, sessionLoading }: UseRecentImportsOptio
     });
   };
 
-  const removeRecentImport = (id: string) => {
+  const removeRecentImport = (id: string, options: RemoveRecentImportOptions = {}) => {
+    const syncToServer = options.syncToServer ?? true;
     if (userId) {
       queryClient.setQueryData<RecentImport[]>(USER_RECENT_IMPORTS_QUERY_KEY, (prev = []) =>
         prev.filter((x) => x.id !== id)
       );
+
+      if (!syncToServer) {
+        return;
+      }
 
       void deleteUserRecentImport(id)
         .then((items) => {
@@ -208,7 +217,7 @@ export function RecentImportsPopover({
   onRemove,
 }: {
   recentImports: RecentImport[];
-  onRemove: (id: string) => void;
+  onRemove: (id: string, options?: RemoveRecentImportOptions) => void;
 }) {
   const { t } = useTranslation();
   const queryClient = useQueryClient();
@@ -221,7 +230,10 @@ export function RecentImportsPopover({
       const res = await fetch('/api/portfolio', {
         method: 'DELETE',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ ids: importItem.importedIds }),
+        body: JSON.stringify({
+          ids: importItem.importedIds,
+          recentImportId: importItem.id,
+        }),
       });
       if (!res.ok) throw new Error('Undo failed');
       return importItem.id;
@@ -231,7 +243,7 @@ export function RecentImportsPopover({
     },
     onSuccess: (id) => {
       queryClient.invalidateQueries({ queryKey: PORTFOLIO_QUERY_KEY });
-      onRemove(id);
+      onRemove(id, { syncToServer: false });
     },
     onSettled: () => {
       setUndoingId(null);

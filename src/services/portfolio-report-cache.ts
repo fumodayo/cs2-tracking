@@ -4,12 +4,17 @@ const REPORT_CACHE_TTL_MS = 60_000;
 
 type CacheEntry = {
   report: PortfolioReportDto;
+  cachedAt: Date;
   expiresAt: number;
 };
 
 const cache = new Map<string, CacheEntry>();
 
 export function getCachedPortfolioReport(ownerId: string): PortfolioReportDto | null {
+  return getCachedPortfolioReportEntry(ownerId)?.report ?? null;
+}
+
+export function getCachedPortfolioReportEntry(ownerId: string): CacheEntry | null {
   const entry = cache.get(ownerId);
   if (!entry) return null;
 
@@ -18,12 +23,13 @@ export function getCachedPortfolioReport(ownerId: string): PortfolioReportDto | 
     return null;
   }
 
-  return entry.report;
+  return entry;
 }
 
 export function setCachedPortfolioReport(ownerId: string, report: PortfolioReportDto): void {
   cache.set(ownerId, {
     report,
+    cachedAt: new Date(),
     expiresAt: Date.now() + REPORT_CACHE_TTL_MS,
   });
 }

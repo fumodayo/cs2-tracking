@@ -8,20 +8,25 @@ import { getErrorMessage } from '@/utils/error';
 import { portfolioItemSchema } from '@/utils/validation';
 import { STORAGE_UNIT_MAX_CAPACITY } from '@/domain/storage-unit';
 import { getOwnerFilter } from '@/infrastructure/db/owner-filter';
-import { publishPortfolioChanged } from '@/services/realtime/portfolio-events';
 import {
-  getCachedPortfolioReport,
+  hasStoredPortfolioEventsAfter,
+  publishPortfolioChanged,
+} from '@/services/realtime/portfolio-events';
+import { publishUserRecentImportsChanged } from '@/services/realtime/user-recent-import-events';
+import {
+  getCachedPortfolioReportEntry,
   setCachedPortfolioReport,
 } from '@/services/portfolio-report-cache';
 
 export const dynamic = 'force-dynamic';
 
-export async function GET() {
+export async function GET(request: NextRequest) {
   try {
     const ownerId = await getPortfolioOwnerId();
-    const cachedReport = getCachedPortfolioReport(ownerId);
+    const forceFresh = request.nextUrl.searchParams.get('fresh') === '1';
+    const cachedReport = forceFresh ? null : await getFreshCachedPortfolioReport(ownerId);
     if (cachedReport) {
-      return NextResponse.json(cachedReport);
+      return NextResponse.json(cachedReport.report);
     }
 
     const { portfolioReportService } = createServices({ ownerId });
@@ -38,6 +43,17 @@ export async function GET() {
       { status: 500 }
     );
   }
+}
+
+async function getFreshCachedPortfolioReport(ownerId: string) {
+  const cachedReport = getCachedPortfolioReportEntry(ownerId);
+  if (!cachedReport) return null;
+
+  const hasNewerPortfolioEvent = await hasStoredPortfolioEventsAfter(
+    ownerId,
+    cachedReport.cachedAt
+  );
+  return hasNewerPortfolioEvent ? null : cachedReport;
 }
 
 export async function POST(request: NextRequest) {
@@ -184,7 +200,13 @@ export async function POST(request: NextRequest) {
 
 export async function DELETE(request: NextRequest) {
   try {
-    const { ids } = await request.json();
+    const body = (await request.json()) as {
+      ids?: unknown;
+      recentImportId?: unknown;
+    };
+    const { ids } = body;
+    const recentImportId =
+      typeof body.recentImportId === 'string' ? body.recentImportId.trim() : '';
     if (!Array.isArray(ids) || ids.length === 0) {
       return NextResponse.json({ message: 'selectItemsToDelete' }, { status: 400 });
     }
@@ -297,6 +319,13 @@ export async function DELETE(request: NextRequest) {
     await publishPortfolioChanged(ownerId, 'deleted_many', {
       count: normalIds.length + virtualCaseIds.length,
     });
+    if (recentImportId && ownerId.startsWith('google:')) {
+      await db.collection('user_recent_imports').deleteOne({ ownerId, id: recentImportId });
+      await publishUserRecentImportsChanged(ownerId, 'deleted', {
+        id: recentImportId,
+        source: 'portfolio_undo',
+      });
+    }
     return NextResponse.json(serializedReport);
   } catch (error) {
     return NextResponse.json(
