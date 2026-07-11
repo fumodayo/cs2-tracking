@@ -145,7 +145,10 @@ export function createScanProgressClient({
         }
 
         signal?.addEventListener('abort', onAbort, { once: true });
-        client = new Ably.Realtime({ tokenDetails: realtimeConfig.tokenDetails });
+        client = new Ably.Realtime({
+          tokenDetails: realtimeConfig.tokenDetails,
+          transports: ['web_socket'],
+        });
         channel = client.channels.get(realtimeConfig.channelName!);
 
         timeoutId = setInterval(() => {

@@ -49,6 +49,14 @@ export function AdminBugReportsClient() {
     let disposed = false;
     let client: Ably.Realtime | null = null;
     let channel: Ably.RealtimeChannel | null = null;
+    let fallbackTimer: ReturnType<typeof setTimeout> | null = null;
+
+    const clearFallbackTimer = () => {
+      if (fallbackTimer) {
+        clearTimeout(fallbackTimer);
+        fallbackTimer = null;
+      }
+    };
 
     const startRealtime = async () => {
       try {
@@ -62,15 +70,41 @@ export function AdminBugReportsClient() {
           return;
         }
 
-        client = new Ably.Realtime({ tokenDetails: realtimeConfig.tokenDetails });
+        client = new Ably.Realtime({
+          tokenDetails: realtimeConfig.tokenDetails,
+          transports: ['web_socket'],
+        });
         channel = client.channels.get(realtimeConfig.channelName);
+        let ablyConnected = false;
+        fallbackTimer = setTimeout(() => {
+          fallbackTimer = null;
+          if (!disposed && !ablyConnected) {
+            client?.close();
+            setRealtimeConnected(false);
+          }
+        }, 5_000);
+
+        client.connection.on('connected', () => {
+          ablyConnected = true;
+          clearFallbackTimer();
+          if (!disposed) {
+            setRealtimeConnected(true);
+          }
+        });
+
+        client.connection.on((stateChange) => {
+          if (stateChange.current === 'failed' || stateChange.current === 'suspended') {
+            clearFallbackTimer();
+            client?.close();
+            if (!disposed) {
+              setRealtimeConnected(false);
+            }
+          }
+        });
+
         await channel.subscribe('bug-report.changed', () => {
           void queryClient.invalidateQueries({ queryKey: ['bug-reports'] });
         });
-
-        if (!disposed) {
-          setRealtimeConnected(true);
-        }
       } catch {
         if (!disposed) {
           setRealtimeConnected(false);
@@ -82,6 +116,7 @@ export function AdminBugReportsClient() {
 
     return () => {
       disposed = true;
+      clearFallbackTimer();
       if (channel) {
         void channel.unsubscribe('bug-report.changed');
       }

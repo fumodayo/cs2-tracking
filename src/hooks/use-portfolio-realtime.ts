@@ -3,7 +3,7 @@
 import * as Ably from 'ably';
 import { useEffect, useRef } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
-import { PORTFOLIO_QUERY_KEY } from '@/lib/api-client/portfolio-api';
+import { fetchFreshPortfolioReport, PORTFOLIO_QUERY_KEY } from '@/lib/api-client/portfolio-api';
 import { STEAM_ACCOUNTS_QUERY_KEY } from '@/lib/api-client/steam-accounts-api';
 
 type PortfolioRealtimePayload = {
@@ -26,8 +26,15 @@ export function usePortfolioRealtime(enabled: boolean, ownerId?: string) {
     let ablyChannel: Ably.RealtimeChannel | null = null;
     let invalidationTimer: ReturnType<typeof setTimeout> | null = null;
 
-    const invalidatePortfolioQueries = () => {
-      void queryClient.invalidateQueries({ queryKey: PORTFOLIO_QUERY_KEY });
+    const refreshPortfolioQueries = () => {
+      void fetchFreshPortfolioReport()
+        .then((report) => {
+          queryClient.setQueryData(PORTFOLIO_QUERY_KEY, report);
+        })
+        .catch((error) => {
+          console.error('Failed to refresh fresh portfolio report after realtime event:', error);
+          void queryClient.invalidateQueries({ queryKey: PORTFOLIO_QUERY_KEY });
+        });
       void queryClient.invalidateQueries({ queryKey: ['portfolio-storage-units'] });
       void queryClient.invalidateQueries({ queryKey: STEAM_ACCOUNTS_QUERY_KEY });
     };
@@ -40,7 +47,7 @@ export function usePortfolioRealtime(enabled: boolean, ownerId?: string) {
       invalidationTimer = setTimeout(() => {
         invalidationTimer = null;
         if (!disposed) {
-          invalidatePortfolioQueries();
+          refreshPortfolioQueries();
         }
       }, 250);
     };
@@ -64,7 +71,6 @@ export function usePortfolioRealtime(enabled: boolean, ownerId?: string) {
 
     const startAbly = async () => {
       if (!ownerId) {
-        startSseFallback();
         return;
       }
 
@@ -78,10 +84,38 @@ export function usePortfolioRealtime(enabled: boolean, ownerId?: string) {
         const tokenDetails = (await tokenResponse.json()) as Ably.TokenDetails;
         if (disposed) return;
 
-        const client = new Ably.Realtime({ tokenDetails });
+        const client = new Ably.Realtime({
+          tokenDetails,
+          transports: ['web_socket'],
+        });
         const channel = client.channels.get(`portfolio:${ownerId}`);
         ablyClient = client;
         ablyChannel = channel;
+        let ablyConnected = false;
+        let fallbackTimer: ReturnType<typeof setTimeout> | null = setTimeout(() => {
+          fallbackTimer = null;
+          if (!disposed && !ablyConnected) {
+            client.close();
+          }
+        }, 5_000);
+
+        client.connection.on('connected', () => {
+          ablyConnected = true;
+          if (fallbackTimer) {
+            clearTimeout(fallbackTimer);
+            fallbackTimer = null;
+          }
+        });
+
+        client.connection.on((stateChange) => {
+          if (stateChange.current === 'failed' || stateChange.current === 'suspended') {
+            if (fallbackTimer) {
+              clearTimeout(fallbackTimer);
+              fallbackTimer = null;
+            }
+            client.close();
+          }
+        });
 
         await channel.subscribe('portfolio.changed', (message) => {
           handlePortfolioChanged(message.data as PortfolioRealtimePayload);
@@ -92,6 +126,7 @@ export function usePortfolioRealtime(enabled: boolean, ownerId?: string) {
       }
     };
 
+    startSseFallback();
     void startAbly();
 
     return () => {

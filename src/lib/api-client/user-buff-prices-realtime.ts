@@ -38,8 +38,36 @@ export function subscribeUserBuffPricesChanges(onChanged: () => void): () => voi
       const realtimeConfig = (await tokenResponse.json()) as UserBuffPricesRealtimeTokenResponse;
       if (!realtimeConfig.tokenDetails || !realtimeConfig.channelName || disposed) return;
 
-      client = new Ably.Realtime({ tokenDetails: realtimeConfig.tokenDetails });
+      client = new Ably.Realtime({
+        tokenDetails: realtimeConfig.tokenDetails,
+        transports: ['web_socket'],
+      });
       channel = client.channels.get(realtimeConfig.channelName);
+      let ablyConnected = false;
+      let fallbackTimer: ReturnType<typeof setTimeout> | null = setTimeout(() => {
+        fallbackTimer = null;
+        if (!disposed && !ablyConnected) {
+          client?.close();
+        }
+      }, 5_000);
+
+      client.connection.on('connected', () => {
+        ablyConnected = true;
+        if (fallbackTimer) {
+          clearTimeout(fallbackTimer);
+          fallbackTimer = null;
+        }
+      });
+
+      client.connection.on((stateChange) => {
+        if (stateChange.current === 'failed' || stateChange.current === 'suspended') {
+          if (fallbackTimer) {
+            clearTimeout(fallbackTimer);
+            fallbackTimer = null;
+          }
+          client?.close();
+        }
+      });
 
       await channel.subscribe('user-buff-prices.changed', () => {
         scheduleChanged();

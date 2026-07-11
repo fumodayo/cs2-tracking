@@ -25,6 +25,11 @@ export async function fetchPortfolioReport(): Promise<PortfolioReportDto> {
   return parseResponse<PortfolioReportDto>(response);
 }
 
+export async function fetchFreshPortfolioReport(): Promise<PortfolioReportDto> {
+  const response = await fetch('/api/portfolio?fresh=1', { cache: 'no-store' });
+  return parseResponse<PortfolioReportDto>(response);
+}
+
 export async function refreshPortfolioPrices(): Promise<PortfolioReportDto> {
   const response = await fetch('/api/prices/refresh', { method: 'POST' });
   return parseResponse<PortfolioReportDto>(response);
