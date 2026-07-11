@@ -8,6 +8,7 @@ import { ObjectId } from 'mongodb';
 import { getDatabase } from '@/infrastructure/db/mongo-client';
 import { STORAGE_UNIT_MAX_CAPACITY } from '@/domain/storage-unit';
 import { publishPortfolioChanged } from '@/services/realtime/portfolio-events';
+import { setCachedPortfolioReport } from '@/services/portfolio-report-cache';
 
 export const dynamic = 'force-dynamic';
 
@@ -183,8 +184,10 @@ export async function PATCH(request: NextRequest, context: RouteContext) {
     const report = await portfolioReportService.buildReport({
       refreshStalePrices: false,
     });
+    const serializedReport = serializeReport(report);
+    setCachedPortfolioReport(ownerId, serializedReport);
     await publishPortfolioChanged(ownerId, 'updated', { id });
-    return NextResponse.json(serializeReport(report));
+    return NextResponse.json(serializedReport);
   } catch (error) {
     return NextResponse.json(
       { message: getErrorMessage(error, 'cannotUpdatePortfolio') },
@@ -255,8 +258,10 @@ export async function DELETE(_request: NextRequest, context: RouteContext) {
     const report = await portfolioReportService.buildReport({
       refreshStalePrices: false,
     });
+    const serializedReport = serializeReport(report);
+    setCachedPortfolioReport(ownerId, serializedReport);
     await publishPortfolioChanged(ownerId, 'deleted', { id });
-    return NextResponse.json(serializeReport(report));
+    return NextResponse.json(serializedReport);
   } catch (error) {
     return NextResponse.json(
       { message: getErrorMessage(error, 'cannotUpdatePortfolio') },

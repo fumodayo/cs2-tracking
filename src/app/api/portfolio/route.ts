@@ -9,18 +9,29 @@ import { portfolioItemSchema } from '@/utils/validation';
 import { STORAGE_UNIT_MAX_CAPACITY } from '@/domain/storage-unit';
 import { getOwnerFilter } from '@/infrastructure/db/owner-filter';
 import { publishPortfolioChanged } from '@/services/realtime/portfolio-events';
+import {
+  getCachedPortfolioReport,
+  setCachedPortfolioReport,
+} from '@/services/portfolio-report-cache';
 
 export const dynamic = 'force-dynamic';
 
 export async function GET() {
   try {
     const ownerId = await getPortfolioOwnerId();
+    const cachedReport = getCachedPortfolioReport(ownerId);
+    if (cachedReport) {
+      return NextResponse.json(cachedReport);
+    }
+
     const { portfolioReportService } = createServices({ ownerId });
     const report = await portfolioReportService.buildReport({
       refreshStalePrices: false,
     });
+    const serializedReport = serializeReport(report);
+    setCachedPortfolioReport(ownerId, serializedReport);
 
-    return NextResponse.json(serializeReport(report));
+    return NextResponse.json(serializedReport);
   } catch (error) {
     return NextResponse.json(
       { message: getErrorMessage(error, 'cannotProcessPortfolio') },
@@ -159,8 +170,10 @@ export async function POST(request: NextRequest) {
     const report = await portfolioReportService.buildReport({
       refreshStalePrices: false,
     });
+    const serializedReport = serializeReport(report);
+    setCachedPortfolioReport(ownerId, serializedReport);
     await publishPortfolioChanged(ownerId, 'created', { count: 1 });
-    return NextResponse.json(serializeReport(report), { status: 201 });
+    return NextResponse.json(serializedReport, { status: 201 });
   } catch (error) {
     return NextResponse.json(
       { message: getErrorMessage(error, 'cannotProcessPortfolio') },
@@ -279,10 +292,12 @@ export async function DELETE(request: NextRequest) {
     const report = await portfolioReportService.buildReport({
       refreshStalePrices: false,
     });
+    const serializedReport = serializeReport(report);
+    setCachedPortfolioReport(ownerId, serializedReport);
     await publishPortfolioChanged(ownerId, 'deleted_many', {
       count: normalIds.length + virtualCaseIds.length,
     });
-    return NextResponse.json(serializeReport(report));
+    return NextResponse.json(serializedReport);
   } catch (error) {
     return NextResponse.json(
       { message: getErrorMessage(error, 'cannotProcessPortfolio') },

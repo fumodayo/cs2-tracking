@@ -5,6 +5,7 @@ import { serializeReport } from '@/services/dto';
 import { getErrorMessage } from '@/utils/error';
 import { pricesRefreshRateLimiter } from '@/infrastructure/rate-limiter';
 import { publishPortfolioChanged } from '@/services/realtime/portfolio-events';
+import { setCachedPortfolioReport } from '@/services/portfolio-report-cache';
 
 export const dynamic = 'force-dynamic';
 
@@ -27,9 +28,11 @@ export async function POST(request: NextRequest) {
     const report = await portfolioReportService.buildReport({
       forceRefresh: true,
     });
+    const serializedReport = serializeReport(report);
+    setCachedPortfolioReport(ownerId, serializedReport);
     await publishPortfolioChanged(ownerId, 'prices_refreshed');
 
-    return NextResponse.json(serializeReport(report));
+    return NextResponse.json(serializedReport);
   } catch (error) {
     return NextResponse.json(
       { message: getErrorMessage(error, 'cannotRefreshPrices') },

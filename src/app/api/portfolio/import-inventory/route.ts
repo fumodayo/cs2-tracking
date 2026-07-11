@@ -34,6 +34,7 @@ import { saveImportedPortfolioAccounts } from './import-inventory-account-links'
 import { assignManualItemsToStorageUnits } from './import-inventory-storage-units';
 import type { ScannedImportInput, StorageUnitAssignment } from './import-inventory-types';
 import { publishPortfolioChanged } from '@/services/realtime/portfolio-events';
+import { invalidateCachedPortfolioReport } from '@/services/portfolio-report-cache';
 
 export const dynamic = 'force-dynamic';
 
@@ -392,6 +393,7 @@ export async function POST(request: NextRequest) {
         });
 
         const totalSavedCount = scannedInputs.size + manualInputs.length;
+        invalidateCachedPortfolioReport(ownerId);
         await publishPortfolioChanged(ownerId, 'imported', {
           count: totalSavedCount,
           skipped: skipped.length,

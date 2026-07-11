@@ -5,6 +5,7 @@ import { serializeReport } from '@/services/dto';
 import type { PortfolioImportRowInput } from '@/services/portfolio-import-service';
 import { getErrorMessage } from '@/utils/error';
 import { publishPortfolioChanged } from '@/services/realtime/portfolio-events';
+import { setCachedPortfolioReport } from '@/services/portfolio-report-cache';
 
 export const dynamic = 'force-dynamic';
 
@@ -86,13 +87,15 @@ export async function POST(request: NextRequest) {
           const report = await portfolioReportService.buildReport({
             refreshStalePrices: false,
           });
+          const serializedReport = serializeReport(report);
+          setCachedPortfolioReport(ownerId, serializedReport);
           await publishPortfolioChanged(ownerId, 'imported', {
             count: importResult.importedCount,
           });
 
           send({
             type: 'complete',
-            result: { ...serializeReport(report), importResult },
+            result: { ...serializedReport, importResult },
           });
         } catch (err) {
           send({
