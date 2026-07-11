@@ -7,6 +7,8 @@ import { getPortfolioRealtimeChannelName } from '@/services/realtime/portfolio-e
 import { getPostAnalysisHistoryRealtimeChannelName } from '@/services/realtime/post-analysis-events';
 import { getScanRealtimeChannelName } from '@/services/realtime/scan-events';
 import { getUserBuffPricesRealtimeChannelName } from '@/services/realtime/user-buff-price-events';
+import { getUserPreferencesRealtimeChannelName } from '@/services/realtime/user-preferences-events';
+import { getUserRecentImportsRealtimeChannelName } from '@/services/realtime/user-recent-import-events';
 import { getUserSettingsRealtimeChannelName } from '@/services/realtime/user-settings-events';
 import { getInMemoryJob } from '@/services/scan-job-store';
 
@@ -32,6 +34,8 @@ export async function GET(request: NextRequest) {
   const wantsAdminBugReports = request.nextUrl.searchParams.get('adminBugReports') === '1';
   const wantsAdminPostAnalysis = request.nextUrl.searchParams.get('adminPostAnalysis') === '1';
   const wantsUserBuffPrices = request.nextUrl.searchParams.get('userBuffPrices') === '1';
+  const wantsUserPreferences = request.nextUrl.searchParams.get('userPreferences') === '1';
+  const wantsUserRecentImports = request.nextUrl.searchParams.get('userRecentImports') === '1';
   const wantsUserSettings = request.nextUrl.searchParams.get('userSettings') === '1';
   let scanChannelName: string | null = null;
   let responseChannelName: string | null = null;
@@ -69,6 +73,18 @@ export async function GET(request: NextRequest) {
     responseChannelName = userBuffPricesChannelName;
   }
 
+  let userPreferencesChannelName: string | null = null;
+  if (wantsUserPreferences) {
+    userPreferencesChannelName = getUserPreferencesRealtimeChannelName(ownerId);
+    responseChannelName = userPreferencesChannelName;
+  }
+
+  let userRecentImportsChannelName: string | null = null;
+  if (wantsUserRecentImports) {
+    userRecentImportsChannelName = getUserRecentImportsRealtimeChannelName(ownerId);
+    responseChannelName = userRecentImportsChannelName;
+  }
+
   let userSettingsChannelName: string | null = null;
   if (wantsUserSettings) {
     userSettingsChannelName = getUserSettingsRealtimeChannelName(ownerId);
@@ -87,6 +103,12 @@ export async function GET(request: NextRequest) {
   }
   if (userBuffPricesChannelName) {
     capability[userBuffPricesChannelName] = ['subscribe'];
+  }
+  if (userPreferencesChannelName) {
+    capability[userPreferencesChannelName] = ['subscribe'];
+  }
+  if (userRecentImportsChannelName) {
+    capability[userRecentImportsChannelName] = ['subscribe'];
   }
   if (userSettingsChannelName) {
     capability[userSettingsChannelName] = ['subscribe'];
