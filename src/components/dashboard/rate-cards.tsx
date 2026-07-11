@@ -1,12 +1,16 @@
 'use client';
 
-import { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Card } from '@/components/ui/card';
+import { useSession } from '@/components/auth/use-session';
 import type { PortfolioTableRow } from '@/components/portfolio';
 import { TbPercentage, TbShoppingBag, TbInfoCircle } from 'react-icons/tb';
 import { CountUp } from '@/components/ui/animation/count-up';
 import { Tooltip, TooltipProvider } from '@/components/ui/tooltip';
+import {
+  useSyncedPricingPreference,
+  useUserPreferencesRealtime,
+} from './hooks/use-user-preferences';
 
 type RateCardsProps = {
   rows: PortfolioTableRow[];
@@ -17,12 +21,6 @@ const RATE_ITEM_TYPES = new Set(['case', 'sticker', 'capsule']);
 
 const LS_KEY_RATE_SI = 'cs2t_rateSi';
 const LS_KEY_RATE_LE = 'cs2t_rateLe';
-
-function readRate(key: string, fallback: number): number {
-  if (typeof window === 'undefined') return fallback;
-  const saved = localStorage.getItem(key);
-  return saved ? Number(saved) || fallback : fallback;
-}
 
 /**
  *
@@ -84,16 +82,22 @@ function ProfitBadge({ profit, invested }: { profit: number; invested: number })
  */
 export function RateCards({ rows, totalInvested }: RateCardsProps) {
   const { t } = useTranslation();
-  const [rateSi, setRateSi] = useState(() => readRate(LS_KEY_RATE_SI, 60));
-  const [rateLe, setRateLe] = useState(() => readRate(LS_KEY_RATE_LE, 65));
-
-  useEffect(() => {
-    localStorage.setItem(LS_KEY_RATE_SI, String(rateSi));
-  }, [rateSi]);
-
-  useEffect(() => {
-    localStorage.setItem(LS_KEY_RATE_LE, String(rateLe));
-  }, [rateLe]);
+  const { user, loading: sessionLoading } = useSession();
+  useUserPreferencesRealtime({ user, sessionLoading });
+  const [rateSi, setRateSi] = useSyncedPricingPreference({
+    user,
+    sessionLoading,
+    preferenceKey: 'rateSi',
+    localStorageKey: LS_KEY_RATE_SI,
+    fallback: 60,
+  });
+  const [rateLe, setRateLe] = useSyncedPricingPreference({
+    user,
+    sessionLoading,
+    preferenceKey: 'rateLe',
+    localStorageKey: LS_KEY_RATE_LE,
+    fallback: 65,
+  });
 
   const valueSi = computeRateValue(rows, rateSi);
   const valueLe = computeRateValue(rows, rateLe);

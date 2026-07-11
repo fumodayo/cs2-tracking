@@ -1,6 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { ClientSessionUser } from '@/components/auth/use-session';
-import { useLocalStorage } from '@/hooks/use-local-storage';
 import {
   fetchUserBuffPrices,
   mergeUserBuffPrices,
@@ -14,6 +13,7 @@ import {
   writeLocalBuffPrices,
   type BuffPricesCny,
 } from '@/utils/buff-prices';
+import { useSyncedPricingPreference } from './use-user-preferences';
 
 interface UseBuffPricingOptions {
   user: ClientSessionUser | null;
@@ -24,7 +24,13 @@ export function useBuffPricing({ user, sessionLoading }: UseBuffPricingOptions) 
   const [pricesCny, setPricesCnyState] = useState<BuffPricesCny>(() => readLocalBuffPrices());
   const pricesRef = useRef<BuffPricesCny>(pricesCny);
   const userId = user?.id ?? null;
-  const [cnyToVndRate, setCnyToVndRate] = useLocalStorage<number>('cs2t_buffCnyToVndRate', 3600);
+  const [cnyToVndRate, setCnyToVndRate] = useSyncedPricingPreference({
+    user,
+    sessionLoading,
+    preferenceKey: 'buffCnyToVndRate',
+    localStorageKey: 'cs2t_buffCnyToVndRate',
+    fallback: 3600,
+  });
 
   useEffect(() => {
     pricesRef.current = pricesCny;

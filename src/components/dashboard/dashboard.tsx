@@ -39,6 +39,7 @@ export function Dashboard() {
     setError,
     user,
     googleConfigured,
+    sessionLoading,
     dialog: { open: dialogOpen, setOpen: setDialogOpen },
     buff: {
       pricesCny: buffPricesCny,
@@ -66,7 +67,7 @@ export function Dashboard() {
       suggestedMapping,
     },
     recentImports: { list: recentImports, remove: removeRecentImport },
-    table: { filteredRows, setFilteredRows, computedTransactionRows, deletingId },
+    table: { filteredRows, setFilteredRows, deletingId },
     reportQuery,
     accountsQuery,
     mutations: {
@@ -275,7 +276,10 @@ export function Dashboard() {
         {!loading && report && user ? (
           <div className="space-y-5">
             <SummaryCards
-              computedRows={filteredRows ?? computedTransactionRows}
+              user={user}
+              sessionLoading={sessionLoading}
+              computedRows={filteredRows ?? undefined}
+              summary={filteredRows === null ? report.summary : undefined}
               steamWalletTotal={steamWalletTotal}
               buffCnyToVndRate={buffCnyToVndRate}
               onUpdateBuffRate={handleUpdateBuffRate}

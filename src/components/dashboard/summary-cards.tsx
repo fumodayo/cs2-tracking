@@ -1,13 +1,15 @@
 'use client';
 
-import { useState, useEffect } from 'react';
 import { FadeIn } from '@/components/ui/animation';
 import { useTranslation } from 'react-i18next';
+import type { ClientSessionUser } from '@/components/auth/use-session';
 import type { PortfolioTableRow } from '@/components/portfolio';
+import type { PortfolioReportDto } from '@/types/report';
 import { BuffRateCard } from '@/components/inventory-scanner/buff-rate-card';
 import { RateCard } from '@/components/inventory-scanner/rate-card';
 import { StatCard } from '@/components/ui/stat-card';
 import { formatVND } from '@/components/inventory-scanner/utils';
+import { useSyncedPricingPreference } from './hooks/use-user-preferences';
 
 const RATE_ITEM_TYPES = new Set(['case', 'sticker', 'capsule']);
 
@@ -41,46 +43,57 @@ function computeRateValue(rows: PortfolioTableRow[], ratePercent: number): numbe
 const LS_KEY_RATE_SI = 'cs2t_rateSi';
 const LS_KEY_RATE_LE = 'cs2t_rateLe';
 
-function readRate(key: string, fallback: number): number {
-  if (typeof window === 'undefined') return fallback;
-  const saved = localStorage.getItem(key);
-  return saved ? Number(saved) || fallback : fallback;
-}
-
 type SummaryCardsProps = {
+  user: ClientSessionUser | null;
+  sessionLoading: boolean;
   computedRows?: PortfolioTableRow[];
+  summary?: PortfolioReportDto['summary'];
   steamWalletTotal?: number;
   buffCnyToVndRate: number;
   onUpdateBuffRate: (rate: number) => void;
 };
 
 export function SummaryCards({
+  user,
+  sessionLoading,
   computedRows = [],
+  summary,
   steamWalletTotal = 0,
   buffCnyToVndRate,
   onUpdateBuffRate,
 }: SummaryCardsProps) {
   const { t } = useTranslation();
 
-  const [rateSi, setRateSi] = useState(() => readRate(LS_KEY_RATE_SI, 60));
-  const [rateLe, setRateLe] = useState(() => readRate(LS_KEY_RATE_LE, 65));
-
-  useEffect(() => {
-    localStorage.setItem(LS_KEY_RATE_SI, String(rateSi));
-  }, [rateSi]);
-
-  useEffect(() => {
-    localStorage.setItem(LS_KEY_RATE_LE, String(rateLe));
-  }, [rateLe]);
+  const [rateSi, setRateSi] = useSyncedPricingPreference({
+    user,
+    sessionLoading,
+    preferenceKey: 'rateSi',
+    localStorageKey: LS_KEY_RATE_SI,
+    fallback: 60,
+  });
+  const [rateLe, setRateLe] = useSyncedPricingPreference({
+    user,
+    sessionLoading,
+    preferenceKey: 'rateLe',
+    localStorageKey: LS_KEY_RATE_LE,
+    fallback: 65,
+  });
 
   // Các phép tính
-  const valueSi = computeRateValue(computedRows, rateSi);
-  const valueLe = computeRateValue(computedRows, rateLe);
-  const itemCount = computedRows.reduce((sum, r) => sum + r.quantity, 0);
-  const totalCurrentValue = computedRows.reduce(
-    (sum, r) => sum + (r.currentValue ?? r.investedValue),
-    0
-  );
+  const hasComputedRows = computedRows.length > 0;
+  const summaryCurrentValue = summary?.totalCurrentValue ?? 0;
+  const valueSi = hasComputedRows
+    ? computeRateValue(computedRows, rateSi)
+    : summaryCurrentValue * (rateSi / 100);
+  const valueLe = hasComputedRows
+    ? computeRateValue(computedRows, rateLe)
+    : summaryCurrentValue * (rateLe / 100);
+  const itemCount = hasComputedRows
+    ? computedRows.reduce((sum, r) => sum + r.quantity, 0)
+    : (summary?.itemCount ?? 0);
+  const totalCurrentValue = hasComputedRows
+    ? computedRows.reduce((sum, r) => sum + (r.currentValue ?? r.investedValue), 0)
+    : summaryCurrentValue;
 
   return (
     <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">

@@ -3,6 +3,10 @@
 import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from 'react';
 import { useLocalStorage } from '@/hooks/use-local-storage';
 import { useSession } from '@/components/auth/use-session';
+import {
+  useSyncedPricingPreference,
+  useUserPreferencesRealtime,
+} from '@/components/dashboard/hooks/use-user-preferences';
 import { fetchUserBuffPrices, mergeUserBuffPrices } from '@/lib/api-client/user-buff-prices-api';
 import { subscribeUserBuffPricesChanges } from '@/lib/api-client/user-buff-prices-realtime';
 import {
@@ -11,16 +15,18 @@ import {
   readLocalBuffPrices,
   writeLocalBuffPrices,
 } from '@/utils/buff-prices';
-import { AccountEntry, ScanResultItem } from './types';
 import {
-  LS_ACCOUNTS,
-  LS_MANUAL_ITEMS,
   createAccount,
   LS_RATE_ALL,
   LS_RATE_LE,
   LS_BUFF_CNY_TO_VND_RATE,
   DEFAULT_BUFF_CNY_TO_VND_RATE,
 } from './utils';
+import {
+  loadScannerPersistedState,
+  persistScannerAccounts,
+  persistScannerManualItems,
+} from './scanner-persistence';
 
 import { initScannerState, scannerReducer } from './scanner-reducer';
 
@@ -88,6 +94,9 @@ export type ScannerQuerySetters = QueryParamsSetters<typeof scannerQueryConfig>;
 export function useInventoryScanner() {
   const [state, dispatch] = useReducer(scannerReducer, null, initScannerState);
   const [urlState, setters, debouncedUrlState] = useQueryParamsState(scannerQueryConfig);
+  const { user, googleConfigured, loading: sessionLoading } = useSession();
+  const userId = user?.id ?? null;
+  useUserPreferencesRealtime({ user, sessionLoading });
 
   // Đồng bộ tham số URL -> state reducer (nguồn sự thật một chiều)
   useEffect(() => {
@@ -121,12 +130,27 @@ export function useInventoryScanner() {
   }, [state.portfolioImportMessage, setters]);
 
   // Tách state rate ngoài reducer bằng useLocalStorage
-  const [rateAll, setRateAll] = useLocalStorage<number>(LS_RATE_ALL, 60);
-  const [rateLe, setRateLe] = useLocalStorage<number>(LS_RATE_LE, 65);
-  const [buffCnyToVndRate, setBuffCnyToVndRate] = useLocalStorage<number>(
-    LS_BUFF_CNY_TO_VND_RATE,
-    DEFAULT_BUFF_CNY_TO_VND_RATE
-  );
+  const [rateAll, setRateAll] = useSyncedPricingPreference({
+    user,
+    sessionLoading,
+    preferenceKey: 'rateSi',
+    localStorageKey: LS_RATE_ALL,
+    fallback: 60,
+  });
+  const [rateLe, setRateLe] = useSyncedPricingPreference({
+    user,
+    sessionLoading,
+    preferenceKey: 'rateLe',
+    localStorageKey: LS_RATE_LE,
+    fallback: 65,
+  });
+  const [buffCnyToVndRate, setBuffCnyToVndRate] = useSyncedPricingPreference({
+    user,
+    sessionLoading,
+    preferenceKey: 'buffCnyToVndRate',
+    localStorageKey: LS_BUFF_CNY_TO_VND_RATE,
+    fallback: DEFAULT_BUFF_CNY_TO_VND_RATE,
+  });
   const [mode, setMode] = useLocalStorage<'case-summary' | 'transactions'>(
     'cs2t_scanner_mode',
     'case-summary'
@@ -135,48 +159,65 @@ export function useInventoryScanner() {
   const [isLoaded, setIsLoaded] = useState(false);
   const [isRefreshingPrices, setIsRefreshingPrices] = useState(false);
 
-  const { user, googleConfigured, loading: sessionLoading } = useSession();
-  const userId = user?.id ?? null;
-
   const scanAbortControllerRef = useRef<AbortController | null>(null);
 
-  // Nạp state đã lưu từ localStorage sau khi mount để tránh lệch hydration
+  // Load saved scanner state after mount to avoid hydration mismatch.
+  // Large scan payloads are read from IndexedDB instead of synchronous localStorage JSON parsing.
   useEffect(() => {
-    let savedAccs: AccountEntry[] | null = null;
-    let savedManual: ScanResultItem[] | null = null;
+    let cancelled = false;
 
-    try {
-      const raw = localStorage.getItem(LS_ACCOUNTS);
-      if (raw) savedAccs = JSON.parse(raw);
-    } catch {
-      /* bỏ qua */
+    async function loadPersistedState() {
+      const persisted = await loadScannerPersistedState();
+      if (cancelled) return;
+
+      dispatch({
+        type: 'INIT_LOAD',
+        accounts: persisted.accounts ?? [createAccount('')],
+        manualItems: persisted.manualItems ?? [],
+        buffPricesCny: readLocalBuffPrices(),
+      });
+      setIsLoaded(true);
     }
 
-    try {
-      const raw = localStorage.getItem(LS_MANUAL_ITEMS);
-      if (raw) savedManual = JSON.parse(raw);
-    } catch {
-      /* bỏ qua */
-    }
+    void loadPersistedState().catch((error) => {
+      console.error('Failed to load scanner persisted state:', error);
+      if (cancelled) return;
 
-    dispatch({
-      type: 'INIT_LOAD',
-      accounts: savedAccs ?? [createAccount('')],
-      manualItems: savedManual ?? [],
-      buffPricesCny: readLocalBuffPrices(),
+      dispatch({
+        type: 'INIT_LOAD',
+        accounts: [createAccount('')],
+        manualItems: [],
+        buffPricesCny: readLocalBuffPrices(),
+      });
+      setIsLoaded(true);
     });
-    setIsLoaded(true);
+
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
-  // Đồng bộ vào LocalStorage khi cập nhật, chỉ sau lần nạp đầu để tránh ghi đè
+  // Persist large scanner state through IndexedDB after the initial load.
   useEffect(() => {
     if (!isLoaded) return;
-    localStorage.setItem(LS_ACCOUNTS, JSON.stringify(state.accounts));
+    const timer = window.setTimeout(() => {
+      void persistScannerAccounts(state.accounts).catch((error) => {
+        console.error('Failed to persist scanner accounts:', error);
+      });
+    }, 250);
+
+    return () => window.clearTimeout(timer);
   }, [state.accounts, isLoaded]);
 
   useEffect(() => {
     if (!isLoaded) return;
-    localStorage.setItem(LS_MANUAL_ITEMS, JSON.stringify(state.manualItems));
+    const timer = window.setTimeout(() => {
+      void persistScannerManualItems(state.manualItems).catch((error) => {
+        console.error('Failed to persist scanner manual items:', error);
+      });
+    }, 250);
+
+    return () => window.clearTimeout(timer);
   }, [state.manualItems, isLoaded]);
 
   useEffect(() => {

@@ -1,14 +1,15 @@
 import { useQuery } from '@tanstack/react-query';
-import { useState, useMemo } from 'react';
+import { useState } from 'react';
 import { useSession } from '@/components/auth/use-session';
 import { useTranslation } from 'react-i18next';
 import { useRecentImports } from './recent-imports-popover';
 import { usePortfolioRealtime } from '@/hooks/use-portfolio-realtime';
 import { useBuffPricing, usePortfolioMutations, useExcelImport } from './hooks';
-import { buildPortfolioTableRows } from '@/components/portfolio';
+import { useUserPreferencesRealtime } from './hooks/use-user-preferences';
 import type { PortfolioTableRow } from '@/components/portfolio';
 import { PORTFOLIO_QUERY_KEY, fetchPortfolioReport } from '@/lib/api-client/portfolio-api';
 import { fetchSteamAccounts, STEAM_ACCOUNTS_QUERY_KEY } from '@/lib/api-client/steam-accounts-api';
+import { usePortfolioReportSnapshot } from './use-portfolio-report-snapshot';
 
 export function useDashboard() {
   const [dialogOpen, setDialogOpen] = useState(false);
@@ -18,12 +19,13 @@ export function useDashboard() {
       : new URLSearchParams(window.location.search).get('authError')
   );
 
-  const recentImportsState = useRecentImports();
   const [filteredRows, setFilteredRows] = useState<PortfolioTableRow[] | null>(null);
 
   const { user, googleConfigured, loading: sessionLoading } = useSession();
+  const recentImportsState = useRecentImports({ user, sessionLoading });
   const { t } = useTranslation();
   usePortfolioRealtime(Boolean(user), user ? `google:${user.id}` : undefined);
+  useUserPreferencesRealtime({ user, sessionLoading });
 
   // Các sub-hook
   const buff = useBuffPricing({ user, sessionLoading });
@@ -37,6 +39,8 @@ export function useDashboard() {
   });
 
   const excel = useExcelImport({
+    user,
+    sessionLoading,
     addRecentImport: recentImportsState.addRecentImport,
     setError,
   });
@@ -45,8 +49,8 @@ export function useDashboard() {
     queryKey: PORTFOLIO_QUERY_KEY,
     queryFn: fetchPortfolioReport,
     staleTime: 5 * 60 * 1000,
-    refetchOnWindowFocus: 'always',
-    refetchOnReconnect: 'always',
+    refetchOnWindowFocus: false,
+    refetchOnReconnect: false,
     enabled: !!user,
   });
 
@@ -57,16 +61,12 @@ export function useDashboard() {
     enabled: !!user,
   });
 
-  const report = reportQuery.data ?? null;
-  const loading = reportQuery.isLoading;
+  const cachedReport = usePortfolioReportSnapshot(user?.id ?? null, reportQuery.data ?? null);
+  const report = reportQuery.data ?? cachedReport ?? null;
+  const loading = reportQuery.isLoading && !cachedReport;
   const deletingId = mutations.deleteMutation.isPending
     ? (mutations.deleteMutation.variables ?? null)
     : null;
-
-  const computedTransactionRows = useMemo(() => {
-    if (!report) return [];
-    return buildPortfolioTableRows(report, 'transactions', buff.pricesCny, buff.cnyToVndRate);
-  }, [report, buff.pricesCny, buff.cnyToVndRate]);
 
   return {
     // Dữ liệu lõi
@@ -76,6 +76,7 @@ export function useDashboard() {
     setError,
     user,
     googleConfigured,
+    sessionLoading,
     t,
 
     // Trạng thái dialog
@@ -125,7 +126,6 @@ export function useDashboard() {
     table: {
       filteredRows,
       setFilteredRows,
-      computedTransactionRows,
       deletingId,
     },
 

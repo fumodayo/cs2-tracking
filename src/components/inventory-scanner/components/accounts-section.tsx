@@ -97,12 +97,19 @@ export function AccountsSection({
   return (
     <div className="mb-8 overflow-hidden rounded-xl border border-stone-800 bg-stone-900/50 transition-all duration-200">
       {/* Hàng tiêu đề */}
-      <div className="flex items-center justify-between p-4 select-none">
-        <button
-          type="button"
-          onClick={() => handleToggleCollapse(!isCollapsed)}
-          className="flex cursor-pointer items-center gap-2 text-stone-300 transition-colors hover:text-stone-100 focus:outline-none"
-        >
+      <div
+        role="button"
+        tabIndex={0}
+        onClick={() => handleToggleCollapse(!isCollapsed)}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter' || e.key === ' ') {
+            e.preventDefault();
+            handleToggleCollapse(!isCollapsed);
+          }
+        }}
+        className="flex cursor-pointer items-center justify-between p-4 transition-colors duration-200 select-none hover:bg-stone-800/10"
+      >
+        <div className="flex items-center gap-2 text-stone-300 transition-colors hover:text-stone-100">
           <Users className="size-4 text-blue-400" />
           <span className="text-xs font-semibold tracking-wider text-stone-300 uppercase sm:text-sm">
             {t('inventoryScanner.accountsList', { count: accounts.length })}
@@ -112,7 +119,7 @@ export function AccountsSection({
           ) : (
             <ChevronUp className="size-4 text-stone-500" />
           )}
-        </button>
+        </div>
 
         {!isCollapsed && isLoaded && (
           <div className="flex shrink-0 items-center justify-end gap-2 sm:w-auto">
@@ -120,7 +127,10 @@ export function AccountsSection({
               <Button
                 type="button"
                 variant="danger"
-                onClick={cancelScanAll}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  cancelScanAll();
+                }}
                 className="h-8 cursor-pointer px-4 text-xs font-semibold"
               >
                 {t('inventoryScanner.stopScan')}
@@ -129,7 +139,10 @@ export function AccountsSection({
             <Button
               type="button"
               variant="primary"
-              onClick={() => scanAll(true)}
+              onClick={(e) => {
+                e.stopPropagation();
+                scanAll(true);
+              }}
               disabled={scanningAll || isAnyScanPending || !hasValidUrls}
               className="h-8 px-4 text-xs font-semibold"
             >
