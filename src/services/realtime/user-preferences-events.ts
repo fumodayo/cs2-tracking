@@ -11,6 +11,7 @@ export type UserPreferencesRealtimePayload = {
 };
 
 let ablyRestClient: Ably.Rest | null = null;
+let warnedAblyPublishUnauthorized = false;
 
 export async function publishUserPreferencesChanged(
   ownerId: string,
@@ -31,6 +32,15 @@ export async function publishUserPreferencesChanged(
         detail,
       } satisfies UserPreferencesRealtimePayload);
   } catch (error) {
+    if (isAblyPublishUnauthorized(error)) {
+      if (!warnedAblyPublishUnauthorized) {
+        warnedAblyPublishUnauthorized = true;
+        console.warn(
+          'ABLY_API_KEY is not allowed to publish user preference events. Preference clients will continue through direct API refreshes.'
+        );
+      }
+      return;
+    }
     console.error('Failed to publish user preferences realtime event to Ably:', error);
   }
 }
@@ -45,4 +55,9 @@ function getAblyRestClient(): Ably.Rest | null {
 
   ablyRestClient ??= new Ably.Rest({ key: apiKey });
   return ablyRestClient;
+}
+
+function isAblyPublishUnauthorized(error: unknown): boolean {
+  const maybeAblyError = error as { code?: unknown; statusCode?: unknown };
+  return maybeAblyError.code === 40160 || maybeAblyError.statusCode === 401;
 }

@@ -10,6 +10,7 @@ export type BugReportRealtimePayload = {
 };
 
 let ablyRestClient: Ably.Rest | null = null;
+let warnedAblyPublishUnauthorized = false;
 
 export async function publishBugReportChanged(
   action: BugReportRealtimeAction,
@@ -26,6 +27,15 @@ export async function publishBugReportChanged(
       detail,
     } satisfies BugReportRealtimePayload);
   } catch (error) {
+    if (isAblyPublishUnauthorized(error)) {
+      if (!warnedAblyPublishUnauthorized) {
+        warnedAblyPublishUnauthorized = true;
+        console.warn(
+          'ABLY_API_KEY is not allowed to publish bug report events. Admin clients will continue through polling fallback.'
+        );
+      }
+      return;
+    }
     console.error('Failed to publish bug report realtime event to Ably:', error);
   }
 }
@@ -40,4 +50,9 @@ function getAblyRestClient(): Ably.Rest | null {
 
   ablyRestClient ??= new Ably.Rest({ key: apiKey });
   return ablyRestClient;
+}
+
+function isAblyPublishUnauthorized(error: unknown): boolean {
+  const maybeAblyError = error as { code?: unknown; statusCode?: unknown };
+  return maybeAblyError.code === 40160 || maybeAblyError.statusCode === 401;
 }

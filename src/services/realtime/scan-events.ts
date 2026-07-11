@@ -26,6 +26,7 @@ export type ScanJobRealtimePayload = {
 };
 
 let ablyRestClient: Ably.Rest | null = null;
+let warnedAblyPublishUnauthorized = false;
 
 export async function publishScanJobChanged(job: ScanJobProgressSnapshot): Promise<void> {
   const client = getAblyRestClient();
@@ -36,6 +37,15 @@ export async function publishScanJobChanged(job: ScanJobProgressSnapshot): Promi
       .get(getScanRealtimeChannelName(job.ownerId, job.id))
       .publish('scan.progress', toRealtimePayload(job));
   } catch (error) {
+    if (isAblyPublishUnauthorized(error)) {
+      if (!warnedAblyPublishUnauthorized) {
+        warnedAblyPublishUnauthorized = true;
+        console.warn(
+          'ABLY_API_KEY is not allowed to publish scan progress events. Scanner clients will continue through HTTP polling fallback.'
+        );
+      }
+      return;
+    }
     console.error('Failed to publish scan progress event to Ably:', error);
   }
 }
@@ -50,6 +60,11 @@ function getAblyRestClient(): Ably.Rest | null {
 
   ablyRestClient ??= new Ably.Rest({ key: apiKey });
   return ablyRestClient;
+}
+
+function isAblyPublishUnauthorized(error: unknown): boolean {
+  const maybeAblyError = error as { code?: unknown; statusCode?: unknown };
+  return maybeAblyError.code === 40160 || maybeAblyError.statusCode === 401;
 }
 
 function toRealtimePayload(job: ScanJobProgressSnapshot): ScanJobRealtimePayload {

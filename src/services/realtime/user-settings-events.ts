@@ -14,6 +14,7 @@ export type UserSettingsRealtimePayload = {
 };
 
 let ablyRestClient: Ably.Rest | null = null;
+let warnedAblyPublishUnauthorized = false;
 
 export async function publishUserSettingsChanged(
   ownerId: string,
@@ -34,6 +35,15 @@ export async function publishUserSettingsChanged(
         detail,
       } satisfies UserSettingsRealtimePayload);
   } catch (error) {
+    if (isAblyPublishUnauthorized(error)) {
+      if (!warnedAblyPublishUnauthorized) {
+        warnedAblyPublishUnauthorized = true;
+        console.warn(
+          'ABLY_API_KEY is not allowed to publish user setting events. Settings clients will continue through direct API refreshes.'
+        );
+      }
+      return;
+    }
     console.error('Failed to publish user settings realtime event to Ably:', error);
   }
 }
@@ -48,4 +58,9 @@ function getAblyRestClient(): Ably.Rest | null {
 
   ablyRestClient ??= new Ably.Rest({ key: apiKey });
   return ablyRestClient;
+}
+
+function isAblyPublishUnauthorized(error: unknown): boolean {
+  const maybeAblyError = error as { code?: unknown; statusCode?: unknown };
+  return maybeAblyError.code === 40160 || maybeAblyError.statusCode === 401;
 }

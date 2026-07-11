@@ -25,6 +25,7 @@ type PortfolioRealtimeListener = (event: PortfolioRealtimeEvent) => void;
 const EVENT_COLLECTION = 'portfolio_realtime_events';
 const STORED_EVENT_LIMIT = 100;
 let ablyRestClient: Ably.Rest | null = null;
+let warnedAblyPublishUnauthorized = false;
 
 type RealtimeGlobal = typeof globalThis & {
   __cs2tPortfolioRealtimeSubscribers?: Map<string, Set<PortfolioRealtimeListener>>;
@@ -115,6 +116,18 @@ export async function findStoredPortfolioEvents(
     .filter((event) => event.id && event.ownerId === ownerId && event.action);
 }
 
+export async function hasStoredPortfolioEventsAfter(
+  ownerId: string,
+  after: Date
+): Promise<boolean> {
+  const db = await getDatabase();
+  const doc = await db
+    .collection(EVENT_COLLECTION)
+    .findOne({ ownerId, createdAt: { $gt: after } }, { projection: { _id: 1 } });
+
+  return Boolean(doc);
+}
+
 function emitPortfolioChanged(event: PortfolioRealtimeEvent): void {
   const ownerSubscribers = getSubscribers().get(event.ownerId);
   if (!ownerSubscribers || ownerSubscribers.size === 0) return;
@@ -137,6 +150,15 @@ async function publishPortfolioChangedToAbly(event: PortfolioRealtimeEvent): Pro
       .get(getPortfolioRealtimeChannelName(event.ownerId))
       .publish('portfolio.changed', event);
   } catch (error) {
+    if (isAblyPublishUnauthorized(error)) {
+      if (!warnedAblyPublishUnauthorized) {
+        warnedAblyPublishUnauthorized = true;
+        console.warn(
+          'ABLY_API_KEY is not allowed to publish portfolio realtime events. Portfolio clients will continue through SSE/event-log fallback.'
+        );
+      }
+      return;
+    }
     console.error('Failed to publish portfolio realtime event to Ably:', error);
   }
 }
@@ -151,4 +173,9 @@ function getAblyRestClient(): Ably.Rest | null {
 
 export function getPortfolioRealtimeChannelName(ownerId: string): string {
   return `portfolio:${ownerId}`;
+}
+
+function isAblyPublishUnauthorized(error: unknown): boolean {
+  const maybeAblyError = error as { code?: unknown; statusCode?: unknown };
+  return maybeAblyError.code === 40160 || maybeAblyError.statusCode === 401;
 }
