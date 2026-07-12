@@ -11,6 +11,22 @@ export function buildAccountOptions(rows: PortfolioTableRow[]) {
   return Array.from(map.values()).sort((first, second) => first.name.localeCompare(second.name));
 }
 
+export function getFilteredRowsChangeKey(rows: PortfolioTableRow[]): string {
+  return JSON.stringify(
+    rows.map((row) => [
+      row.id,
+      row.itemIds,
+      row.itemType,
+      row.quantity,
+      row.storageUnitQuantity ?? 0,
+      row.investedValue,
+      row.currentValue,
+      row.currentPrice,
+      row.steamPrice ?? null,
+    ])
+  );
+}
+
 export function getBuyDateSortValue(value: string | null): number {
   if (!value) {
     return 0;

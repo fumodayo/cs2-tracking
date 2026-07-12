@@ -26,7 +26,9 @@ export function usePortfolioTableState({
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
+  const searchParamsString = searchParams.toString();
   const didMountRef = useRef(false);
+  const filterResetPendingRef = useRef(false);
 
   // Đọc trang từ searchParams, mặc định là 1 (tương ứng index 0)
   const pageParam = searchParams.get('page');
@@ -61,12 +63,18 @@ export function usePortfolioTableState({
 
   // Đọc trang từ URL
   useEffect(() => {
-    const pageVal = searchParams.get('page');
+    const pageVal = new URLSearchParams(searchParamsString).get('page');
     const pIndex = pageVal ? Math.max(0, parseInt(pageVal, 10) - 1) : 0;
+    if (filterResetPendingRef.current) {
+      if (pIndex === 0) {
+        filterResetPendingRef.current = false;
+      }
+      return;
+    }
     if (pIndex !== pagination.pageIndex) {
       setPagination((prev) => ({ ...prev, pageIndex: pIndex }));
     }
-  }, [searchParams, pagination.pageIndex]);
+  }, [searchParamsString, pagination.pageIndex]);
 
   // Lùi về trang trước nếu trang hiện tại rỗng sau khi xóa
   useEffect(() => {
@@ -84,6 +92,7 @@ export function usePortfolioTableState({
       return;
     }
 
+    filterResetPendingRef.current = new URLSearchParams(window.location.search).has('page');
     setPagination((prev) => {
       if (prev.pageIndex === 0) return prev;
       return { ...prev, pageIndex: 0 };
@@ -100,6 +109,10 @@ export function usePortfolioTableState({
 
   // Đồng bộ thay đổi pagination.pageIndex lên query parameter URL
   useEffect(() => {
+    if (filterResetPendingRef.current) {
+      return;
+    }
+
     const params = new URLSearchParams(window.location.search);
     const currentPageVal = params.get('page');
     const currentUrlPage = currentPageVal ? Math.max(0, parseInt(currentPageVal, 10) - 1) : 0;

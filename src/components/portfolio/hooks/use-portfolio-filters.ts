@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { useTranslation } from 'react-i18next';
 import {
@@ -21,20 +21,12 @@ import {
   getRowSubtype,
 } from '../portfolio-table-model';
 import { buildAccountOptions } from '../portfolio-table-utils';
+import { buildPortfolioFilterQueryString, FILTER_PARAM_KEYS } from './portfolio-filter-url';
 
 interface UsePortfolioFiltersProps {
   rows: PortfolioTableRow[];
   buffPricesCny: Record<string, number>;
 }
-
-const FILTER_PARAM_KEYS = {
-  search: 'q',
-  source: 'source',
-  itemType: 'itemType',
-  account: 'account',
-  status: 'status',
-  priceSource: 'priceSource',
-} as const;
 
 const VALID_SOURCE_FILTERS = new Set(['manual', 'existing']);
 const VALID_STATUS_FILTERS = new Set(['tradeable', 'market', 'protected', 'hold']);
@@ -71,13 +63,6 @@ function readSourceFilters(params: ReadableSearchParams): PortfolioSourceFilter[
 function areListsEqual(first: string[], second: string[]): boolean {
   if (first.length !== second.length) return false;
   return first.every((value, index) => value === second[index]);
-}
-
-function setParamList(params: URLSearchParams, key: string, values: string[]) {
-  params.delete(key);
-  for (const value of values) {
-    params.append(key, value);
-  }
 }
 
 export function accountMatchesFilters(row: PortfolioTableRow, accountFilters: string[]): boolean {
@@ -215,6 +200,8 @@ export function usePortfolioFilters({ rows, buffPricesCny }: UsePortfolioFilters
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
+  const searchParamsString = searchParams.toString();
+  const internalUrlUpdatesRef = useRef(new Set<string>());
 
   const [sourceFilters, setSourceFilters] = useState<PortfolioSourceFilter[]>(() =>
     readSourceFilters(searchParams)
@@ -258,17 +245,22 @@ export function usePortfolioFilters({ rows, buffPricesCny }: UsePortfolioFilters
   );
 
   useEffect(() => {
-    const nextGlobalFilter = searchParams.get(FILTER_PARAM_KEYS.search) ?? '';
-    const nextSourceFilters = readSourceFilters(searchParams);
-    const nextItemTypeFilters = readParamList(searchParams, FILTER_PARAM_KEYS.itemType);
-    const nextAccountFilters = readParamList(searchParams, FILTER_PARAM_KEYS.account);
+    if (internalUrlUpdatesRef.current.delete(searchParamsString)) {
+      return;
+    }
+
+    const nextParams = new URLSearchParams(searchParamsString);
+    const nextGlobalFilter = nextParams.get(FILTER_PARAM_KEYS.search) ?? '';
+    const nextSourceFilters = readSourceFilters(nextParams);
+    const nextItemTypeFilters = readParamList(nextParams, FILTER_PARAM_KEYS.itemType);
+    const nextAccountFilters = readParamList(nextParams, FILTER_PARAM_KEYS.account);
     const nextStatusFilters = readFilteredParamList(
-      searchParams,
+      nextParams,
       FILTER_PARAM_KEYS.status,
       VALID_STATUS_FILTERS
     );
     const nextPriceSourceFilters = readFilteredParamList(
-      searchParams,
+      nextParams,
       FILTER_PARAM_KEYS.priceSource,
       VALID_PRICE_SOURCE_FILTERS
     );
@@ -289,29 +281,25 @@ export function usePortfolioFilters({ rows, buffPricesCny }: UsePortfolioFilters
     setPriceSourceFilters((current) =>
       areListsEqual(current, nextPriceSourceFilters) ? current : nextPriceSourceFilters
     );
-  }, [searchParams]);
+  }, [searchParamsString]);
 
   const syncFiltersToUrl = useCallback(() => {
-    const params = new URLSearchParams(window.location.search);
-    const trimmedGlobalFilter = globalFilter.trim();
-
-    if (trimmedGlobalFilter) {
-      params.set(FILTER_PARAM_KEYS.search, trimmedGlobalFilter);
-    } else {
-      params.delete(FILTER_PARAM_KEYS.search);
-    }
-
-    setParamList(params, FILTER_PARAM_KEYS.source, sourceFilters);
-    setParamList(params, FILTER_PARAM_KEYS.itemType, itemTypeFilters);
-    setParamList(params, FILTER_PARAM_KEYS.account, accountFilters);
-    setParamList(params, FILTER_PARAM_KEYS.status, statusFilters);
-    setParamList(params, FILTER_PARAM_KEYS.priceSource, priceSourceFilters);
-
-    const queryString = params.toString();
+    const queryString = buildPortfolioFilterQueryString(window.location.search, {
+      globalFilter,
+      sourceFilters,
+      itemTypeFilters,
+      accountFilters,
+      statusFilters,
+      priceSourceFilters,
+    });
     const nextUrl = queryString ? `${pathname}?${queryString}` : pathname;
     const currentUrl = `${window.location.pathname}${window.location.search}`;
 
     if (nextUrl !== currentUrl) {
+      if (internalUrlUpdatesRef.current.size >= 20) {
+        internalUrlUpdatesRef.current.clear();
+      }
+      internalUrlUpdatesRef.current.add(queryString);
       router.replace(nextUrl, { scroll: false });
     }
   }, [

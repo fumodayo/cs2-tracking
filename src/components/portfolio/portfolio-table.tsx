@@ -28,6 +28,7 @@ import { TablePagination } from '@/components/shared/table-pagination';
 import { usePortfolioFilters, usePortfolioTableState } from './hooks';
 import { PortfolioTableToolbar } from './components/portfolio-table-toolbar';
 import { PortfolioTableBody } from './components/portfolio-table-body';
+import { getFilteredRowsChangeKey } from './portfolio-table-utils';
 
 type PortfolioTableProps = {
   report: PortfolioReportDto;
@@ -312,12 +313,18 @@ export function PortfolioTable({
     () => filteredRows.map((row) => row.original),
     [filteredRows]
   );
+  const filteredRowsChangeKey = useMemo(
+    () => getFilteredRowsChangeKey(originalFilteredRows),
+    [originalFilteredRows]
+  );
+  const lastReportedFilteredRowsKeyRef = useRef<string | null>(null);
 
   useEffect(() => {
-    if (onFilteredRowsChange) {
+    if (onFilteredRowsChange && lastReportedFilteredRowsKeyRef.current !== filteredRowsChangeKey) {
+      lastReportedFilteredRowsKeyRef.current = filteredRowsChangeKey;
       onFilteredRowsChange(originalFilteredRows);
     }
-  }, [originalFilteredRows, onFilteredRowsChange]);
+  }, [filteredRowsChangeKey, originalFilteredRows, onFilteredRowsChange]);
 
   return (
     <div className="rounded-xl border border-stone-800 bg-stone-900/50 shadow-md">
