@@ -1,8 +1,8 @@
 import { ObjectId } from 'mongodb';
 import type { CaseItem } from '@/domain/case-item';
 import type { CaseRepository } from '@/domain/repositories';
+import { enrichMissingCaseImages } from '@/infrastructure/cases/case-image-cache';
 import { DEFAULT_CASES } from '@/infrastructure/cases/default-cases';
-import { getSteamCaseImageUrl } from '@/infrastructure/cases/steam-case-image-provider';
 import { getDatabase } from '@/infrastructure/db/mongo-client';
 import { mapCaseDocument, toObjectId } from '@/infrastructure/db/mappers';
 
@@ -180,38 +180,8 @@ export class MongoCaseRepository implements CaseRepository {
   }
 
   private async enrichMissingMetadata(cases: CaseItem[]): Promise<CaseItem[]> {
-    await Promise.all([this.enrichMissingImages(cases), this.enrichMissingRarities(cases)]);
+    await Promise.all([enrichMissingCaseImages(cases), this.enrichMissingRarities(cases)]);
     return cases;
-  }
-
-  private async enrichMissingImages(cases: CaseItem[]): Promise<void> {
-    const missingImageCases = cases.filter((caseItem) => !caseItem.imageUrl);
-    if (missingImageCases.length === 0) {
-      return;
-    }
-
-    const db = await getDatabase();
-
-    await Promise.all(
-      missingImageCases.map(async (caseItem) => {
-        const imageUrl = await getSteamCaseImageUrl(caseItem.marketHashName);
-        if (!imageUrl) {
-          return;
-        }
-
-        caseItem.imageUrl = imageUrl;
-
-        await db.collection('cases').updateOne(
-          { _id: toObjectId(caseItem.id) },
-          {
-            $set: {
-              imageUrl,
-              updatedAt: new Date(),
-            },
-          }
-        );
-      })
-    );
   }
 
   private async enrichMissingRarities(cases: CaseItem[]): Promise<void> {
