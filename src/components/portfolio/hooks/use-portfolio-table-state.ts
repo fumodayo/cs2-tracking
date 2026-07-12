@@ -1,6 +1,12 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { useRouter, useSearchParams, usePathname } from 'next/navigation';
-import type { SortingState } from '@tanstack/react-table';
+import {
+  functionalUpdate,
+  type OnChangeFn,
+  type PaginationState,
+  type SortingState,
+  type Updater,
+} from '@tanstack/react-table';
 import type { PortfolioSourceFilter } from '../portfolio-table-model';
 import { useLocalStorage } from '@/hooks/use-local-storage';
 
@@ -12,6 +18,18 @@ interface UsePortfolioTableStateProps {
   accountFilters: string[];
   statusFilters: string[];
   priceSourceFilters: string[];
+}
+
+export function applyPortfolioPaginationUpdate(
+  current: PaginationState,
+  updater: Updater<PaginationState>
+): PaginationState {
+  const next = functionalUpdate(updater, current);
+  if (next.pageSize !== current.pageSize) {
+    return { ...next, pageIndex: 0 };
+  }
+
+  return next;
 }
 
 export function usePortfolioTableState({
@@ -34,10 +52,14 @@ export function usePortfolioTableState({
   const pageParam = searchParams.get('page');
   const initialPageIndex = pageParam ? Math.max(0, parseInt(pageParam, 10) - 1) : 0;
 
-  const [pagination, setPagination] = useState({
+  const [pagination, setPaginationState] = useState<PaginationState>({
     pageIndex: initialPageIndex,
     pageSize: 10,
   });
+
+  const setPagination = useCallback<OnChangeFn<PaginationState>>((updater) => {
+    setPaginationState((current) => applyPortfolioPaginationUpdate(current, updater));
+  }, []);
 
   const [sorting, setSorting] = useState<SortingState>([{ id: 'buyPrice', desc: true }]);
 
@@ -71,17 +93,21 @@ export function usePortfolioTableState({
       }
       return;
     }
-    if (pIndex !== pagination.pageIndex) {
-      setPagination((prev) => ({ ...prev, pageIndex: pIndex }));
-    }
-  }, [searchParamsString, pagination.pageIndex]);
+    setPaginationState((prev) => {
+      if (pIndex === prev.pageIndex) return prev;
+      return { ...prev, pageIndex: pIndex };
+    });
+  }, [searchParamsString]);
 
   // Lùi về trang trước nếu trang hiện tại rỗng sau khi xóa
   useEffect(() => {
     const totalPages = Math.ceil(filteredDataCount / pagination.pageSize);
     if (filteredDataCount > 0 && pagination.pageIndex >= totalPages) {
       const newPageIndex = Math.max(0, totalPages - 1);
-      setPagination((prev) => ({ ...prev, pageIndex: newPageIndex }));
+      setPaginationState((prev) => {
+        if (prev.pageIndex === newPageIndex) return prev;
+        return { ...prev, pageIndex: newPageIndex };
+      });
     }
   }, [filteredDataCount, pagination.pageSize, pagination.pageIndex]);
 
@@ -93,7 +119,7 @@ export function usePortfolioTableState({
     }
 
     filterResetPendingRef.current = new URLSearchParams(window.location.search).has('page');
-    setPagination((prev) => {
+    setPaginationState((prev) => {
       if (prev.pageIndex === 0) return prev;
       return { ...prev, pageIndex: 0 };
     });
