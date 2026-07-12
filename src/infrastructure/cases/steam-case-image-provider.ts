@@ -14,20 +14,32 @@ type SteamMarketSearchResult = {
   };
 };
 
+export type SteamCaseImageLookupResult =
+  | { status: 'found'; imageUrl: string }
+  | { status: 'not-found' }
+  | { status: 'retryable-error' };
+
 const STEAM_IMAGE_CDN_BASE_URL = 'https://community.cloudflare.steamstatic.com/economy/image';
 const STEAM_MARKET_SEARCH_URL = 'https://steamcommunity.com/market/search/render/';
 const STEAM_IMAGE_SIZE = '96fx96f';
 const STEAM_SEARCH_TIMEOUT_MS = 10_000;
 
 const imageUrlCache = new Map<string, string>();
-const pendingImageRequests = new Map<string, Promise<string | null>>();
+const pendingImageRequests = new Map<string, Promise<SteamCaseImageLookupResult>>();
 
 export async function getSteamCaseImageUrl(marketHashName: string): Promise<string | null> {
+  const result = await lookupSteamCaseImage(marketHashName);
+  return result.status === 'found' ? result.imageUrl : null;
+}
+
+export async function lookupSteamCaseImage(
+  marketHashName: string
+): Promise<SteamCaseImageLookupResult> {
   const normalizedMarketHashName = marketHashName.trim();
   const cacheKey = normalizedMarketHashName.toLowerCase();
   const cachedImageUrl = imageUrlCache.get(cacheKey);
   if (cachedImageUrl) {
-    return cachedImageUrl;
+    return { status: 'found', imageUrl: cachedImageUrl };
   }
 
   const pendingRequest = pendingImageRequests.get(cacheKey);
@@ -46,7 +58,7 @@ export async function getSteamCaseImageUrl(marketHashName: string): Promise<stri
 async function fetchSteamCaseImageUrl(
   marketHashName: string,
   cacheKey: string
-): Promise<string | null> {
+): Promise<SteamCaseImageLookupResult> {
   try {
     const params = new URLSearchParams({
       query: marketHashName,
@@ -76,23 +88,27 @@ async function fetchSteamCaseImageUrl(
     );
 
     if (!response.ok) {
-      return null;
+      return { status: 'retryable-error' };
     }
 
     const data = (await response.json()) as SteamMarketSearchResponse;
+    if (!data.success) {
+      return { status: 'retryable-error' };
+    }
+
     const result = data.results?.find((item) => matchesMarketHashName(item, marketHashName));
     const iconUrl = result?.asset_description?.icon_url;
 
-    if (!data.success || !iconUrl) {
-      return null;
+    if (!iconUrl) {
+      return { status: 'not-found' };
     }
 
     const imageUrl = `${STEAM_IMAGE_CDN_BASE_URL}/${iconUrl}/${STEAM_IMAGE_SIZE}`;
     imageUrlCache.set(cacheKey, imageUrl);
 
-    return imageUrl;
+    return { status: 'found', imageUrl };
   } catch {
-    return null;
+    return { status: 'retryable-error' };
   }
 }
 

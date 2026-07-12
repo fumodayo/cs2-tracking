@@ -25,9 +25,12 @@ describe('getSteamCaseImageUrl', () => {
       );
     vi.stubGlobal('fetch', fetchMock);
 
-    const { getSteamCaseImageUrl } = await import('./steam-case-image-provider');
+    const { getSteamCaseImageUrl, lookupSteamCaseImage } =
+      await import('./steam-case-image-provider');
 
-    await expect(getSteamCaseImageUrl(marketHashName)).resolves.toBeNull();
+    await expect(lookupSteamCaseImage(marketHashName)).resolves.toEqual({
+      status: 'retryable-error',
+    });
     await expect(getSteamCaseImageUrl(marketHashName)).resolves.toBe(
       `https://community.cloudflare.steamstatic.com/economy/image/${iconUrl}/96fx96f`
     );
@@ -62,6 +65,23 @@ describe('getSteamCaseImageUrl', () => {
     const [requestUrl, requestInit] = fetchMock.mock.calls[0];
     expect(new URL(String(requestUrl)).searchParams.get('query')).toBe(marketHashName);
     expect(requestInit).toEqual(expect.objectContaining({ cache: 'no-store' }));
+  });
+
+  it('distinguishes a confirmed missing item from a temporary Steam failure', async () => {
+    const marketHashName = 'Not Indexed CS2 Case';
+    const fetchMock = vi.fn<typeof fetch>().mockResolvedValue(
+      jsonResponse({
+        success: true,
+        results: [],
+      })
+    );
+    vi.stubGlobal('fetch', fetchMock);
+
+    const { lookupSteamCaseImage } = await import('./steam-case-image-provider');
+
+    await expect(lookupSteamCaseImage(marketHashName)).resolves.toEqual({
+      status: 'not-found',
+    });
   });
 });
 

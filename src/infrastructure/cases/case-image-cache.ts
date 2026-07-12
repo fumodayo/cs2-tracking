@@ -1,9 +1,10 @@
 import type { CaseItem } from '@/domain/case-item';
 import { getDatabase } from '@/infrastructure/db/mongo-client';
 import { toObjectId } from '@/infrastructure/db/mappers';
-import { getSteamCaseImageUrl } from './steam-case-image-provider';
+import { lookupSteamCaseImage } from './steam-case-image-provider';
 
-export const CASE_IMAGE_LOOKUP_RETRY_MS = 6 * 60 * 60 * 1_000;
+export const CASE_IMAGE_TRANSIENT_RETRY_MS = 2 * 60 * 1_000;
+export const CASE_IMAGE_NOT_FOUND_RETRY_MS = 6 * 60 * 60 * 1_000;
 
 const IMAGE_LOOKUP_CONCURRENCY = 4;
 
@@ -15,7 +16,7 @@ export async function enrichMissingCaseImages(cases: CaseItem[], now = new Date(
 
   const db = await getDatabase();
   const collection = db.collection('cases');
-  const retryBefore = new Date(now.getTime() - CASE_IMAGE_LOOKUP_RETRY_MS);
+  const transientRetryAt = new Date(now.getTime() + CASE_IMAGE_TRANSIENT_RETRY_MS);
 
   for (let index = 0; index < missingImageCases.length; index += IMAGE_LOOKUP_CONCURRENCY) {
     const batch = missingImageCases.slice(index, index + IMAGE_LOOKUP_CONCURRENCY);
@@ -33,8 +34,8 @@ export async function enrichMissingCaseImages(cases: CaseItem[], now = new Date(
               },
               {
                 $or: [
-                  { imageLookupAttemptedAt: { $exists: false } },
-                  { imageLookupAttemptedAt: { $lte: retryBefore } },
+                  { imageLookupRetryAt: { $exists: false } },
+                  { imageLookupRetryAt: { $lte: now } },
                 ],
               },
             ],
@@ -42,6 +43,8 @@ export async function enrichMissingCaseImages(cases: CaseItem[], now = new Date(
           {
             $set: {
               imageLookupAttemptedAt: now,
+              // Safety timeout: if the process stops mid-request, another worker can retry soon.
+              imageLookupRetryAt: transientRetryAt,
             },
           }
         );
@@ -51,11 +54,28 @@ export async function enrichMissingCaseImages(cases: CaseItem[], now = new Date(
           return;
         }
 
-        const imageUrl = await getSteamCaseImageUrl(caseItem.marketHashName);
-        if (!imageUrl) {
+        const result = await lookupSteamCaseImage(caseItem.marketHashName);
+        if (result.status !== 'found') {
+          const retryAt = new Date(
+            now.getTime() +
+              (result.status === 'not-found'
+                ? CASE_IMAGE_NOT_FOUND_RETRY_MS
+                : CASE_IMAGE_TRANSIENT_RETRY_MS)
+          );
+
+          await collection.updateOne(
+            { _id: objectId },
+            {
+              $set: {
+                imageLookupStatus: result.status,
+                imageLookupRetryAt: retryAt,
+              },
+            }
+          );
           return;
         }
 
+        const { imageUrl } = result;
         caseItem.imageUrl = imageUrl;
 
         await collection.updateOne(
@@ -65,6 +85,10 @@ export async function enrichMissingCaseImages(cases: CaseItem[], now = new Date(
               imageUrl,
               imageFetchedAt: now,
               updatedAt: now,
+            },
+            $unset: {
+              imageLookupRetryAt: '',
+              imageLookupStatus: '',
             },
           }
         );

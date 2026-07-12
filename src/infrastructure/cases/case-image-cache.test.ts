@@ -6,7 +6,7 @@ const mocks = vi.hoisted(() => ({
   findOneAndUpdate: vi.fn(),
   updateOne: vi.fn(),
   getDatabase: vi.fn(),
-  getSteamCaseImageUrl: vi.fn(),
+  lookupSteamCaseImage: vi.fn(),
 }));
 
 vi.mock('@/infrastructure/db/mongo-client', () => ({
@@ -14,10 +14,14 @@ vi.mock('@/infrastructure/db/mongo-client', () => ({
 }));
 
 vi.mock('./steam-case-image-provider', () => ({
-  getSteamCaseImageUrl: mocks.getSteamCaseImageUrl,
+  lookupSteamCaseImage: mocks.lookupSteamCaseImage,
 }));
 
-import { CASE_IMAGE_LOOKUP_RETRY_MS, enrichMissingCaseImages } from './case-image-cache';
+import {
+  CASE_IMAGE_NOT_FOUND_RETRY_MS,
+  CASE_IMAGE_TRANSIENT_RETRY_MS,
+  enrichMissingCaseImages,
+} from './case-image-cache';
 
 beforeEach(() => {
   vi.clearAllMocks();
@@ -35,7 +39,7 @@ describe('enrichMissingCaseImages', () => {
     const now = new Date('2026-07-12T00:00:00.000Z');
     const imageUrl = 'https://community.cloudflare.steamstatic.com/economy/image/new-case';
     mocks.findOneAndUpdate.mockResolvedValue({ _id: new ObjectId(item.id) });
-    mocks.getSteamCaseImageUrl.mockResolvedValue(imageUrl);
+    mocks.lookupSteamCaseImage.mockResolvedValue({ status: 'found', imageUrl });
     mocks.updateOne.mockResolvedValue({ acknowledged: true });
 
     await enrichMissingCaseImages([item], now);
@@ -49,44 +53,66 @@ describe('enrichMissingCaseImages', () => {
           imageFetchedAt: now,
           updatedAt: now,
         },
+        $unset: {
+          imageLookupRetryAt: '',
+          imageLookupStatus: '',
+        },
       }
     );
   });
 
-  it('claims a missing image lookup only after the retry cooldown', async () => {
+  it('claims a lookup when its retry time is due', async () => {
     const item = createCaseItem('Not Indexed Yet Case');
     const now = new Date('2026-07-12T12:00:00.000Z');
     mocks.findOneAndUpdate.mockResolvedValue(null);
 
     await enrichMissingCaseImages([item], now);
 
-    const retryBefore = new Date(now.getTime() - CASE_IMAGE_LOOKUP_RETRY_MS);
+    const transientRetryAt = new Date(now.getTime() + CASE_IMAGE_TRANSIENT_RETRY_MS);
     expect(mocks.findOneAndUpdate).toHaveBeenCalledWith(
       expect.objectContaining({
         _id: new ObjectId(item.id),
         $and: expect.arrayContaining([
           {
             $or: [
-              { imageLookupAttemptedAt: { $exists: false } },
-              { imageLookupAttemptedAt: { $lte: retryBefore } },
+              { imageLookupRetryAt: { $exists: false } },
+              { imageLookupRetryAt: { $lte: now } },
             ],
           },
         ]),
       }),
-      { $set: { imageLookupAttemptedAt: now } }
+      {
+        $set: {
+          imageLookupAttemptedAt: now,
+          imageLookupRetryAt: transientRetryAt,
+        },
+      }
     );
-    expect(mocks.getSteamCaseImageUrl).not.toHaveBeenCalled();
+    expect(mocks.lookupSteamCaseImage).not.toHaveBeenCalled();
   });
 
-  it('keeps the retry timestamp without storing an empty image result', async () => {
-    const item = createCaseItem('Temporarily Missing Case');
+  it.each([
+    ['retryable-error', CASE_IMAGE_TRANSIENT_RETRY_MS],
+    ['not-found', CASE_IMAGE_NOT_FOUND_RETRY_MS],
+  ] as const)('schedules %s results with the matching retry delay', async (status, retryMs) => {
+    const item = createCaseItem(`${status} Case`);
+    const now = new Date('2026-07-12T12:00:00.000Z');
     mocks.findOneAndUpdate.mockResolvedValue({ _id: new ObjectId(item.id) });
-    mocks.getSteamCaseImageUrl.mockResolvedValue(null);
+    mocks.lookupSteamCaseImage.mockResolvedValue({ status });
+    mocks.updateOne.mockResolvedValue({ acknowledged: true });
 
-    await enrichMissingCaseImages([item]);
+    await enrichMissingCaseImages([item], now);
 
     expect(item.imageUrl).toBeUndefined();
-    expect(mocks.updateOne).not.toHaveBeenCalled();
+    expect(mocks.updateOne).toHaveBeenCalledWith(
+      { _id: new ObjectId(item.id) },
+      {
+        $set: {
+          imageLookupStatus: status,
+          imageLookupRetryAt: new Date(now.getTime() + retryMs),
+        },
+      }
+    );
   });
 
   it('does not look up images that are already stored', async () => {
@@ -98,7 +124,7 @@ describe('enrichMissingCaseImages', () => {
     await enrichMissingCaseImages([item]);
 
     expect(mocks.getDatabase).not.toHaveBeenCalled();
-    expect(mocks.getSteamCaseImageUrl).not.toHaveBeenCalled();
+    expect(mocks.lookupSteamCaseImage).not.toHaveBeenCalled();
   });
 });
 
