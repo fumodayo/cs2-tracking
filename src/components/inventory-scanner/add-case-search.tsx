@@ -29,6 +29,7 @@ import {
   formatDecimalViInput as formatDecimalVi,
   parseViFloat,
 } from '@/utils/format';
+import { getSavedBuffPriceCny } from '@/components/portfolio/add-item-pricing';
 
 type AddCaseSearchProps = {
   onAdd: (
@@ -45,12 +46,14 @@ type AddCaseSearchProps = {
   ) => void;
   scannedAccounts?: Array<{ steamId64: string; name: string }>;
   defaultBuffRate?: number;
+  buffPricesCny?: Record<string, number>;
 };
 
 export const AddCaseSearch: React.FC<AddCaseSearchProps> = ({
   onAdd,
   scannedAccounts = [],
   defaultBuffRate = 3600,
+  buffPricesCny,
 }) => {
   const { t } = useTranslation();
   const [isOpen, setIsOpen] = useState(false);
@@ -62,9 +65,12 @@ export const AddCaseSearch: React.FC<AddCaseSearchProps> = ({
   const [buyDate, setBuyDate] = useState(formatInputDate(new Date()));
   const [buffPrice, setBuffPrice] = useState('');
   const [buffRate, setBuffRate] = useState(formatIntegerVi(defaultBuffRate));
+  const [marketPrice, setMarketPrice] = useState(0);
   const [selectedAccountId, setSelectedAccountId] = useState('');
   const [selectedStorageUnitId, setSelectedStorageUnitId] = useState('');
   const [error, setError] = useState<string | null>(null);
+  const savedBuffPriceCny = getSavedBuffPriceCny(selectedCase?.marketHashName, buffPricesCny);
+  const hasBuff = savedBuffPriceCny !== null;
 
   // Reset trạng thái
   const resetForm = useCallback(() => {
@@ -74,6 +80,7 @@ export const AddCaseSearch: React.FC<AddCaseSearchProps> = ({
     setBuyDate(formatInputDate(new Date()));
     setBuffPrice('');
     setBuffRate(formatIntegerVi(defaultBuffRate));
+    setMarketPrice(0);
     setSelectedAccountId('');
     setSelectedStorageUnitId('');
     setError(null);
@@ -92,6 +99,7 @@ export const AddCaseSearch: React.FC<AddCaseSearchProps> = ({
           setBuyDate(draft.buyDate ?? formatInputDate(new Date()));
           setBuffPrice(draft.buffPrice ?? '');
           setBuffRate(draft.buffRate ?? formatIntegerVi(defaultBuffRate));
+          setMarketPrice(Number(draft.marketPrice) || 0);
           setSelectedAccountId(draft.selectedAccountId ?? '');
           setSelectedStorageUnitId(draft.selectedStorageUnitId ?? '');
           setError(null);
@@ -127,6 +135,7 @@ export const AddCaseSearch: React.FC<AddCaseSearchProps> = ({
             buyDate,
             buffPrice,
             buffRate,
+            marketPrice,
             selectedAccountId,
             selectedStorageUnitId,
           };
@@ -144,6 +153,7 @@ export const AddCaseSearch: React.FC<AddCaseSearchProps> = ({
     buyDate,
     buffPrice,
     buffRate,
+    marketPrice,
     selectedAccountId,
     selectedStorageUnitId,
     defaultBuffRate,
@@ -232,7 +242,9 @@ export const AddCaseSearch: React.FC<AddCaseSearchProps> = ({
   const handleBuyPriceChange = (val: string) => {
     const formatted = formatIntegerVi(val);
     setBuyPrice(formatted);
-    recalcBuffPrice(formatted, buffRate);
+    if (hasBuff) {
+      recalcBuffPrice(formatted, buffRate);
+    }
   };
 
   const canSubmit = useMemo(() => {
@@ -273,8 +285,8 @@ export const AddCaseSearch: React.FC<AddCaseSearchProps> = ({
       buyDate,
       sourceAccounts,
       selectedStorageUnitId || undefined,
-      parseViFloat(buffPrice) || undefined,
-      parseViFloat(buffRate) || undefined,
+      hasBuff ? parseViFloat(buffPrice) || undefined : undefined,
+      hasBuff ? parseViFloat(buffRate) || undefined : undefined,
       selectedStorageUnit?.name || undefined
     );
 
@@ -316,11 +328,21 @@ export const AddCaseSearch: React.FC<AddCaseSearchProps> = ({
               selectedCase={selectedCase}
               onSelect={(caseItem, price) => {
                 setSelectedCase(caseItem);
-                if (price > 0) {
-                  handleBuyPriceChange(price.toString());
+                setMarketPrice(price);
+                const savedBuffPrice = getSavedBuffPriceCny(caseItem.marketHashName, buffPricesCny);
+                setBuffRate(formatIntegerVi(defaultBuffRate));
+                if (savedBuffPrice !== null) {
+                  setBuffPrice(formatDecimalVi(savedBuffPrice));
+                  setBuyPrice(formatIntegerVi(Math.round(savedBuffPrice * defaultBuffRate)));
+                } else {
+                  setBuffPrice('');
+                  setBuyPrice(price > 0 ? formatIntegerVi(price) : '');
                 }
               }}
-              onClear={() => setSelectedCase(null)}
+              onClear={() => {
+                setSelectedCase(null);
+                setMarketPrice(0);
+              }}
               label={t('inventoryScanner.searchItem')}
             />
 
@@ -328,63 +350,91 @@ export const AddCaseSearch: React.FC<AddCaseSearchProps> = ({
               <>
                 {/* Hàng công thức giá */}
                 <div className="space-y-2">
-                  <div className="flex flex-col items-stretch gap-2 sm:flex-row sm:items-end">
-                    {/* Ô nhập giá Buff */}
-                    <div className="min-w-0 flex-1">
-                      <label className="mb-1 block text-[10px] font-semibold text-stone-500 dark:text-stone-400">
-                        {t('inventoryScanner.buffPriceCny')}
-                      </label>
-                      <Input
-                        value={buffPrice}
-                        onChange={(e) => handleBuffPriceChange(e.target.value)}
-                        placeholder={t('inventoryScanner.placeholderBuffPrice')}
-                        className="h-10 text-sm"
-                      />
-                    </div>
+                  {hasBuff ? (
+                    <div className="flex flex-col items-stretch gap-2 sm:flex-row sm:items-end">
+                      {/* Ô nhập giá Buff */}
+                      <div className="min-w-0 flex-1">
+                        <label className="mb-1 block text-[10px] font-semibold text-stone-500 dark:text-stone-400">
+                          {t('inventoryScanner.buffPriceCny')}
+                        </label>
+                        <Input
+                          value={buffPrice}
+                          onChange={(e) => handleBuffPriceChange(e.target.value)}
+                          placeholder={t('inventoryScanner.placeholderBuffPrice')}
+                          className="h-10 text-sm"
+                        />
+                      </div>
 
-                    {/* Dấu nhân */}
-                    <div className="hidden items-center justify-center px-1 pb-2.5 text-sm font-black text-stone-400 select-none sm:flex dark:text-stone-600">
-                      ×
-                    </div>
-                    <div className="text-center text-xs font-black text-stone-400 select-none sm:hidden dark:text-stone-600">
-                      {t('inventoryScanner.multipliedByRate')}
-                    </div>
+                      {/* Dấu nhân */}
+                      <div className="hidden items-center justify-center px-1 pb-2.5 text-sm font-black text-stone-400 select-none sm:flex dark:text-stone-600">
+                        ×
+                      </div>
+                      <div className="text-center text-xs font-black text-stone-400 select-none sm:hidden dark:text-stone-600">
+                        {t('inventoryScanner.multipliedByRate')}
+                      </div>
 
-                    {/* Ô nhập tỷ giá */}
-                    <div className="min-w-0 flex-1">
-                      <label className="mb-1 block text-[10px] font-semibold text-stone-500 dark:text-stone-400">
-                        {t('inventoryScanner.buffRate')}
-                      </label>
-                      <Input
-                        value={buffRate}
-                        onChange={(e) => handleBuffRateChange(e.target.value)}
-                        placeholder={t('inventoryScanner.placeholderBuffRate')}
-                        className="h-10 text-sm"
-                      />
-                    </div>
+                      {/* Ô nhập tỷ giá */}
+                      <div className="min-w-0 flex-1">
+                        <label className="mb-1 block text-[10px] font-semibold text-stone-500 dark:text-stone-400">
+                          {t('inventoryScanner.buffRate')}
+                        </label>
+                        <Input
+                          value={buffRate}
+                          onChange={(e) => handleBuffRateChange(e.target.value)}
+                          placeholder={t('inventoryScanner.placeholderBuffRate')}
+                          className="h-10 text-sm"
+                        />
+                      </div>
 
-                    {/* Dấu bằng */}
-                    <div className="hidden items-center justify-center px-1 pb-2.5 text-sm font-black text-stone-400 select-none sm:flex dark:text-stone-600">
-                      =
-                    </div>
-                    <div className="text-center text-xs font-black text-stone-400 select-none sm:hidden dark:text-stone-600">
-                      {t('inventoryScanner.equalsVnd')}
-                    </div>
+                      {/* Dấu bằng */}
+                      <div className="hidden items-center justify-center px-1 pb-2.5 text-sm font-black text-stone-400 select-none sm:flex dark:text-stone-600">
+                        =
+                      </div>
+                      <div className="text-center text-xs font-black text-stone-400 select-none sm:hidden dark:text-stone-600">
+                        {t('inventoryScanner.equalsVnd')}
+                      </div>
 
-                    {/* Ô nhập giá mua cuối */}
-                    <div className="min-w-0 flex-[1.2]">
-                      <label className="text-accent mb-1 block text-[10px] font-bold">
-                        {t('inventoryScanner.buyPricePerCaseVnd')}
-                      </label>
-                      <Input
-                        value={buyPrice}
-                        onChange={(event) => handleBuyPriceChange(event.target.value)}
-                        inputMode="numeric"
-                        placeholder={t('inventoryScanner.placeholderBuyPrice')}
-                        className="text-accent focus:border-accent/80 focus:ring-accent/30 h-10 text-sm font-bold focus:ring-1"
-                      />
+                      {/* Ô nhập giá mua cuối */}
+                      <div className="min-w-0 flex-[1.2]">
+                        <label className="text-accent mb-1 block text-[10px] font-bold">
+                          {t('inventoryScanner.buyPricePerCaseVnd')}
+                        </label>
+                        <Input
+                          value={buyPrice}
+                          onChange={(event) => handleBuyPriceChange(event.target.value)}
+                          inputMode="numeric"
+                          placeholder={t('inventoryScanner.placeholderBuyPrice')}
+                          className="text-accent focus:border-accent/80 focus:ring-accent/30 h-10 text-sm font-bold focus:ring-1"
+                        />
+                      </div>
                     </div>
-                  </div>
+                  ) : (
+                    <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                      <div>
+                        <label className="mb-1 block text-[10px] font-semibold text-stone-500 dark:text-stone-400">
+                          {t('portfolio.marketPriceAtFullRate', 'Giá Market (100%)')}
+                        </label>
+                        <Input
+                          value={formatIntegerVi(marketPrice)}
+                          readOnly
+                          aria-readonly="true"
+                          className="h-10 cursor-default bg-stone-900/40 text-sm text-stone-400"
+                        />
+                      </div>
+                      <div>
+                        <label className="text-accent mb-1 block text-[10px] font-bold">
+                          {t('portfolio.unitBuyPriceVnd', 'Đơn giá mua (VND)')}
+                        </label>
+                        <Input
+                          value={buyPrice}
+                          onChange={(event) => handleBuyPriceChange(event.target.value)}
+                          inputMode="numeric"
+                          placeholder={t('inventoryScanner.placeholderBuyPrice')}
+                          className="text-accent focus:border-accent/80 focus:ring-accent/30 h-10 text-sm font-bold focus:ring-1"
+                        />
+                      </div>
+                    </div>
+                  )}
                 </div>
 
                 {/* Số lượng và ngày mua đặt cạnh nhau */}

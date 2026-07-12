@@ -346,6 +346,7 @@ export function Dashboard() {
         onClose={() => setDialogOpen(false)}
         onSubmit={(payload) => addMutation.mutateAsync(payload).then(() => undefined)}
         defaultBuffRate={buffCnyToVndRate}
+        buffPricesCny={buffPricesCny}
       />
 
       {excelImportRows && (

@@ -33,6 +33,19 @@ import { PricingFormulaSection } from './add-case-dialog/pricing-formula-section
 import { QuantityDateSection } from './add-case-dialog/quantity-date-section';
 import { LocationSelectionSection } from './add-case-dialog/location-selection-section';
 import { StatusSection } from './add-case-dialog/status-section';
+import { getSavedBuffPriceCny } from '../add-item-pricing';
+import {
+  readManualOwnershipPreferences,
+  writeManualOwnershipPreferences,
+  type ManualOwnershipPreferences,
+} from '../item-hover-card/manual-ownership-preferences';
+
+const EMPTY_MANUAL_OWNERSHIP_PREFERENCES: ManualOwnershipPreferences = {
+  editAccountId: '',
+  editStorageUnitId: '',
+  editState: 'tradeable',
+  editHoldDays: '',
+};
 
 type AddCaseDialogProps = {
   open: boolean;
@@ -58,6 +71,7 @@ type AddCaseDialogProps = {
     tradeHoldUntil?: string | null;
   }) => Promise<void>;
   defaultBuffRate?: number;
+  buffPricesCny?: Record<string, number>;
 };
 
 export function AddCaseDialog({
@@ -66,10 +80,14 @@ export function AddCaseDialog({
   onClose,
   onSubmit,
   defaultBuffRate = 3600,
+  buffPricesCny,
 }: AddCaseDialogProps) {
   const { t } = useTranslation();
   const [selectedCase, setSelectedCase] = useState<CaseItemSearchData | null>(null);
   const [isResetting, setIsResetting] = useState(false);
+  const [marketPrice, setMarketPrice] = useState(0);
+  const [manualOwnershipDefaults, setManualOwnershipDefaults] =
+    useState<ManualOwnershipPreferences>(EMPTY_MANUAL_OWNERSHIP_PREFERENCES);
 
   const form = useForm<FormValues>({
     defaultValues: {
@@ -94,6 +112,8 @@ export function AddCaseDialog({
   const buyPrice = useWatch({ control, name: 'buyPrice' });
   const quantity = useWatch({ control, name: 'quantity' });
   const buyDate = useWatch({ control, name: 'buyDate' });
+  const savedBuffPriceCny = getSavedBuffPriceCny(selectedCase?.marketHashName, buffPricesCny);
+  const hasBuff = savedBuffPriceCny !== null;
 
   // Lấy tài khoản đã liên kết
   const accountsQuery = useQuery({
@@ -133,14 +153,20 @@ export function AddCaseDialog({
   // Nạp bản nháp hoặc reset trạng thái khi dialog mở
   useEffect(() => {
     if (open) {
+      const ownershipDefaults =
+        readManualOwnershipPreferences(localStorage) ?? EMPTY_MANUAL_OWNERSHIP_PREFERENCES;
+      setManualOwnershipDefaults(ownershipDefaults);
+
       try {
         const savedDraft = localStorage.getItem('add_case_dialog_draft');
         if (savedDraft) {
           const draft = JSON.parse(savedDraft);
           if (draft.selectedCase) {
             setSelectedCase(draft.selectedCase);
+            setMarketPrice(Number(draft.marketPrice) || 0);
           } else {
             setSelectedCase(null);
+            setMarketPrice(0);
           }
           if (draft.formValues) {
             reset(draft.formValues);
@@ -153,17 +179,8 @@ export function AddCaseDialog({
 
       // Reset mặc định nếu không có bản nháp
       setSelectedCase(null);
-      reset({
-        quantity: '1',
-        buyPrice: '',
-        buyDate: formatInputDate(new Date()),
-        buffPrice: '',
-        buffRate: formatIntegerVi(defaultBuffRate),
-        accountId: '',
-        storageUnitId: '',
-        itemState: 'tradeable',
-        holdDays: '',
-      });
+      setMarketPrice(0);
+      reset(getDefaultFormValues(defaultBuffRate, ownershipDefaults));
     }
   }, [open, defaultBuffRate, reset]);
 
@@ -179,10 +196,10 @@ export function AddCaseDialog({
         !watchedValues.buyPrice &&
         !watchedValues.buffPrice &&
         watchedValues.buffRate === formatIntegerVi(defaultBuffRate) &&
-        !watchedValues.accountId &&
-        !watchedValues.storageUnitId &&
-        watchedValues.itemState === 'tradeable' &&
-        !watchedValues.holdDays;
+        watchedValues.accountId === manualOwnershipDefaults.editAccountId &&
+        watchedValues.storageUnitId === manualOwnershipDefaults.editStorageUnitId &&
+        watchedValues.itemState === manualOwnershipDefaults.editState &&
+        watchedValues.holdDays === manualOwnershipDefaults.editHoldDays;
 
       try {
         if (isDefault) {
@@ -190,6 +207,7 @@ export function AddCaseDialog({
         } else {
           const draft = {
             selectedCase,
+            marketPrice,
             formValues: watchedValues,
           };
           localStorage.setItem('add_case_dialog_draft', JSON.stringify(draft));
@@ -198,7 +216,7 @@ export function AddCaseDialog({
         console.error('Failed to update draft in localStorage', e);
       }
     }
-  }, [open, selectedCase, watchedValues, defaultBuffRate]);
+  }, [open, selectedCase, marketPrice, watchedValues, defaultBuffRate, manualOwnershipDefaults]);
 
   // Tính lại buyPrice khi buffPrice hoặc buffRate thay đổi
   const recalcBuyPrice = useCallback(
@@ -250,9 +268,11 @@ export function AddCaseDialog({
     (val: string) => {
       const formatted = formatIntegerVi(val);
       setValue('buyPrice', formatted);
-      recalcBuffPrice(formatted, buffRate);
+      if (hasBuff) {
+        recalcBuffPrice(formatted, buffRate);
+      }
     },
-    [setValue, recalcBuffPrice, buffRate]
+    [setValue, recalcBuffPrice, buffRate, hasBuff]
   );
 
   const handleAccountChange = useCallback(
@@ -316,13 +336,23 @@ export function AddCaseDialog({
       tradeHoldUntil,
     });
 
+    const nextOwnershipDefaults: ManualOwnershipPreferences = {
+      editAccountId: selectedAccount?.steamId64 ?? '',
+      editStorageUnitId: selectedAccount ? data.storageUnitId : '',
+      editState: data.itemState,
+      editHoldDays: data.itemState === 'tradeable' ? '' : data.holdDays,
+    };
+    writeManualOwnershipPreferences(localStorage, nextOwnershipDefaults);
+    setManualOwnershipDefaults(nextOwnershipDefaults);
+
     try {
       localStorage.removeItem('add_case_dialog_draft');
     } catch {
       // bỏ qua
     }
     setSelectedCase(null);
-    reset();
+    setMarketPrice(0);
+    reset(getDefaultFormValues(defaultBuffRate, nextOwnershipDefaults));
   }
 
   const handleCancel = () => {
@@ -332,17 +362,8 @@ export function AddCaseDialog({
       // bỏ qua
     }
     setSelectedCase(null);
-    reset({
-      quantity: '1',
-      buyPrice: '',
-      buyDate: formatInputDate(new Date()),
-      buffPrice: '',
-      buffRate: String(defaultBuffRate),
-      accountId: '',
-      storageUnitId: '',
-      itemState: 'tradeable',
-      holdDays: '',
-    });
+    setMarketPrice(0);
+    reset(getDefaultFormValues(defaultBuffRate, manualOwnershipDefaults));
     onClose();
   };
 
@@ -366,15 +387,27 @@ export function AddCaseDialog({
               selectedCase={selectedCase}
               onSelect={(caseItem, price) => {
                 setSelectedCase(caseItem);
-                if (price > 0) {
-                  handleBuyPriceChange(price.toString());
+                setMarketPrice(price);
+                const buffPrice = getSavedBuffPriceCny(caseItem.marketHashName, buffPricesCny);
+                setValue('buffRate', formatIntegerVi(defaultBuffRate));
+                if (buffPrice !== null) {
+                  setValue('buffPrice', formatDecimalVi(buffPrice));
+                  setValue('buyPrice', formatIntegerVi(Math.round(buffPrice * defaultBuffRate)));
+                } else {
+                  setValue('buffPrice', '');
+                  setValue('buyPrice', price > 0 ? formatIntegerVi(price) : '');
                 }
               }}
-              onClear={() => setSelectedCase(null)}
+              onClear={() => {
+                setSelectedCase(null);
+                setMarketPrice(0);
+              }}
             />
 
             <PricingFormulaSection
               control={control}
+              hasBuff={hasBuff}
+              marketPrice={formatIntegerVi(marketPrice)}
               handleBuffPriceChange={handleBuffPriceChange}
               handleBuffRateChange={handleBuffRateChange}
               handleBuyPriceChange={handleBuyPriceChange}
@@ -406,17 +439,8 @@ export function AddCaseDialog({
                   // ignore
                 }
                 setSelectedCase(null);
-                reset({
-                  quantity: '1',
-                  buyPrice: '',
-                  buyDate: formatInputDate(new Date()),
-                  buffPrice: '',
-                  buffRate: String(defaultBuffRate),
-                  accountId: '',
-                  storageUnitId: '',
-                  itemState: 'tradeable',
-                  holdDays: '',
-                });
+                setMarketPrice(0);
+                reset(getDefaultFormValues(defaultBuffRate, manualOwnershipDefaults));
                 setTimeout(() => setIsResetting(false), 400);
               }}
               className="text-muted-foreground hover:text-foreground mr-auto h-9 text-xs"
@@ -444,4 +468,21 @@ export function AddCaseDialog({
       </DialogContent>
     </Dialog>
   );
+}
+
+function getDefaultFormValues(
+  defaultBuffRate: number,
+  ownershipDefaults: ManualOwnershipPreferences
+): FormValues {
+  return {
+    quantity: '1',
+    buyPrice: '',
+    buyDate: formatInputDate(new Date()),
+    buffPrice: '',
+    buffRate: formatIntegerVi(defaultBuffRate),
+    accountId: ownershipDefaults.editAccountId,
+    storageUnitId: ownershipDefaults.editStorageUnitId,
+    itemState: ownershipDefaults.editState,
+    holdDays: ownershipDefaults.editHoldDays,
+  };
 }

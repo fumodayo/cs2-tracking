@@ -44,7 +44,7 @@ export function getItemHoverCardDefaultFormValues({
     priceCny: hasBuff
       ? formatDecimalViInput(defaultVnd / (buffCnyToVndRate ?? 3600))
       : formatIntegerViInput(defaultMarket),
-    buyRate: getItemHoverCardDefaultBuyRate({ item, hasBuff, buffCnyToVndRate }),
+    buyRate: hasBuff ? formatIntegerViInput(buffCnyToVndRate ?? 3600) : '100',
     priceVnd: formatIntegerViInput(defaultVnd),
     note: item.note ?? '',
     sellRate: formatIntegerViInput(buffCnyToVndRate ?? 3600),
@@ -99,13 +99,8 @@ export function getItemHoverCardDraftFormValues({
     ...defaultValues,
     quantity: formatIntegerViInput(draft.quantity ?? String(item.quantity)),
     priceVnd: formatIntegerViInput(draft.priceVnd ?? toInputNumber(defaultVnd)),
-    priceCny: formatIntegerViInput(draft.priceCny ?? toInputNumber(defaultMarket)),
-    buyRate:
-      item.buyPrice > 0 && defaultMarket > 0
-        ? formatIntegerViInput(
-            draft.buyRate ?? String(Math.round((item.buyPrice / defaultMarket) * 100))
-          )
-        : formatIntegerViInput(draft.buyRate ?? '100'),
+    priceCny: formatIntegerViInput(defaultMarket),
+    buyRate: '100',
     note: draft.note ?? item.note ?? '',
     editAccountId: draft.editAccountId ?? item.sourceAccounts?.[0]?.steamId64 ?? '',
     editStorageUnitId: draft.editStorageUnitId ?? item.storageUnitId ?? '',
@@ -116,27 +111,4 @@ export function getItemHoverCardDraftFormValues({
     capturedScanTotal: draft.capturedScanTotal ?? item.stickerScanTotalPrice ?? null,
     capturedScanDate: draft.capturedScanDate ?? item.stickerScanPriceCapturedAt,
   };
-}
-
-function getItemHoverCardDefaultBuyRate({
-  item,
-  hasBuff,
-  buffCnyToVndRate,
-}: {
-  item: PortfolioTableRow;
-  hasBuff: boolean;
-  buffCnyToVndRate?: number;
-}): string {
-  if (hasBuff) {
-    return formatIntegerViInput(buffCnyToVndRate ?? 3600);
-  }
-
-  if (item.buyPrice > 0) {
-    const defaultMarket = item.steamPrice || item.currentPrice || 0;
-    if (defaultMarket > 0) {
-      return String(Math.round((item.buyPrice / defaultMarket) * 100));
-    }
-  }
-
-  return '100';
 }

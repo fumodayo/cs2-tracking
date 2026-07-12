@@ -31,6 +31,11 @@ import {
 } from './item-hover-card-form-values';
 import { useItemPatternInspectControls } from './use-item-pattern-inspect-controls';
 import { useItemHoverCardAccounts } from './use-item-hover-card-accounts';
+import {
+  applyManualOwnershipPreferences,
+  readManualOwnershipPreferences,
+  writeManualOwnershipPreferences,
+} from './manual-ownership-preferences';
 
 export function ItemHoverCard({
   item,
@@ -200,6 +205,14 @@ export function ItemHoverCard({
       console.error('Failed to parse item draft from localStorage', e);
     }
 
+    if (!loadedFromDraft && item.sourceType === 'manual') {
+      nextValues = applyManualOwnershipPreferences(
+        nextValues,
+        item.sourceType,
+        readManualOwnershipPreferences(localStorage)
+      );
+    }
+
     applyFormValues(nextValues, !loadedFromDraft);
   }, [item, defaultFormValues, hasBuff, buffCnyToVndRate, applyFormValues]);
 
@@ -318,17 +331,10 @@ export function ItemHoverCard({
     const formatted = formatIntegerViInput(value);
     setPriceVnd(formatted);
     const vnd = parseViFloat(formatted);
-    if (Number.isFinite(vnd)) {
-      if (hasBuff) {
-        const rate = parseViFloat(buyRate);
-        if (Number.isFinite(rate) && rate > 0) {
-          setPriceCny(formatDecimalViInput(vnd / rate));
-        }
-      } else {
-        const marketVal = parseViFloat(priceCny);
-        if (Number.isFinite(marketVal) && marketVal > 0) {
-          setBuyRate(formatIntegerViInput(Math.round((vnd / marketVal) * 100)));
-        }
+    if (hasBuff && Number.isFinite(vnd)) {
+      const rate = parseViFloat(buyRate);
+      if (Number.isFinite(rate) && rate > 0) {
+        setPriceCny(formatDecimalViInput(vnd / rate));
       }
     }
   }
@@ -387,6 +393,14 @@ export function ItemHoverCard({
         if (onUpdateNote && note !== (item.note ?? '')) {
           await onUpdateNote(targetId, note);
         }
+      }
+      if (item.sourceType === 'manual') {
+        writeManualOwnershipPreferences(localStorage, {
+          editAccountId,
+          editStorageUnitId,
+          editState,
+          editHoldDays,
+        });
       }
       try {
         localStorage.removeItem(`item_hover_card_draft_${item.id}`);

@@ -438,7 +438,11 @@ export function InventoryScanner() {
       {!merged && hasScannedAccount && (
         <section className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
           <div className="space-y-6">
-            <AddCaseSearch onAdd={addManualItem} />
+            <AddCaseSearch
+              onAdd={addManualItem}
+              defaultBuffRate={buffCnyToVndRate}
+              buffPricesCny={state.buffPricesCny}
+            />
           </div>
         </section>
       )}

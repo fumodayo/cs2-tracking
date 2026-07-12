@@ -168,6 +168,7 @@ export function ScannerResults({
                 name: a.result!.profile.name,
               }))}
             defaultBuffRate={buffCnyToVndRate}
+            buffPricesCny={state.buffPricesCny}
           />
         </div>
       )}
@@ -231,6 +232,7 @@ export function ScannerResults({
                 name: a.result!.profile.name,
               }))}
             defaultBuffRate={buffCnyToVndRate}
+            buffPricesCny={state.buffPricesCny}
           />
         </div>
       )}

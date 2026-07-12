@@ -1,15 +1,15 @@
-"use client";
+'use client';
 
-import { useTranslation } from "react-i18next";
-import { Control, Controller } from "react-hook-form";
+import { useTranslation } from 'react-i18next';
+import { Control, Controller } from 'react-hook-form';
 import {
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue,
-} from "@/components/ui/select";
-import { FormValues } from "./types";
+} from '@/components/ui/select';
+import { FormValues } from './types';
 
 interface LocationSelectionSectionProps {
   control: Control<FormValues>;
@@ -27,25 +27,29 @@ export function LocationSelectionSection({
   handleAccountChange,
 }: LocationSelectionSectionProps) {
   const { t } = useTranslation();
+  const selectedAccountValue = accountId
+    ? (accounts.find((account) => account.id === accountId || account.steamId64 === accountId)
+        ?.id ?? accountId)
+    : '__manual__';
+
   return (
-    <div className="grid grid-cols-1 gap-4 border-t border-border pt-4 sm:grid-cols-2">
+    <div className="border-border grid grid-cols-1 gap-4 border-t pt-4 sm:grid-cols-2">
       <div>
         <label
-          className="mb-1.5 block text-xs font-semibold text-muted-foreground"
+          className="text-muted-foreground mb-1.5 block text-xs font-semibold"
           htmlFor="account-select"
         >
-          {t("portfolio.owningAccounts", "Owning Accounts")}
+          {t('portfolio.owningAccounts', 'Owning Accounts')}
         </label>
-        <Select
-          value={accountId || "__manual__"}
-          onValueChange={handleAccountChange}
-        >
+        <Select value={selectedAccountValue} onValueChange={handleAccountChange}>
           <SelectTrigger id="account-select" className="h-10">
-            <SelectValue placeholder={t("portfolio.manualNoAccount", "Manual (No account selected)")} />
+            <SelectValue
+              placeholder={t('portfolio.manualNoAccount', 'Manual (No account selected)')}
+            />
           </SelectTrigger>
           <SelectContent>
             <SelectItem value="__manual__">
-              {t("portfolio.manualNoAccount", "Manual (No account selected)")}
+              {t('portfolio.manualNoAccount', 'Manual (No account selected)')}
             </SelectItem>
             {accounts.map((acc) => (
               <SelectItem key={acc.id} value={acc.id}>
@@ -59,36 +63,34 @@ export function LocationSelectionSection({
 
       <div>
         <label
-          className="mb-1.5 block text-xs font-semibold text-muted-foreground"
+          className="text-muted-foreground mb-1.5 block text-xs font-semibold"
           htmlFor="storage-unit-select"
         >
-          {t("portfolio.storedInStorageUnit", "Stored in (Storage Unit)")}
+          {t('portfolio.storedInStorageUnit', 'Stored in (Storage Unit)')}
         </label>
         <Controller
           control={control}
           name="storageUnitId"
           render={({ field }) => (
             <Select
-              value={field.value || "__inventory__"}
-              onValueChange={(val) =>
-                field.onChange(val === "__inventory__" ? "" : val)
-              }
+              value={field.value || '__inventory__'}
+              onValueChange={(val) => field.onChange(val === '__inventory__' ? '' : val)}
               disabled={!accountId || storageUnits.length === 0}
             >
               <SelectTrigger id="storage-unit-select" className="h-10">
                 <SelectValue
                   placeholder={
                     !accountId
-                      ? t("portfolio.selectAccountFirst", "Select owning account first")
+                      ? t('portfolio.selectAccountFirst', 'Select owning account first')
                       : storageUnits.length === 0
-                        ? t("portfolio.noStorageUnitsOnAccount", "Account has no Storage Units")
-                        : t("portfolio.regularInventory", "Regular inventory (Inventory)")
+                        ? t('portfolio.noStorageUnitsOnAccount', 'Account has no Storage Units')
+                        : t('portfolio.regularInventory', 'Regular inventory (Inventory)')
                   }
                 />
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="__inventory__">
-                  {t("portfolio.regularInventory", "Regular inventory (Inventory)")}
+                  {t('portfolio.regularInventory', 'Regular inventory (Inventory)')}
                 </SelectItem>
                 {storageUnits.map((su) => (
                   <SelectItem key={su.id} value={su.id}>

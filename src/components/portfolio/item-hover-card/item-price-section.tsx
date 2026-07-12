@@ -7,6 +7,7 @@ import { TbCoins } from 'react-icons/tb';
 import { PortfolioTableRow } from '../portfolio-table-model';
 import { formatIntegerViInput, formatVND } from '@/utils/format';
 import { useTranslation } from 'react-i18next';
+import { calculateLotTotal } from './item-price-section-values';
 
 interface ItemPriceSectionProps {
   item: PortfolioTableRow;
@@ -58,13 +59,22 @@ export function ItemPriceSection({
       : priceVnd
         ? `${priceVnd} ₫`
         : '';
+  const unitPriceForTotal =
+    showStickerFormulaTotal &&
+    stickerFormulaTotalPrice !== null &&
+    Number.isFinite(stickerFormulaTotalPrice)
+      ? stickerFormulaTotalPrice
+      : priceVnd;
+  const lotTotal = calculateLotTotal(quantity, unitPriceForTotal);
 
   return (
     <div className="space-y-3 rounded-xl border border-stone-800 bg-stone-950/20 p-3.5 shadow-[inset_0_1px_4px_rgba(0,0,0,0.15)]">
       <div className="flex items-center justify-between gap-1.5 text-[10px] font-extrabold tracking-wide text-stone-400">
         <div className="flex items-center gap-1.5">
           <TbCoins className="size-3.5 text-amber-500" />
-          {t('portfolio.quantityAndPrice', 'Số lượng & Đơn giá bán')}
+          {isGuest || useSellLabel
+            ? t('portfolio.quantityAndSellPrice', 'Số lượng & Đơn giá bán')
+            : t('portfolio.quantityAndBuyPrice', 'Số lượng & Đơn giá mua')}
         </div>
         {item.sourceType === 'existing' && (
           <span className="text-accent/90 bg-accent/10 border-accent/20 rounded-full border px-2 py-0.5 text-[8px] font-extrabold tracking-wide shadow-[0_0_10px_rgba(59,130,246,0.08)] select-none">
@@ -109,7 +119,13 @@ export function ItemPriceSection({
               aria-label={hasBuff ? t('portfolio.priceCny', 'CNY Price') : 'Market Price VND'}
               value={priceCny}
               onChange={(e) => updateCny(e.target.value)}
-              className="hover:border-stone-750 focus:border-accent/40 focus:ring-accent/10 h-9 w-full rounded-lg border border-stone-800 bg-stone-950/30 pr-3 pl-12 text-right text-xs font-bold text-stone-100 transition-all duration-200 placeholder:text-stone-600 hover:bg-stone-950/60 focus:ring-2 focus:outline-none"
+              readOnly={!hasBuff}
+              aria-readonly={!hasBuff}
+              className={`h-9 w-full rounded-lg border border-stone-800 pr-3 pl-12 text-right text-xs font-bold transition-all duration-200 focus:outline-none ${
+                hasBuff
+                  ? 'hover:border-stone-750 focus:border-accent/40 focus:ring-accent/10 bg-stone-950/30 text-stone-100 placeholder:text-stone-600 hover:bg-stone-950/60 focus:ring-2'
+                  : 'cursor-default bg-stone-900/40 text-stone-400'
+              }`}
             />
             <span className="pointer-events-none absolute left-2 rounded border border-stone-800/50 bg-stone-900/60 px-1.5 py-0.5 text-[8px] font-extrabold tracking-wide text-stone-400 select-none">
               {hasBuff ? 'CNY' : 'VND'}
@@ -117,45 +133,43 @@ export function ItemPriceSection({
           </div>
         </div>
 
-        <div className="flex flex-col gap-1.5">
-          <label
-            className={`text-[9px] font-extrabold tracking-wide ${isGuest && hasBuff ? 'text-emerald-500/80' : 'text-stone-500'}`}
-          >
-            {hasBuff
-              ? isGuest
+        {hasBuff && (
+          <div className="flex flex-col gap-1.5">
+            <label
+              className={`text-[9px] font-extrabold tracking-wide ${isGuest ? 'text-emerald-500/80' : 'text-stone-500'}`}
+            >
+              {isGuest
                 ? t('portfolio.sellRate', 'Tỷ giá bán')
-                : t('portfolio.buyRate', 'Tỷ giá mua')
-              : 'Tỷ lệ chiết khấu (%)'}
-          </label>
-          <div className="relative flex items-center">
-            <input
-              type="text"
-              aria-label={
-                hasBuff
-                  ? isGuest
+                : t('portfolio.buyRate', 'Tỷ giá mua')}
+            </label>
+            <div className="relative flex items-center">
+              <input
+                type="text"
+                aria-label={
+                  isGuest
                     ? t('portfolio.sellRate', 'Sell Rate')
                     : t('portfolio.buyRate', 'Buy Rate')
-                  : 'Rate Percent'
-              }
-              value={buyRate}
-              onChange={(e) => updateBuyRate(e.target.value)}
-              className={
-                isGuest && hasBuff
-                  ? 'h-9 w-full rounded-lg border border-emerald-800/30 bg-emerald-950/10 pr-3 pl-14 text-right text-xs font-bold text-emerald-300 transition-all duration-200 placeholder:text-stone-600 hover:border-emerald-700/40 hover:bg-emerald-950/20 focus:border-emerald-500/40 focus:ring-2 focus:ring-emerald-500/10 focus:outline-none'
-                  : 'hover:border-stone-750 focus:border-accent/40 focus:ring-accent/10 h-9 w-full rounded-lg border border-stone-800 bg-stone-950/30 pr-3 pl-14 text-right text-xs font-bold text-stone-100 transition-all duration-200 placeholder:text-stone-600 hover:bg-stone-950/60 focus:ring-2 focus:outline-none'
-              }
-            />
-            <span
-              className={
-                isGuest && hasBuff
-                  ? 'pointer-events-none absolute left-2 rounded border border-emerald-800/20 bg-emerald-900/20 px-1.5 py-0.5 text-[8px] font-extrabold tracking-wide text-emerald-500/60 select-none'
-                  : 'pointer-events-none absolute left-2 rounded border border-stone-800/50 bg-stone-900/60 px-1.5 py-0.5 text-[8px] font-extrabold tracking-wide text-stone-400 select-none'
-              }
-            >
-              {hasBuff ? 'Tỷ giá' : '%'}
-            </span>
+                }
+                value={buyRate}
+                onChange={(e) => updateBuyRate(e.target.value)}
+                className={
+                  isGuest
+                    ? 'h-9 w-full rounded-lg border border-emerald-800/30 bg-emerald-950/10 pr-3 pl-14 text-right text-xs font-bold text-emerald-300 transition-all duration-200 placeholder:text-stone-600 hover:border-emerald-700/40 hover:bg-emerald-950/20 focus:border-emerald-500/40 focus:ring-2 focus:ring-emerald-500/10 focus:outline-none'
+                    : 'hover:border-stone-750 focus:border-accent/40 focus:ring-accent/10 h-9 w-full rounded-lg border border-stone-800 bg-stone-950/30 pr-3 pl-14 text-right text-xs font-bold text-stone-100 transition-all duration-200 placeholder:text-stone-600 hover:bg-stone-950/60 focus:ring-2 focus:outline-none'
+                }
+              />
+              <span
+                className={
+                  isGuest
+                    ? 'pointer-events-none absolute left-2 rounded border border-emerald-800/20 bg-emerald-900/20 px-1.5 py-0.5 text-[8px] font-extrabold tracking-wide text-emerald-500/60 select-none'
+                    : 'pointer-events-none absolute left-2 rounded border border-stone-800/50 bg-stone-900/60 px-1.5 py-0.5 text-[8px] font-extrabold tracking-wide text-stone-400 select-none'
+                }
+              >
+                Tỷ giá
+              </span>
+            </div>
           </div>
-        </div>
+        )}
 
         {hasBuff && !isGuest && sellRate !== undefined && updateSellRate && (
           <div className="flex flex-col gap-1.5">
@@ -177,7 +191,7 @@ export function ItemPriceSection({
           </div>
         )}
 
-        <div className="flex flex-col gap-1.5">
+        <div className={`flex flex-col gap-1.5 ${hasBuff ? '' : 'col-span-2'}`}>
           <label className="text-[9px] font-extrabold tracking-wide text-stone-500">
             {t('portfolio.note', 'Ghi chú')}
           </label>
@@ -196,16 +210,24 @@ export function ItemPriceSection({
         </div>
       </div>
 
-      {/* Tổng giá bán VND */}
+      {/* Đơn giá và tổng giá trị của lô */}
       <div className="mt-3.5 flex items-center justify-between rounded-xl border border-emerald-500/15 bg-emerald-500/5 p-3.5 shadow-[inset_0_1px_4px_rgba(0,0,0,0.15)] transition-all duration-300 hover:border-emerald-500/30 hover:bg-emerald-500/8">
         <div className="flex flex-col">
           <span className="text-[9px] font-extrabold tracking-wide text-emerald-400">
-            {isGuest
-              ? t('portfolio.totalSellPriceVnd', 'Tổng giá bán (VND)')
-              : t('portfolio.totalBuyPriceVnd', 'Tổng giá mua (VND)')}
+            {isGuest || useSellLabel
+              ? t('portfolio.unitSellPriceVnd', 'Đơn giá bán (VND)')
+              : t('portfolio.unitBuyPriceVnd', 'Đơn giá mua (VND)')}
           </span>
+          {showStickerFormulaTotal && (
+            <span className="text-[8px] text-stone-500">
+              {t('portfolio.skinStickerFormula', 'Giá Skin + (giá Sticker × %)')}
+            </span>
+          )}
           <span className="text-[8px] text-stone-500">
-            {t('portfolio.skinStickerFormula', 'Giá Skin + (giá Sticker × %)')}
+            {isGuest || useSellLabel
+              ? t('portfolio.totalSellValue', 'Tổng giá bán')
+              : t('portfolio.totalInvestedValue', 'Tổng vốn')}
+            : {lotTotal === null ? '—' : formatVND(lotTotal)}
           </span>
         </div>
         {showStickerFormulaTotal && (
@@ -217,9 +239,9 @@ export function ItemPriceSection({
           <input
             type="text"
             aria-label={
-              isGuest
-                ? t('portfolio.totalSellPriceVnd', 'Total Sell Price VND')
-                : t('portfolio.buyPriceVnd', 'Buy Price VND')
+              isGuest || useSellLabel
+                ? t('portfolio.unitSellPriceVnd', 'Unit Sell Price VND')
+                : t('portfolio.unitBuyPriceVnd', 'Unit Buy Price VND')
             }
             value={priceVnd}
             onChange={(e) => updateVnd(e.target.value)}

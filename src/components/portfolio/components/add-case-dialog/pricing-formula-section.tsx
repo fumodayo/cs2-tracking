@@ -7,6 +7,8 @@ import { FormValues } from './types';
 
 interface PricingFormulaSectionProps {
   control: Control<FormValues>;
+  hasBuff: boolean;
+  marketPrice: string;
   handleBuffPriceChange: (val: string) => void;
   handleBuffRateChange: (val: string) => void;
   handleBuyPriceChange: (val: string) => void;
@@ -14,11 +16,58 @@ interface PricingFormulaSectionProps {
 
 export function PricingFormulaSection({
   control,
+  hasBuff,
+  marketPrice,
   handleBuffPriceChange,
   handleBuffRateChange,
   handleBuyPriceChange,
 }: PricingFormulaSectionProps) {
   const { t } = useTranslation();
+
+  if (!hasBuff) {
+    return (
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+        <div>
+          <label
+            htmlFor="pricing-market-price"
+            className="text-muted-foreground mb-1 block text-[10px] font-semibold"
+          >
+            {t('portfolio.marketPriceAtFullRate', 'Giá Market (100%)')}
+          </label>
+          <Input
+            id="pricing-market-price"
+            value={marketPrice}
+            readOnly
+            aria-readonly="true"
+            className="h-10 cursor-default bg-stone-900/40 text-sm text-stone-400"
+          />
+        </div>
+
+        <div>
+          <label
+            htmlFor="pricing-buy-price"
+            className="text-accent mb-1 block text-[10px] font-bold"
+          >
+            {t('portfolio.unitBuyPriceVnd', 'Đơn giá mua (VND)')}
+          </label>
+          <Controller
+            control={control}
+            name="buyPrice"
+            render={({ field }) => (
+              <Input
+                id="pricing-buy-price"
+                value={field.value}
+                onChange={(event) => handleBuyPriceChange(event.target.value)}
+                inputMode="numeric"
+                placeholder="VD: 12.500"
+                className="text-accent focus:border-accent/80 focus:ring-accent/30 h-10 text-sm font-bold focus:ring-1"
+              />
+            )}
+          />
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-2">

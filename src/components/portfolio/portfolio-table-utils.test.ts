@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { PortfolioTableRow } from './portfolio-table-model';
-import { getFilteredRowsChangeKey } from './portfolio-table-utils';
+import { calculateRatedValue, getFilteredRowsChangeKey } from './portfolio-table-utils';
 
 describe('getFilteredRowsChangeKey', () => {
   it('stays stable for cloned rows with the same summary values', () => {
@@ -17,6 +17,12 @@ describe('getFilteredRowsChangeKey', () => {
 
     expect(getFilteredRowsChangeKey([first])).not.toBe(getFilteredRowsChangeKey([changedQuantity]));
     expect(getFilteredRowsChangeKey([first])).not.toBe(getFilteredRowsChangeKey([]));
+  });
+});
+
+describe('calculateRatedValue', () => {
+  it('returns the full Market value at the 100% default for non-BUFF items', () => {
+    expect(calculateRatedValue(createRow(), 100)).toBe(100);
   });
 });
 
