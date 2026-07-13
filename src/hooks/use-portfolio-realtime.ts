@@ -95,7 +95,11 @@ export function usePortfolioRealtime(enabled: boolean, ownerId?: string) {
         let fallbackTimer: ReturnType<typeof setTimeout> | null = setTimeout(() => {
           fallbackTimer = null;
           if (!disposed && !ablyConnected) {
-            client.close();
+            try {
+              client.close();
+            } catch (err) {
+              console.warn('Error closing Ably client in fallback timer:', err);
+            }
           }
         }, 5_000);
 
@@ -113,7 +117,11 @@ export function usePortfolioRealtime(enabled: boolean, ownerId?: string) {
               clearTimeout(fallbackTimer);
               fallbackTimer = null;
             }
-            client.close();
+            try {
+              client.close();
+            } catch (err) {
+              console.warn('Error closing Ably client in state connection state listener:', err);
+            }
           }
         });
 
@@ -138,7 +146,11 @@ export function usePortfolioRealtime(enabled: boolean, ownerId?: string) {
       if (ablyChannel) {
         ablyChannel.unsubscribe('portfolio.changed');
       }
-      ablyClient?.close();
+      try {
+        ablyClient?.close();
+      } catch (err) {
+        console.warn('Error closing Ably client in useEffect cleanup:', err);
+      }
     };
   }, [enabled, ownerId, queryClient]);
 }
