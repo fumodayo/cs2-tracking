@@ -1,16 +1,17 @@
 import { type ColumnDef } from '@tanstack/react-table';
 import type { TFunction } from 'i18next';
 import { Loader2 } from 'lucide-react';
-import { FaSteam, FaSyncAlt, FaSearch } from 'react-icons/fa';
+import { FaSyncAlt, FaSearch } from 'react-icons/fa';
 import * as HoverCard from '@radix-ui/react-hover-card';
 
-import { CopyButton, DataTableColumnHeader } from '@/components/ui/actions';
+import { DataTableColumnHeader } from '@/components/ui/actions';
 import { formatRelative } from '@/utils/date';
 import { CaseThumbnail } from '@/components/portfolio';
 import type { ScanResultItem } from './types';
 import type { InspectPatternResult } from './hooks/use-pattern-inspect';
 import { AccessoryPricePreviewStrip } from './inventory-scanner-accessories';
 import { InventoryScannerItemHoverCardContent } from './inventory-scanner-item-hover-card';
+import { InventoryScannerItemTitle } from './inventory-scanner-item-title';
 import { InventoryScannerManualQuantityCell } from './inventory-scanner-manual-quantity-cell';
 import { InventoryScannerPriceCell } from './inventory-scanner-price-cell';
 import { InventoryScannerStatusBadges } from './inventory-scanner-status-badges';
@@ -52,7 +53,6 @@ export function buildInventoryColumns({
   patternResults,
   inspectPattern,
   mode,
-  onSelectItem,
   isMobile = false,
 }: BuildInventoryColumnsParams): ColumnDef<ScanResultItem>[] {
   const renderVND = (value: number | null | undefined) => {
@@ -138,48 +138,13 @@ export function buildInventoryColumns({
               />
             </button>
             <div className="min-w-0">
-              <div className="flex items-center gap-1.5">
-                <button
-                  type="button"
-                  onClick={(e) => {
-                    e.preventDefault();
-                    e.stopPropagation();
-                    onSelectItem?.(row.original);
-                  }}
-                  className="inline-flex max-w-[24rem] cursor-pointer items-center gap-1.5 text-left font-semibold text-stone-200 transition-colors hover:text-blue-300 focus:outline-none max-md:max-w-full max-md:whitespace-normal"
-                  title={t('inventoryScanner.clickToViewDetails', 'Click to view details')}
-                >
-                  <span className="truncate max-md:line-clamp-2 max-md:text-xs max-md:whitespace-normal">
-                    {row.original.caseItem.name}
-                  </span>
-                </button>
-                <span className="inline-flex items-center gap-1.5 max-md:hidden">
-                  <CopyButton value={marketHashName} />
-                  <a
-                    href={steamMarketUrl}
-                    target="_blank"
-                    rel="noreferrer"
-                    className="border-stone-850 flex h-[20px] w-[20px] cursor-pointer items-center justify-center rounded border bg-stone-900 text-stone-400 shadow-sm transition-all hover:border-white hover:bg-white hover:text-[#171a21]"
-                    title={t('inventoryScanner.openSteamMarket', 'Open on Steam Market')}
-                  >
-                    <FaSteam className="size-2.5" />
-                  </a>
-                  <a
-                    href={buffMarketUrl}
-                    target="_blank"
-                    rel="noreferrer"
-                    className="border-stone-850 flex h-[20px] cursor-pointer items-center justify-center rounded border bg-stone-900 px-1.5 text-[10px] font-bold text-stone-400 shadow-sm transition-all select-none hover:border-amber-500/50 hover:bg-amber-500/10 hover:text-amber-400"
-                    title={t('common.openBuffMarket', 'Open on BUFF.Market')}
-                  >
-                    BUFF
-                  </a>
-                </span>
-                {row.original.isManual && (
-                  <span className="inline-flex items-center rounded border border-blue-500/30 bg-blue-500/10 px-1.5 py-0.5 text-[10px] font-semibold tracking-wider text-blue-400 uppercase">
-                    {t('common.manual')}
-                  </span>
-                )}
-              </div>
+              <InventoryScannerItemTitle
+                item={row.original}
+                marketHashName={marketHashName}
+                steamMarketUrl={steamMarketUrl}
+                buffMarketUrl={buffMarketUrl}
+                t={t}
+              />
               <InventoryScannerStatusBadges
                 item={row.original}
                 patternInfo={patternInfo}

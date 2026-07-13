@@ -7,7 +7,6 @@ import {
   AlertCircle,
   ShoppingBag,
   Wallet,
-  ExternalLink,
 } from 'lucide-react';
 import { proxySteamUrl } from '@/utils/url';
 import { useTranslation } from 'react-i18next';
@@ -20,7 +19,6 @@ import {
   isCookieCredentialError,
   isFamilyViewAccountError,
   isPrivateInventoryAccountError,
-  STEAM_PRIVACY_SETTINGS_URL,
 } from '../utils';
 import { AccountCookieConfig } from './account-cookie-config';
 import { toast } from '@/stores';
@@ -132,14 +130,13 @@ export function AccountCard({
   const accountErrorMessage = translateAccountError(acc.error, t);
   const hasFamilyViewError = isFamilyViewAccountError(acc.error);
   const hasCookieError = isCookieCredentialError(acc.error);
-  const showPrivacySettingsLink =
-    isPrivateInventoryAccountError(acc.error) || (!acc.steamCookie && acc.status !== 'scanning');
+  const isPrivateInventory = isPrivateInventoryAccountError(acc.error);
 
   const isCookieInvalid =
     !!hasCookieError || cookieStatus?.status === 'error' || cookieStatus?.status === 'expired';
 
   const isCookiesExpanded =
-    showCookies || !!acc.steamCookie || isCookieInvalid || hasFamilyViewError;
+    showCookies || !!acc.steamCookie || isCookieInvalid || hasFamilyViewError || isPrivateInventory;
 
   return (
     <div className="group hover:border-stone-750 flex flex-col gap-3 rounded-md border border-stone-800 bg-stone-950/40 p-3.5 transition-all duration-200">
@@ -285,6 +282,7 @@ export function AccountCard({
       {(acc.result?.marketScanWarning ||
         isCookieInvalid ||
         hasFamilyViewError ||
+        isPrivateInventory ||
         (!acc.steamCookie && acc.status !== 'scanning')) && (
         <div className="flex flex-wrap gap-1">
           {hasFamilyViewError ? (
@@ -293,6 +291,13 @@ export function AccountCard({
               title={accountErrorMessage}
             >
               {t('inventoryScanner.familyViewErrorBadge')}
+            </span>
+          ) : isPrivateInventory ? (
+            <span
+              className="cursor-help rounded border border-red-300 bg-red-50 px-1.5 py-0.5 text-[9px] font-semibold text-red-700 dark:border-red-500/25 dark:bg-red-500/10 dark:text-red-300"
+              title={accountErrorMessage}
+            >
+              {t('inventoryScanner.privateInventoryErrorBadge')}
             </span>
           ) : isCookieInvalid ? (
             <span
@@ -313,18 +318,6 @@ export function AccountCard({
               {t('inventoryScanner.missingCookieWarning')}
             </span>
           ) : null}
-          {showPrivacySettingsLink && (
-            <a
-              href={STEAM_PRIVACY_SETTINGS_URL}
-              target="_blank"
-              rel="noreferrer"
-              className="inline-flex items-center gap-1 rounded border border-blue-300 bg-blue-50 px-1.5 py-0.5 text-[9px] font-semibold text-blue-700 transition-colors hover:border-blue-400 hover:text-blue-900 dark:border-blue-500/25 dark:bg-blue-500/10 dark:text-blue-300 dark:hover:text-blue-200"
-              title={t('inventoryScanner.openSteamPrivacySettings', 'Open Steam Privacy Settings')}
-            >
-              {t('inventoryScanner.setInventoryPublic', 'Set Inventory Public')}
-              <ExternalLink className="size-2.5" />
-            </a>
-          )}
         </div>
       )}
 

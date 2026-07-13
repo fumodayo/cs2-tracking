@@ -32,7 +32,7 @@ export function ResultsTableBulkActions({
           {selectedCount}
         </span>
         <span className="text-xs font-semibold whitespace-nowrap text-stone-300">
-          {t('portfolio.selectedItemsCount', 'Da chon {{count}} vat pham', {
+          {t('portfolio.selectedItemsCount', 'Đã chọn {{count}} vật phẩm', {
             count: selectedCount,
           })}
         </span>
@@ -49,7 +49,7 @@ export function ResultsTableBulkActions({
             )}
           >
             <ListChecks className="size-3.5" />
-            {t('portfolio.selectAllRows', 'Chon tat ca')}
+            {t('portfolio.selectAllRows', 'Chọn tất cả')}
           </button>
         )}
         <button
@@ -57,7 +57,7 @@ export function ResultsTableBulkActions({
           onClick={onClearSelection}
           className="hover:bg-stone-850 inline-flex h-8 flex-grow cursor-pointer items-center justify-center rounded-md border border-stone-800 bg-stone-900/60 px-3 text-xs font-semibold whitespace-nowrap text-stone-400 transition-all hover:border-stone-700 hover:text-stone-200 md:flex-grow-0"
         >
-          {t('common.cancelSelection', 'Huy chon')}
+          {t('portfolio.deselectAll', 'Hủy chọn')}
         </button>
         <button
           type="button"
@@ -65,7 +65,7 @@ export function ResultsTableBulkActions({
           className="inline-flex h-8 flex-grow cursor-pointer items-center justify-center gap-1.5 rounded-md bg-blue-500 px-3.5 text-xs font-bold whitespace-nowrap text-white shadow-md shadow-blue-500/25 transition-all hover:bg-blue-600 active:scale-95 md:flex-grow-0"
         >
           <FaBoxOpen className="size-3.5" />
-          <span>{t('portfolio.sellCount', 'Ban ({{count}})', { count: selectedCount })}</span>
+          <span>{t('portfolio.sellCount', 'Bán ({{count}})', { count: selectedCount })}</span>
         </button>
         <button
           type="button"
@@ -73,7 +73,7 @@ export function ResultsTableBulkActions({
           className="inline-flex h-8 flex-grow cursor-pointer items-center justify-center gap-1.5 rounded-md border border-red-500/20 bg-red-500/5 px-3.5 text-xs font-bold whitespace-nowrap text-red-400 shadow-sm transition-all hover:border-red-500/30 hover:bg-red-500/15 hover:text-red-300 active:scale-95 md:flex-grow-0"
         >
           <FaTrashAlt className="size-3" />
-          <span>{t('common.deleteCount', 'Xoa ({{count}})', { count: selectedCount })}</span>
+          <span>{t('portfolio.deleteCount', 'Xóa ({{count}})', { count: selectedCount })}</span>
         </button>
       </div>
     </div>
