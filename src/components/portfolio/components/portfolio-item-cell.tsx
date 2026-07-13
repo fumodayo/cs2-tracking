@@ -8,6 +8,7 @@ import { useTranslation } from 'react-i18next';
 import { CopyButton } from '@/components/ui/actions';
 import { SlidePanel, SlidePanelContent } from '@/components/ui/slide-panel';
 import { CaseThumbnail } from '../case-thumbnail';
+import { AccessoryPreviewStrip } from './accessory-preview-strip';
 
 import {
   PortfolioTableRow,
@@ -83,6 +84,7 @@ export function ItemCell({
 }) {
   const { t } = useTranslation();
   const [isDialogOpen, setIsDialogOpen] = useState(false);
+  const [copyFeedbackTrigger, setCopyFeedbackTrigger] = useState(0);
   const steamMarketUrl = getSteamMarketListingUrl(item.case.marketHashName);
   const buffMarketUrl = `https://buff.market/market/all?search=${encodeURIComponent(item.case.marketHashName)}`;
   const typeColor =
@@ -93,9 +95,28 @@ export function ItemCell({
   const [hoverCardOpen, setHoverCardOpen] = useState(false);
   const [isSelectOpen, setIsSelectOpen] = useState(false);
   const isMobile = useIsMobile();
+  const openItemDetails = () => {
+    setHoverCardOpen(false);
+    setIsSelectOpen(false);
+    setIsDialogOpen(true);
+  };
 
   const triggerContent = (
-    <div className="relative flex w-fit items-center gap-3 outline-none max-md:max-w-[220px]">
+    <div
+      role="button"
+      tabIndex={0}
+      data-portfolio-item-details="true"
+      aria-label={t('portfolio.clickToEditLots', 'Click to customize / edit purchase lots')}
+      className="relative flex w-full cursor-pointer items-start gap-3 outline-none max-md:max-w-[220px]"
+      onClick={openItemDetails}
+      onKeyDown={(event) => {
+        if (event.target !== event.currentTarget) return;
+        if (event.key !== 'Enter' && event.key !== ' ') return;
+
+        event.preventDefault();
+        openItemDetails();
+      }}
+    >
       <button
         type="button"
         onClick={(e) => {
@@ -133,22 +154,30 @@ export function ItemCell({
         <div className="flex items-center gap-1.5">
           <button
             type="button"
-            data-portfolio-item-details="true"
-            onClick={() => setIsDialogOpen(true)}
+            onClick={(event) => {
+              event.stopPropagation();
+              void navigator.clipboard.writeText(item.case.marketHashName);
+              setCopyFeedbackTrigger((value) => value + 1);
+            }}
             className="text-foreground inline-flex max-w-[24rem] cursor-pointer items-center gap-1.5 truncate text-left font-bold transition-colors hover:text-blue-400 focus:outline-none max-md:max-w-full max-md:whitespace-normal"
-            title={t('portfolio.clickToEditLots', 'Click to customize / edit purchase lots')}
+            title={t('common.copy', 'Copy')}
           >
             <span className="truncate max-md:line-clamp-2 max-md:text-xs max-md:whitespace-normal">
               {item.case.name}
             </span>
           </button>
-          <span className="inline-flex items-center gap-1.5 max-md:hidden">
-            <CopyButton value={item.case.marketHashName} />
+          <span className="inline-flex items-center gap-2 max-md:hidden">
+            <CopyButton
+              value={item.case.marketHashName}
+              variant="borderless"
+              feedbackTrigger={copyFeedbackTrigger}
+            />
             <a
               href={steamMarketUrl}
               target="_blank"
               rel="noreferrer"
-              className="flex cursor-pointer items-center justify-center rounded border border-stone-800 bg-stone-900 p-1 text-stone-400 shadow-sm transition-all hover:border-white hover:bg-white hover:text-[#171a21]"
+              onClick={(event) => event.stopPropagation()}
+              className="inline-flex cursor-pointer items-center justify-center text-stone-400 transition-all hover:text-[#171a21] dark:hover:text-stone-100"
               title={t('portfolio.openSteamMarket', 'Open on Steam Market')}
             >
               <FaSteam className="size-3.5" />
@@ -157,7 +186,8 @@ export function ItemCell({
               href={buffMarketUrl}
               target="_blank"
               rel="noreferrer"
-              className="flex h-[24px] cursor-pointer items-center justify-center rounded border border-stone-800 bg-stone-900 px-1.5 text-[10px] font-bold text-stone-400 shadow-sm transition-all select-none hover:border-amber-500/50 hover:bg-amber-500/10 hover:text-amber-400"
+              onClick={(event) => event.stopPropagation()}
+              className="inline-flex cursor-pointer items-center justify-center text-[10px] font-bold text-stone-400 transition-all select-none hover:text-amber-500 dark:hover:text-amber-400"
               title={t('common.openBuffMarket', 'Open on BUFF.Market')}
             >
               BUFF
@@ -273,27 +303,30 @@ export function ItemCell({
               </span>
             </span>
           ) : null}
-        </div>
-        {item.sourceAccounts.length > 0 ? (
-          <div
-            className="mt-1 flex max-w-[28rem] flex-wrap gap-1 max-md:hidden"
-            title={formatSourceAccountTitle(item.sourceAccounts)}
-          >
-            {item.sourceAccounts.slice(0, 3).map((account) => (
+          {item.sourceAccounts.length > 0 &&
+            item.sourceAccounts.map((account) => (
               <span
                 key={account.steamId64}
-                className="inline-flex max-w-40 items-center truncate rounded border border-sky-500/25 bg-sky-500/10 px-1.5 py-0.5 text-[10px] font-medium text-sky-300"
+                className="inline-flex max-w-40 items-center truncate rounded border border-sky-500/25 bg-sky-500/10 px-1.5 py-0.5 text-[10px] font-medium text-sky-300 max-md:hidden"
+                title={formatSourceAccountTitle(item.sourceAccounts)}
               >
                 <span className="truncate">{account.name}</span>
               </span>
             ))}
-            {item.sourceAccounts.length > 3 ? (
-              <span className="border-border bg-surface-muted text-muted-foreground inline-flex items-center rounded border px-1.5 py-0.5 text-[10px] font-medium">
-                +{item.sourceAccounts.length - 3}
-              </span>
-            ) : null}
-          </div>
-        ) : null}
+        </div>
+        {item.itemType === 'skin' &&
+          item.patternInfo &&
+          ((item.patternInfo.stickers && item.patternInfo.stickers.length > 0) ||
+            (item.patternInfo.charms && item.patternInfo.charms.length > 0)) && (
+            <div className="mt-1.5">
+              <AccessoryPreviewStrip
+                stickers={item.patternInfo.stickers}
+                charms={item.patternInfo.charms}
+                maxVisible={5}
+                size="sm"
+              />
+            </div>
+          )}
       </div>
     </div>
   );

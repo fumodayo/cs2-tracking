@@ -82,6 +82,7 @@ function createFormValues(): ItemHoverCardFormValues {
     priceVnd: '50',
     note: '',
     sellRate: '100',
+    sellPriceCny: '0',
     editAccountId: '',
     editStorageUnitId: '',
     editState: 'tradeable',

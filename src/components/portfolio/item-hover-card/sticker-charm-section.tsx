@@ -94,7 +94,7 @@ export function StickerCharmSection({
   }
 
   return (
-    <div className="mb-5 space-y-3 border-b border-stone-800/60 pb-5 text-xs">
+    <div className="mb-5 space-y-3 text-xs">
       <div className="flex items-center justify-between gap-3">
         <div className="text-[10px] font-bold tracking-wide text-stone-500">
           {t('portfolio.stickerCharmTitle')}
@@ -139,11 +139,19 @@ export function StickerCharmSection({
                 value={currentAddedValue}
                 tone="emerald"
               />
-              <ValueLine
-                label={t('portfolio.estimatedValue')}
-                value={currentTotalPrice}
-                tone="emerald"
-              />
+              <div className="mt-2 flex flex-col gap-1 border-t border-emerald-500/10 pt-2 text-[10px] font-semibold text-stone-500">
+                <div className="flex items-center justify-between">
+                  <span>{t('portfolio.estimatedValue')}</span>
+                  <span className="font-mono text-[11px] font-extrabold text-emerald-600 dark:text-emerald-400">
+                    {formatVND(currentTotalPrice)}
+                  </span>
+                </div>
+                <div className="text-right font-mono text-[9.5px] text-stone-500/80">
+                  {Math.round(currentBaseSkinPrice).toLocaleString('vi-VN')} + (
+                  {Math.round(currentAccessoryTotal).toLocaleString('vi-VN')} × {safeStickerRate}%)
+                  = {Math.round(currentTotalPrice).toLocaleString('vi-VN')} ₫
+                </div>
+              </div>
             </div>
 
             {hasScanSnapshot ? (
@@ -162,15 +170,23 @@ export function StickerCharmSection({
                   onChange={onStickerBuyRateChange}
                 />
                 <ValueLine
-                  label={t('portfolio.addToCapital')}
+                  label={t('portfolio.addToCurrentPrice')}
                   value={buyAddedValue}
                   tone="orange"
                 />
-                <ValueLine
-                  label={t('portfolio.suggestedCost')}
-                  value={buyFormulaTotalPrice}
-                  tone="orange"
-                />
+                <div className="mt-2 flex flex-col gap-1 border-t border-orange-500/15 pt-2 text-[10px] font-semibold text-stone-500">
+                  <div className="flex items-center justify-between">
+                    <span>{t('portfolio.estimatedValue')}</span>
+                    <span className="font-mono text-[11px] font-extrabold text-orange-600 dark:text-orange-400">
+                      {formatVND(buyFormulaTotalPrice)}
+                    </span>
+                  </div>
+                  <div className="text-right font-mono text-[9.5px] text-stone-500/80">
+                    {Math.round(buyBaseSkinPrice).toLocaleString('vi-VN')} + (
+                    {Math.round(scanAccessoryTotal).toLocaleString('vi-VN')} × {safeStickerBuyRate}
+                    %) = {Math.round(buyFormulaTotalPrice).toLocaleString('vi-VN')} ₫
+                  </div>
+                </div>
               </div>
             ) : null}
           </div>

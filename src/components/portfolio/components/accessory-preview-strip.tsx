@@ -8,8 +8,8 @@ import { proxySteamUrl } from '@/utils/url';
 import { formatStickerWearPercent } from '@/utils/accessories';
 
 type AccessoryPreviewStripProps = {
-  stickers?: StickerInfo[];
-  charms?: CharmInfo[];
+  stickers?: StickerInfo[] | null;
+  charms?: CharmInfo[] | null;
   maxVisible?: number;
   size?: 'sm' | 'md';
   showNames?: boolean;
@@ -122,11 +122,13 @@ export function AccessoryPreviewStrip({
 }
 
 function toAccessoryPreviewItems(
-  stickers: StickerInfo[],
-  charms: CharmInfo[]
+  stickers: StickerInfo[] | null | undefined,
+  charms: CharmInfo[] | null | undefined
 ): AccessoryPreviewItem[] {
+  const safeStickers = stickers ?? [];
+  const safeCharms = charms ?? [];
   return [
-    ...stickers.map((sticker) => ({
+    ...safeStickers.map((sticker) => ({
       kind: 'sticker' as const,
       id: sticker.id,
       slot: sticker.slot,
@@ -135,7 +137,7 @@ function toAccessoryPreviewItems(
       marketHashName: sticker.marketHashName,
       wear: sticker.wear,
     })),
-    ...charms.map((charm) => ({
+    ...safeCharms.map((charm) => ({
       kind: 'charm' as const,
       id: charm.id,
       slot: charm.slot,

@@ -29,6 +29,17 @@ interface ItemPriceSectionProps {
   useSellLabel?: boolean;
   hasBuff?: boolean;
   isGuest?: boolean;
+  stickerFormulaBasePrice?: number;
+  stickerFormulaAccessoryTotal?: number;
+  stickerFormulaRate?: number;
+  showSecondaryCard?: boolean;
+  secondaryLabel?: string;
+
+  secondaryLotTotalText?: string;
+  secondaryFormulaDisplay?: string;
+  secondaryFormulaText?: string;
+  sellPriceCny?: string;
+  updateSellPriceCny?: (val: string) => void;
 }
 
 export function ItemPriceSection({
@@ -51,6 +62,17 @@ export function ItemPriceSection({
   useSellLabel = false,
   hasBuff = true,
   isGuest = false,
+  stickerFormulaBasePrice,
+  stickerFormulaAccessoryTotal,
+  stickerFormulaRate,
+  showSecondaryCard = false,
+  secondaryLabel,
+
+  secondaryLotTotalText,
+  secondaryFormulaDisplay,
+  secondaryFormulaText,
+  sellPriceCny = '',
+  updateSellPriceCny,
 }: ItemPriceSectionProps) {
   const { t } = useTranslation();
   const stickerFormulaDisplay =
@@ -84,6 +106,7 @@ export function ItemPriceSection({
       </div>
 
       <div className="grid grid-cols-2 gap-3">
+        {/* Hàng 1: Số lượng, Ghi chú */}
         <div className="flex flex-col gap-1.5">
           <label className="text-[9px] font-extrabold tracking-wide text-stone-500">
             {t('portfolio.quantity', 'Số lượng')}
@@ -105,13 +128,30 @@ export function ItemPriceSection({
 
         <div className="flex flex-col gap-1.5">
           <label className="text-[9px] font-extrabold tracking-wide text-stone-500">
+            {t('portfolio.note', 'Ghi chú')}
+          </label>
+          <div className="relative flex items-center">
+            <input
+              type="text"
+              placeholder={t('portfolio.notePlaceholder', 'E.g.: Storage unit...')}
+              value={note}
+              onChange={(e) => setNote(e.target.value)}
+              className="hover:border-stone-750 focus:border-accent/40 focus:ring-accent/10 h-9 w-full rounded-lg border border-stone-800 bg-stone-950/30 pr-3 pl-14 text-xs font-semibold text-stone-100 transition-all duration-200 placeholder:text-stone-600 hover:bg-stone-950/60 focus:ring-2 focus:outline-none"
+            />
+            <span className="pointer-events-none absolute left-2 rounded border border-stone-800/50 bg-stone-900/60 px-1.5 py-0.5 text-[8px] font-extrabold tracking-wide text-stone-400 select-none">
+              Ghi chú
+            </span>
+          </div>
+        </div>
+
+        {/* Hàng 2: Giá mua CNY, Giá bán CNY */}
+        <div className={`flex flex-col gap-1.5 ${hasBuff ? '' : 'col-span-2'}`}>
+          <label className="text-[9px] font-extrabold tracking-wide text-stone-500">
             {hasBuff
               ? useSellLabel
                 ? 'Giá bán CNY'
                 : t('portfolio.buyPriceCny', 'Giá mua CNY')
-              : useSellLabel
-                ? 'Giá Market (VND)'
-                : 'Giá Market (VND)'}
+              : 'Giá Market (VND)'}
           </label>
           <div className="relative flex items-center">
             <input
@@ -134,9 +174,30 @@ export function ItemPriceSection({
         </div>
 
         {hasBuff && (
+          <div className="animate-in fade-in-50 slide-in-from-top-1 flex flex-col gap-1.5 duration-200">
+            <label className="text-[9px] font-extrabold tracking-wide text-stone-500">
+              {useSellLabel ? t('portfolio.buyPriceCny', 'Giá mua CNY') : 'Giá bán CNY'}
+            </label>
+            <div className="relative flex items-center">
+              <input
+                type="text"
+                aria-label="Secondary CNY Price"
+                value={sellPriceCny}
+                onChange={(e) => updateSellPriceCny?.(e.target.value)}
+                className="hover:border-stone-750 focus:border-accent/40 focus:ring-accent/10 h-9 w-full rounded-lg border border-stone-800 bg-stone-950/30 pr-3 pl-12 text-right text-xs font-bold text-stone-100 transition-all duration-200 placeholder:text-stone-600 hover:bg-stone-950/60 focus:ring-2 focus:outline-none"
+              />
+              <span className="pointer-events-none absolute left-2 rounded border border-stone-800/50 bg-stone-900/60 px-1.5 py-0.5 text-[8px] font-extrabold tracking-wide text-stone-400 select-none">
+                CNY
+              </span>
+            </div>
+          </div>
+        )}
+
+        {/* Hàng 3: Tỷ giá mua, Tỷ giá bán */}
+        {hasBuff && (
           <div className="flex flex-col gap-1.5">
             <label
-              className={`text-[9px] font-extrabold tracking-wide ${isGuest ? 'text-emerald-500/80' : 'text-stone-500'}`}
+              className={`text-[9px] font-extrabold tracking-wide ${isGuest ? 'text-emerald-700 dark:text-emerald-400' : 'text-stone-500'}`}
             >
               {isGuest
                 ? t('portfolio.sellRate', 'Tỷ giá bán')
@@ -154,14 +215,14 @@ export function ItemPriceSection({
                 onChange={(e) => updateBuyRate(e.target.value)}
                 className={
                   isGuest
-                    ? 'h-9 w-full rounded-lg border border-emerald-800/30 bg-emerald-950/10 pr-3 pl-14 text-right text-xs font-bold text-emerald-300 transition-all duration-200 placeholder:text-stone-600 hover:border-emerald-700/40 hover:bg-emerald-950/20 focus:border-emerald-500/40 focus:ring-2 focus:ring-emerald-500/10 focus:outline-none'
+                    ? 'h-9 w-full rounded-lg border border-emerald-600/20 bg-emerald-50/40 pr-3 pl-14 text-right text-xs font-bold text-emerald-700 transition-all duration-200 placeholder:text-stone-600 hover:border-emerald-500/40 hover:bg-emerald-50/70 focus:border-emerald-500/40 focus:ring-2 focus:ring-emerald-500/10 focus:outline-none dark:border-emerald-800/30 dark:bg-emerald-950/10 dark:text-emerald-300 dark:hover:border-emerald-700/40 dark:hover:bg-emerald-950/20'
                     : 'hover:border-stone-750 focus:border-accent/40 focus:ring-accent/10 h-9 w-full rounded-lg border border-stone-800 bg-stone-950/30 pr-3 pl-14 text-right text-xs font-bold text-stone-100 transition-all duration-200 placeholder:text-stone-600 hover:bg-stone-950/60 focus:ring-2 focus:outline-none'
                 }
               />
               <span
                 className={
                   isGuest
-                    ? 'pointer-events-none absolute left-2 rounded border border-emerald-800/20 bg-emerald-900/20 px-1.5 py-0.5 text-[8px] font-extrabold tracking-wide text-emerald-500/60 select-none'
+                    ? 'pointer-events-none absolute left-2 rounded border border-emerald-600/20 bg-emerald-100/30 px-1.5 py-0.5 text-[8px] font-extrabold tracking-wide text-emerald-700/70 select-none dark:border-emerald-800/20 dark:bg-emerald-900/20 dark:text-emerald-500/60'
                     : 'pointer-events-none absolute left-2 rounded border border-stone-800/50 bg-stone-900/60 px-1.5 py-0.5 text-[8px] font-extrabold tracking-wide text-stone-400 select-none'
                 }
               >
@@ -173,7 +234,7 @@ export function ItemPriceSection({
 
         {hasBuff && !isGuest && sellRate !== undefined && updateSellRate && (
           <div className="flex flex-col gap-1.5">
-            <label className="text-[9px] font-extrabold tracking-wide text-emerald-500/80">
+            <label className="text-[9px] font-extrabold tracking-wide text-emerald-700 dark:text-emerald-400">
               {t('portfolio.sellRate', 'Tỷ giá bán')}
             </label>
             <div className="relative flex items-center">
@@ -182,48 +243,26 @@ export function ItemPriceSection({
                 aria-label={t('portfolio.sellRate', 'Sell Rate')}
                 value={sellRate}
                 onChange={(e) => updateSellRate(e.target.value)}
-                className="h-9 w-full rounded-lg border border-emerald-800/30 bg-emerald-950/10 pr-3 pl-14 text-right text-xs font-bold text-emerald-300 transition-all duration-200 placeholder:text-stone-600 hover:border-emerald-700/40 hover:bg-emerald-950/20 focus:border-emerald-500/40 focus:ring-2 focus:ring-emerald-500/10 focus:outline-none"
+                className="h-9 w-full rounded-lg border border-emerald-600/20 bg-emerald-50/40 pr-3 pl-14 text-right text-xs font-bold text-emerald-700 transition-all duration-200 placeholder:text-stone-600 hover:border-emerald-500/40 hover:bg-emerald-50/70 focus:border-emerald-500/40 focus:ring-2 focus:ring-emerald-500/10 focus:outline-none dark:border-emerald-800/30 dark:bg-emerald-950/10 dark:text-emerald-300 dark:hover:border-emerald-700/40 dark:hover:bg-emerald-950/20"
               />
-              <span className="pointer-events-none absolute left-2 rounded border border-emerald-800/20 bg-emerald-900/20 px-1.5 py-0.5 text-[8px] font-extrabold tracking-wide text-emerald-500/60 select-none">
+              <span className="pointer-events-none absolute left-2 rounded border border-emerald-600/20 bg-emerald-100/30 px-1.5 py-0.5 text-[8px] font-extrabold tracking-wide text-emerald-700/70 select-none dark:border-emerald-800/20 dark:bg-emerald-900/20 dark:text-emerald-500/60">
                 Tỷ giá
               </span>
             </div>
           </div>
         )}
-
-        <div className={`flex flex-col gap-1.5 ${hasBuff ? '' : 'col-span-2'}`}>
-          <label className="text-[9px] font-extrabold tracking-wide text-stone-500">
-            {t('portfolio.note', 'Ghi chú')}
-          </label>
-          <div className="relative flex items-center">
-            <input
-              type="text"
-              placeholder={t('portfolio.notePlaceholder', 'E.g.: Storage unit...')}
-              value={note}
-              onChange={(e) => setNote(e.target.value)}
-              className="hover:border-stone-750 focus:border-accent/40 focus:ring-accent/10 h-9 w-full rounded-lg border border-stone-800 bg-stone-950/30 pr-3 pl-14 text-xs font-semibold text-stone-100 transition-all duration-200 placeholder:text-stone-600 hover:bg-stone-950/60 focus:ring-2 focus:outline-none"
-            />
-            <span className="pointer-events-none absolute left-2 rounded border border-stone-800/50 bg-stone-900/60 px-1.5 py-0.5 text-[8px] font-extrabold tracking-wide text-stone-400 select-none">
-              Ghi chú
-            </span>
-          </div>
-        </div>
       </div>
 
       {/* Đơn giá và tổng giá trị của lô */}
       <div className="mt-3.5 flex items-center justify-between rounded-xl border border-emerald-500/15 bg-emerald-500/5 p-3.5 shadow-[inset_0_1px_4px_rgba(0,0,0,0.15)] transition-all duration-300 hover:border-emerald-500/30 hover:bg-emerald-500/8">
         <div className="flex flex-col">
-          <span className="text-[9px] font-extrabold tracking-wide text-emerald-400">
+          <span className="text-[10px] font-extrabold tracking-wide text-emerald-600 dark:text-emerald-400">
             {isGuest || useSellLabel
               ? t('portfolio.unitSellPriceVnd', 'Đơn giá bán (VND)')
               : t('portfolio.unitBuyPriceVnd', 'Đơn giá mua (VND)')}
           </span>
-          {showStickerFormulaTotal && (
-            <span className="text-[8px] text-stone-500">
-              {t('portfolio.skinStickerFormula', 'Giá Skin + (giá Sticker × %)')}
-            </span>
-          )}
-          <span className="text-[8px] text-stone-500">
+
+          <span className="text-[8.5px] text-stone-500">
             {isGuest || useSellLabel
               ? t('portfolio.totalSellValue', 'Tổng giá bán')
               : t('portfolio.totalInvestedValue', 'Tổng vốn')}
@@ -231,8 +270,19 @@ export function ItemPriceSection({
           </span>
         </div>
         {showStickerFormulaTotal && (
-          <div className="max-w-[12rem] text-right text-xs leading-snug font-extrabold text-emerald-300">
-            {stickerFormulaDisplay}
+          <div className="flex flex-col gap-0.5 text-right">
+            <div className="text-lg font-bold text-emerald-600 drop-shadow-[0_0_6px_rgba(16,185,129,0.15)] dark:text-emerald-400 dark:drop-shadow-[0_0_6px_rgba(16,185,129,0.3)]">
+              {stickerFormulaDisplay}
+            </div>
+            {stickerFormulaBasePrice !== undefined &&
+              stickerFormulaAccessoryTotal !== undefined &&
+              stickerFormulaRate !== undefined && (
+                <div className="font-mono text-[9.5px] font-medium text-stone-500 dark:text-stone-400/90">
+                  {Math.round(stickerFormulaBasePrice).toLocaleString('vi-VN')} + (
+                  {Math.round(stickerFormulaAccessoryTotal).toLocaleString('vi-VN')} ×{' '}
+                  {Math.round(stickerFormulaRate)}%) = {stickerFormulaDisplay}
+                </div>
+              )}
           </div>
         )}
         <div className={showStickerFormulaTotal ? 'hidden' : 'relative flex items-center'}>
@@ -248,11 +298,38 @@ export function ItemPriceSection({
             onKeyDown={(e) => {
               if (e.key === 'Enter') submit();
             }}
-            className="w-36 bg-transparent pr-5 text-right text-lg font-extrabold text-emerald-400 drop-shadow-[0_0_6px_rgba(16,185,129,0.3)] outline-none focus:ring-0"
+            className="w-36 bg-transparent pr-5 text-right text-lg font-bold text-emerald-600 drop-shadow-[0_0_6px_rgba(16,185,129,0.15)] outline-none focus:ring-0 dark:text-emerald-400 dark:drop-shadow-[0_0_6px_rgba(16,185,129,0.3)]"
           />
-          <span className="absolute right-0 text-sm font-bold text-emerald-500">₫</span>
+          <span className="absolute right-0 text-sm font-bold text-emerald-600 dark:text-emerald-400">
+            ₫
+          </span>
         </div>
       </div>
+
+      {/* Secondary Card (Read-only) */}
+      {showSecondaryCard && (
+        <div className="flex items-center justify-between rounded-xl border border-emerald-500/10 bg-emerald-500/[0.02] p-3.5 opacity-90 shadow-[inset_0_1px_4px_rgba(0,0,0,0.08)] transition-all duration-300 hover:border-emerald-500/25 hover:bg-emerald-500/5">
+          <div className="flex flex-col">
+            <span className="text-[10px] font-extrabold tracking-wide text-emerald-600 dark:text-emerald-400">
+              {secondaryLabel}
+            </span>
+
+            {secondaryLotTotalText && (
+              <span className="text-[8.5px] text-stone-500">{secondaryLotTotalText}</span>
+            )}
+          </div>
+          <div className="flex flex-col gap-0.5 text-right">
+            <div className="text-lg font-bold text-emerald-600 drop-shadow-[0_0_6px_rgba(16,185,129,0.15)] dark:text-emerald-400 dark:drop-shadow-[0_0_6px_rgba(16,185,129,0.3)]">
+              {secondaryFormulaDisplay}
+            </div>
+            {secondaryFormulaText && (
+              <div className="font-mono text-[9.5px] font-medium text-stone-500 dark:text-stone-400/90">
+                {secondaryFormulaText}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   );
 }

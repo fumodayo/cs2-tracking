@@ -28,7 +28,7 @@ export function ItemLotSummary({
   const formattedDate = lot.buyDate
     ? formatDateVi(lot.buyDate)
     : t('common.unknownDate', 'Unknown date');
-  const accountName = lot.sourceAccounts?.[0]?.name;
+
   const stickers = lot.patternInfo?.stickers ?? [];
   const charms = lot.patternInfo?.charms ?? [];
   const hasAccessories = stickers.length + charms.length > 0;
@@ -109,10 +109,19 @@ export function ItemLotSummary({
           <span className="inline-flex items-center gap-1 rounded border border-stone-800/30 bg-stone-900/40 px-1.5 py-0.5 text-[9px] font-semibold text-stone-400">
             <TbCalendar className="size-3 text-stone-500" /> {formattedDate}
           </span>
-          {accountName && (
-            <span className="inline-flex max-w-[8rem] items-center gap-1 truncate rounded border border-sky-500/10 bg-sky-500/5 px-1.5 py-0.5 text-[9px] font-semibold text-sky-400">
-              <TbUser className="size-2.5 text-sky-400" /> {accountName}
-            </span>
+          {lot.sourceAccounts && lot.sourceAccounts.length > 0 && (
+            <>
+              {lot.sourceAccounts.map((account) => (
+                <span
+                  key={account.steamId64}
+                  className="inline-flex max-w-[8rem] items-center gap-1 truncate rounded border border-sky-500/10 bg-sky-500/5 px-1.5 py-0.5 text-[9px] font-semibold text-sky-400"
+                  title={account.name}
+                >
+                  <TbUser className="size-2.5 shrink-0 text-sky-400" />
+                  <span className="truncate">{account.name}</span>
+                </span>
+              ))}
+            </>
           )}
           {storageUnitName && (
             <span className="inline-flex max-w-[8rem] items-center gap-1 truncate rounded border border-amber-500/10 bg-amber-500/5 px-1.5 py-0.5 text-[9px] font-semibold text-amber-400">

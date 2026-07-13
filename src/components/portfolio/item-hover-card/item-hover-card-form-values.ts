@@ -10,6 +10,7 @@ export type ItemHoverCardFormValues = {
   priceVnd: string;
   note: string;
   sellRate: string;
+  sellPriceCny: string;
   editAccountId: string;
   editStorageUnitId: string;
   editState: ItemTradeState;
@@ -30,14 +31,20 @@ export function getItemHoverCardDefaultFormValues({
   item,
   hasBuff,
   buffCnyToVndRate,
+  buffPricesCny,
 }: {
   item: PortfolioTableRow;
   hasBuff: boolean;
   buffCnyToVndRate?: number;
+  buffPricesCny?: Record<string, number>;
 }): ItemHoverCardFormValues {
   const defaultVnd = item.buyPrice || item.steamPrice || item.currentPrice || 0;
   const defaultMarket = item.steamPrice || item.currentPrice || 0;
   const defaultTradeState = getDefaultItemTradeState(item);
+
+  const defaultSellCnyVal =
+    buffPricesCny?.[item.case.marketHashName] ||
+    (hasBuff ? defaultMarket / (buffCnyToVndRate ?? 3600) : 0);
 
   return {
     quantity: formatIntegerViInput(item.quantity),
@@ -48,6 +55,7 @@ export function getItemHoverCardDefaultFormValues({
     priceVnd: formatIntegerViInput(defaultVnd),
     note: item.note ?? '',
     sellRate: formatIntegerViInput(buffCnyToVndRate ?? 3600),
+    sellPriceCny: formatDecimalViInput(defaultSellCnyVal),
     editAccountId: item.sourceAccounts?.[0]?.steamId64 ?? '',
     editStorageUnitId: item.storageUnitId ?? '',
     editState: defaultTradeState.state,
@@ -64,14 +72,26 @@ export function getItemHoverCardDraftFormValues({
   draft,
   hasBuff,
   buffCnyToVndRate,
+  buffPricesCny,
 }: {
   item: PortfolioTableRow;
   draft: ItemHoverCardDraftValues;
   hasBuff: boolean;
   buffCnyToVndRate?: number;
+  buffPricesCny?: Record<string, number>;
 }): ItemHoverCardFormValues {
-  const defaultValues = getItemHoverCardDefaultFormValues({ item, hasBuff, buffCnyToVndRate });
+  const defaultValues = getItemHoverCardDefaultFormValues({
+    item,
+    hasBuff,
+    buffCnyToVndRate,
+    buffPricesCny,
+  });
   const defaultVnd = item.buyPrice || item.steamPrice || item.currentPrice || 0;
+  const defaultMarket = item.steamPrice || item.currentPrice || 0;
+
+  const defaultSellCnyVal =
+    buffPricesCny?.[item.case.marketHashName] ||
+    (hasBuff ? defaultMarket / (buffCnyToVndRate ?? 3600) : 0);
 
   if (hasBuff) {
     return {
@@ -83,6 +103,7 @@ export function getItemHoverCardDraftFormValues({
       ),
       buyRate: formatIntegerViInput(draft.buyRate ?? toInputNumber(buffCnyToVndRate ?? 3600)),
       note: draft.note ?? item.note ?? '',
+      sellPriceCny: formatDecimalViInput(draft.sellPriceCny ?? defaultSellCnyVal),
       editAccountId: draft.editAccountId ?? item.sourceAccounts?.[0]?.steamId64 ?? '',
       editStorageUnitId: draft.editStorageUnitId ?? item.storageUnitId ?? '',
       editState: draft.editState ?? 'tradeable',
@@ -94,7 +115,6 @@ export function getItemHoverCardDraftFormValues({
     };
   }
 
-  const defaultMarket = item.steamPrice || item.currentPrice || 0;
   return {
     ...defaultValues,
     quantity: formatIntegerViInput(draft.quantity ?? String(item.quantity)),
@@ -102,6 +122,7 @@ export function getItemHoverCardDraftFormValues({
     priceCny: formatIntegerViInput(defaultMarket),
     buyRate: '100',
     note: draft.note ?? item.note ?? '',
+    sellPriceCny: '0',
     editAccountId: draft.editAccountId ?? item.sourceAccounts?.[0]?.steamId64 ?? '',
     editStorageUnitId: draft.editStorageUnitId ?? item.storageUnitId ?? '',
     editState: draft.editState ?? 'tradeable',

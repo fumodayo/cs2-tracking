@@ -118,8 +118,8 @@ export function ItemHoverCard({
   }, [item, buffPricesCny]);
 
   const defaultFormValues = useMemo(
-    () => getItemHoverCardDefaultFormValues({ item, hasBuff, buffCnyToVndRate }),
-    [item, hasBuff, buffCnyToVndRate]
+    () => getItemHoverCardDefaultFormValues({ item, hasBuff, buffCnyToVndRate, buffPricesCny }),
+    [item, hasBuff, buffCnyToVndRate, buffPricesCny]
   );
 
   const [quantity, setQuantity] = useState(() => defaultFormValues.quantity);
@@ -130,6 +130,7 @@ export function ItemHoverCard({
   const [saving, setSaving] = useState(false);
   const [isResetting, setIsResetting] = useState(false);
   const [sellRate, setSellRate] = useState(() => defaultFormValues.sellRate);
+  const [sellPriceCny, setSellPriceCny] = useState(() => defaultFormValues.sellPriceCny);
 
   const [stickerRate, setStickerRate] = useState(() => defaultFormValues.stickerRate);
   const [stickerBuyRate, setStickerBuyRate] = useState(() => defaultFormValues.stickerBuyRate);
@@ -173,6 +174,7 @@ export function ItemHoverCard({
     if (includeSellRate) {
       setSellRate(values.sellRate);
     }
+    setSellPriceCny(values.sellPriceCny);
     setEditAccountId(values.editAccountId);
     setEditStorageUnitId(values.editStorageUnitId);
     setEditState(values.editState);
@@ -197,6 +199,7 @@ export function ItemHoverCard({
             draft,
             hasBuff,
             buffCnyToVndRate,
+            buffPricesCny,
           });
           loadedFromDraft = true;
         }
@@ -214,7 +217,7 @@ export function ItemHoverCard({
     }
 
     applyFormValues(nextValues, !loadedFromDraft);
-  }, [item, defaultFormValues, hasBuff, buffCnyToVndRate, applyFormValues]);
+  }, [item, defaultFormValues, hasBuff, buffCnyToVndRate, buffPricesCny, applyFormValues]);
 
   // Kiểm tra giá trị form có khớp giá trị mặc định từ props không
   const isDefault = useMemo(() => {
@@ -231,7 +234,9 @@ export function ItemHoverCard({
       parseViFloat(stickerRate) === parseViFloat(defaultFormValues.stickerRate) &&
       parseViFloat(stickerBuyRate) === parseViFloat(defaultFormValues.stickerBuyRate) &&
       capturedScanTotal === defaultFormValues.capturedScanTotal &&
-      capturedScanDate === defaultFormValues.capturedScanDate
+      capturedScanDate === defaultFormValues.capturedScanDate &&
+      parseViFloat(sellPriceCny) === parseViFloat(defaultFormValues.sellPriceCny) &&
+      parseViFloat(sellRate) === parseViFloat(defaultFormValues.sellRate)
     );
   }, [
     defaultFormValues,
@@ -248,6 +253,8 @@ export function ItemHoverCard({
     stickerBuyRate,
     capturedScanTotal,
     capturedScanDate,
+    sellPriceCny,
+    sellRate,
   ]);
 
   // Tự lưu bản nháp khi có thay đổi
@@ -271,6 +278,8 @@ export function ItemHoverCard({
           stickerBuyRate,
           capturedScanTotal,
           capturedScanDate,
+          sellPriceCny,
+          sellRate,
         };
         localStorage.setItem(`item_hover_card_draft_${item.id}`, JSON.stringify(draft));
       }
@@ -293,6 +302,8 @@ export function ItemHoverCard({
     stickerBuyRate,
     capturedScanTotal,
     capturedScanDate,
+    sellPriceCny,
+    sellRate,
   ]);
 
   function updateCny(value: string) {
@@ -392,6 +403,15 @@ export function ItemHoverCard({
         }
         if (onUpdateNote && note !== (item.note ?? '')) {
           await onUpdateNote(targetId, note);
+        }
+      }
+      if (hasBuff && onUpdateBuffPrice) {
+        const nextSellPriceCny = parseViFloat(sellPriceCny);
+        if (
+          Number.isFinite(nextSellPriceCny) &&
+          nextSellPriceCny !== (buffPricesCny?.[item.case.marketHashName] ?? 0)
+        ) {
+          await onUpdateBuffPrice(item.case.marketHashName, nextSellPriceCny);
         }
       }
       if (item.sourceType === 'manual') {
@@ -525,6 +545,8 @@ export function ItemHoverCard({
               capturedScanDate={capturedScanDate}
               setStickerFormulaTotal={setStickerFormulaTotal}
               stickerFormulaTotal={stickerFormulaTotal}
+              sellPriceCny={sellPriceCny}
+              setSellPriceCny={setSellPriceCny}
               hasBuff={hasBuff}
               useSellLabel={useSellLabel}
               isGuest={isGuest}

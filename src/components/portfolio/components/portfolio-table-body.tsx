@@ -36,31 +36,38 @@ function PortfolioTableRowComponent({
       }
     } else if (e.key === 'Enter' || e.key === ' ') {
       e.preventDefault();
-      const editButton = e.currentTarget.querySelector(
-        'button[data-portfolio-item-details="true"]'
-      ) as HTMLButtonElement | null;
-      if (editButton) {
-        editButton.click();
+      const detailsTrigger = e.currentTarget.querySelector<HTMLElement>(
+        '[data-portfolio-item-details="true"]'
+      );
+      if (detailsTrigger) {
+        detailsTrigger.click();
       }
     }
   };
 
-  const handleMobileOpen = (e: React.MouseEvent<HTMLTableRowElement>) => {
-    if (!isMobile) return;
+  const handleRowClick = (e: React.MouseEvent<HTMLTableRowElement>) => {
     const target = e.target as HTMLElement;
     if (
       target.closest('button') ||
       target.closest('input') ||
       target.closest('a') ||
-      target.closest('svg')
+      target.closest('svg') ||
+      target.closest('select') ||
+      target.closest('textarea') ||
+      target.closest('[role="button"]') ||
+      target.closest('[data-portfolio-item-details="true"]')
     ) {
       return;
     }
 
-    const detailsButton = e.currentTarget.querySelector(
-      'button[data-portfolio-item-details="true"]'
-    ) as HTMLButtonElement | null;
-    detailsButton?.click();
+    if (isMobile) {
+      const detailsTrigger = e.currentTarget.querySelector<HTMLElement>(
+        '[data-portfolio-item-details="true"]'
+      );
+      detailsTrigger?.click();
+    } else {
+      row.toggleSelected(!row.getIsSelected());
+    }
   };
 
   const stickyBgClass =
@@ -76,8 +83,8 @@ function PortfolioTableRowComponent({
     <tr
       tabIndex={0}
       onKeyDown={handleKeyDown}
-      onClick={handleMobileOpen}
-      className={`group focus:ring-accent/40 transition-colors outline-none focus:bg-stone-800/80 focus:ring-1 ${isMobile ? 'cursor-pointer' : ''} ${
+      onClick={handleRowClick}
+      className={`group focus:ring-accent/40 cursor-pointer transition-colors outline-none focus:bg-stone-800/80 focus:ring-1 ${
         row.original.sourceType === 'manual'
           ? isSelected
             ? 'border-l-2 border-l-blue-500 bg-blue-500/[0.08]'
