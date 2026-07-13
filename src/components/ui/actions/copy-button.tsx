@@ -11,13 +11,22 @@ interface CopyButtonProps {
   value: string | number;
   className?: string;
   children?: React.ReactNode;
+  variant?: 'default' | 'borderless';
+  feedbackTrigger?: number;
 }
 
-export function CopyButton({ value, className, children }: CopyButtonProps) {
+export function CopyButton({
+  value,
+  className,
+  children,
+  variant = 'default',
+  feedbackTrigger,
+}: CopyButtonProps) {
   const { t } = useTranslation();
   const [copied, setCopied] = useState(false);
   const [showTooltip, setShowTooltip] = useState(false);
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const lastFeedbackTriggerRef = useRef(feedbackTrigger);
 
   useEffect(() => {
     return () => {
@@ -26,6 +35,25 @@ export function CopyButton({ value, className, children }: CopyButtonProps) {
       }
     };
   }, []);
+
+  useEffect(() => {
+    if (feedbackTrigger === undefined || feedbackTrigger === lastFeedbackTriggerRef.current) {
+      return;
+    }
+
+    lastFeedbackTriggerRef.current = feedbackTrigger;
+    setCopied(true);
+    setShowTooltip(true);
+
+    if (timerRef.current) {
+      clearTimeout(timerRef.current);
+    }
+
+    timerRef.current = setTimeout(() => {
+      setCopied(false);
+      setShowTooltip(false);
+    }, 1800);
+  }, [feedbackTrigger]);
 
   const handleCopyToClipboard = (e: React.MouseEvent) => {
     e.stopPropagation();
@@ -57,7 +85,14 @@ export function CopyButton({ value, className, children }: CopyButtonProps) {
       onMouseLeave={() => !copied && setShowTooltip(false)}
     >
       {children}
-      <div className="border-stone-850 group-hover:border-stone-750 relative flex size-6 items-center justify-center rounded-md border bg-stone-900/60 text-stone-500 transition-all group-hover:bg-stone-900 group-hover:text-stone-300">
+      <div
+        className={cn(
+          'relative flex items-center justify-center transition-all',
+          variant === 'borderless'
+            ? 'size-auto bg-transparent text-stone-400 group-hover:text-stone-200'
+            : 'border-stone-850 group-hover:border-stone-750 size-6 rounded-md border bg-stone-900/60 text-stone-500 group-hover:bg-stone-900 group-hover:text-stone-300'
+        )}
+      >
         <AnimatePresence mode="wait" initial={false}>
           {copied ? (
             <motion.div
