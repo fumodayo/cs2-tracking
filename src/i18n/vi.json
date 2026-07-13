@@ -846,6 +846,7 @@
     "setInventoryPublic": "Đặt Inventory Public",
     "familyView": "Cấu hình Family View (Nếu có)",
     "familyViewErrorBadge": "Family View đang bật",
+    "privateInventoryErrorBadge": "Kho đồ riêng tư",
     "steamparentalOpt": "Mã steamparental (Tùy chọn)",
     "sessionidOpt": "Mã sessionid (Tùy chọn)",
     "steamparentalLabel": "Mã steamparental",
@@ -1419,5 +1420,14 @@
     "marketValueTooltip": "Tổng giá trị của tất cả vật phẩm theo đơn giá thị trường 100% (không áp dụng chiết khấu).",
     "steamWalletTitle": "Số dư ví Steam",
     "steamWalletTooltip": "Tổng số dư ví Steam hiện tại của tất cả các tài khoản được liên kết."
+  },
+  "portfolio": {
+    "selectedItems": "Đã chọn {{count}} vật phẩm",
+    "selectedItemsCount": "Đã chọn {{count}} vật phẩm",
+    "selectAllRows": "Chọn tất cả",
+    "selectAllFilteredTooltip": "Chọn tất cả vật phẩm khớp với bộ lọc hiện tại",
+    "deselectAll": "Hủy chọn",
+    "sellCount": "Bán ({{count}})",
+    "deleteCount": "Xóa ({{count}})"
   }
 }

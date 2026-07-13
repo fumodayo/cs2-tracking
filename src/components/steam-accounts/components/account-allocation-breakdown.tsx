@@ -1,27 +1,25 @@
-"use client";
+'use client';
 
-import React from "react";
-import { TbUser } from "react-icons/tb";
-import { useTranslation } from "react-i18next";
-import { PortfolioTableRow } from "@/components/portfolio";
+import React from 'react';
+import { TbUser } from 'react-icons/tb';
+import { useTranslation } from 'react-i18next';
+import { PortfolioTableRow } from '@/components/portfolio';
 
 interface AccountAllocationBreakdownProps {
   relatedRows: PortfolioTableRow[];
 }
 
 const PALETTES = [
-  { barColor: "#38bdf8", bgClass: "bg-sky-500/5", borderClass: "border-sky-500/10" },
-  { barColor: "#34d399", bgClass: "bg-emerald-500/5", borderClass: "border-emerald-500/10" },
-  { barColor: "#fbbf24", bgClass: "bg-amber-500/5", borderClass: "border-amber-500/10" },
-  { barColor: "#f87171", bgClass: "bg-rose-500/5", borderClass: "border-rose-500/10" },
-  { barColor: "#2dd4bf", bgClass: "bg-teal-500/5", borderClass: "border-teal-500/10" },
-  { barColor: "#fb923c", bgClass: "bg-orange-500/5", borderClass: "border-orange-500/10" },
-  { barColor: "#a1a1aa", bgClass: "bg-zinc-500/5", borderClass: "border-zinc-500/10" },
+  { barColor: '#38bdf8', bgClass: 'bg-sky-500/5', borderClass: 'border-sky-500/10' },
+  { barColor: '#34d399', bgClass: 'bg-emerald-500/5', borderClass: 'border-emerald-500/10' },
+  { barColor: '#fbbf24', bgClass: 'bg-amber-500/5', borderClass: 'border-amber-500/10' },
+  { barColor: '#f87171', bgClass: 'bg-rose-500/5', borderClass: 'border-rose-500/10' },
+  { barColor: '#2dd4bf', bgClass: 'bg-teal-500/5', borderClass: 'border-teal-500/10' },
+  { barColor: '#fb923c', bgClass: 'bg-orange-500/5', borderClass: 'border-orange-500/10' },
+  { barColor: '#a1a1aa', bgClass: 'bg-zinc-500/5', borderClass: 'border-zinc-500/10' },
 ];
 
-export function AccountAllocationBreakdown({
-  relatedRows,
-}: AccountAllocationBreakdownProps) {
+export function AccountAllocationBreakdown({ relatedRows }: AccountAllocationBreakdownProps) {
   const { t } = useTranslation();
   const combinedAccounts = React.useMemo(() => {
     const map = new Map<
@@ -98,7 +96,7 @@ export function AccountAllocationBreakdown({
     return combinedAccounts.map((accStats, idx) => {
       const percent = totalQuantity > 0 ? (accStats.total / totalQuantity) * 100 : 0;
       const strokeDasharray = `${(percent / 100) * C} ${C}`;
-      const strokeDashoffset = - (accumulatedPercent / 100) * C;
+      const strokeDashoffset = -(accumulatedPercent / 100) * C;
       accumulatedPercent += percent;
 
       const palette = PALETTES[idx % PALETTES.length];
@@ -121,10 +119,10 @@ export function AccountAllocationBreakdown({
       <div className="flex items-center justify-between text-[10px] font-extrabold tracking-wider text-stone-500 uppercase">
         <span className="flex items-center gap-1.5">
           <TbUser className="size-3.5 text-stone-400" />
-          {t("steamAccounts.accountAllocationTitle")}
+          {t('steamAccounts.accountAllocationTitle')}
         </span>
         <span className="rounded-full bg-stone-800/40 px-2 py-0.5 font-mono text-[9px] font-bold text-stone-300">
-          {totalQuantity} {t("steamAccounts.totalLabel")}
+          {totalQuantity} {t('steamAccounts.totalLabel')}
         </span>
       </div>
 
@@ -158,54 +156,66 @@ export function AccountAllocationBreakdown({
           </svg>
           {/* Inner Total count */}
           <div className="absolute inset-0 flex flex-col items-center justify-center text-center">
-            <span className="font-mono text-sm font-extrabold text-stone-200 leading-none">
+            <span className="font-mono text-sm leading-none font-extrabold text-stone-200">
               {totalQuantity}
             </span>
-            <span className="text-[7.5px] font-bold text-stone-500 tracking-wider uppercase mt-0.5">
-              {t("steamAccounts.totalLabel")}
+            <span className="mt-0.5 text-[7.5px] font-bold tracking-wider text-stone-500 uppercase">
+              {t('steamAccounts.totalLabel')}
             </span>
           </div>
         </div>
 
         {/* Legend list on the right */}
-        <div className="flex-1 min-w-0 space-y-1.5">
+        <div className="min-w-0 flex-1 space-y-1.5">
           {slices.map((slice) => (
             <div
               key={slice.steamId64}
               className="flex items-center justify-between gap-2 text-[11px]"
             >
-              <div className="flex items-center gap-1.5 min-w-0">
+              <div className="flex min-w-0 items-center gap-1.5">
                 <span
                   className="size-2 shrink-0 rounded-full"
                   style={{ backgroundColor: slice.palette.barColor }}
                 />
-                <span className="font-bold text-stone-300 truncate" title={slice.name}>
+                <span className="truncate font-bold text-stone-300" title={slice.name}>
                   {slice.name}
                 </span>
               </div>
-              <div className="flex items-center gap-1.5 shrink-0 font-mono text-[10px] text-stone-400 font-medium">
+              <div className="flex shrink-0 items-center gap-1.5 font-mono text-[10px] font-medium text-stone-400">
                 <span className="text-stone-150 font-bold">{slice.total}</span>
                 <span>({slice.percent.toFixed(0)}%)</span>
-                
+
                 {/* Breakdown badges */}
-                <div className="flex items-center gap-0.5 ml-1">
+                <div className="ml-1 flex items-center gap-0.5">
                   {slice.tradeable > 0 && (
-                    <span className="text-[8px] font-extrabold text-emerald-400/90" title={`${slice.tradeable} Tradeable`}>
+                    <span
+                      className="text-[8px] font-extrabold text-emerald-400/90"
+                      title={`${slice.tradeable} Tradeable`}
+                    >
                       {slice.tradeable}T
                     </span>
                   )}
                   {slice.hold > 0 && (
-                    <span className="text-[8px] font-extrabold text-rose-450 text-rose-400/80" title={`${slice.hold} Hold`}>
+                    <span
+                      className="text-rose-450 text-[8px] font-extrabold text-rose-400/80"
+                      title={`${slice.hold} Hold`}
+                    >
                       {slice.hold}H
                     </span>
                   )}
                   {slice.tradeProtected > 0 && (
-                    <span className="text-[8px] font-extrabold text-cyan-450 text-cyan-400/80" title={`${slice.tradeProtected} Protected`}>
+                    <span
+                      className="text-cyan-450 text-[8px] font-extrabold text-cyan-400/80"
+                      title={`${slice.tradeProtected} Protected`}
+                    >
                       {slice.tradeProtected}P
                     </span>
                   )}
                   {slice.onMarket > 0 && (
-                    <span className="text-[8px] font-extrabold text-amber-450 text-amber-400/80" title={`${slice.onMarket} Market`}>
+                    <span
+                      className="text-amber-450 text-[8px] font-extrabold text-amber-400/80"
+                      title={`${slice.onMarket} Market`}
+                    >
                       {slice.onMarket}M
                     </span>
                   )}

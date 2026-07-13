@@ -846,6 +846,7 @@
     "setInventoryPublic": "Set Inventory Public",
     "familyView": "Family View Configuration (if any)",
     "familyViewErrorBadge": "Family View enabled",
+    "privateInventoryErrorBadge": "Private Inventory",
     "steamparentalOpt": "steamparental (Optional)",
     "sessionidOpt": "sessionid (Optional)",
     "steamparentalLabel": "steamparental",
@@ -1419,5 +1420,14 @@
     "marketValueTooltip": "Total value of all items at 100% market price (without discount).",
     "steamWalletTitle": "Steam Wallet Balance",
     "steamWalletTooltip": "Total current Steam wallet balance across all linked accounts."
+  },
+  "portfolio": {
+    "selectedItems": "Selected {{count}} items",
+    "selectedItemsCount": "Selected {{count}} items",
+    "selectAllRows": "Select all",
+    "selectAllFilteredTooltip": "Select all items matching the current filters",
+    "deselectAll": "Deselect",
+    "sellCount": "Sell ({{count}})",
+    "deleteCount": "Delete ({{count}})"
   }
 }
