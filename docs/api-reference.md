@@ -1,94 +1,161 @@
 # API Reference
 
-Tài liệu này liệt kê các API route nội bộ, client API module và external service mà dự án đang dùng.
-
-Tất cả internal route nằm trong `src/app/api`.
+Tất cả internal API route nằm trong `src/app/api`. Tài liệu này phản ánh method, quyền truy cập, streaming format, realtime channel và browser API client đang có trong code.
 
 ## Quy Ước Chung
 
-- Response mặc định là JSON, trừ một số route streaming/SSE.
-- API đọc/ghi data user phải xác định `ownerId`.
-- User login có `ownerId = google:<googleUserId>`.
-- User chưa login có `ownerId = guest:<uuid>`.
-- API admin cần email nằm trong `ADMIN_EMAILS`.
-- Secret/API key chỉ đọc server-side, không đưa vào client bundle.
-- API tốn tài nguyên nên có validation/rate limit.
+- Response mặc định là JSON; ngoại lệ được liệt kê ở mục [Streaming APIs](#streaming-apis).
+- Portfolio data được scope bằng `ownerId`: `google:<userId>` hoặc `guest:<uuid>`.
+- Route user-only lấy Google session bằng `getCurrentUser()` và trả `401` nếu chưa login.
+- Route admin kiểm tra email trong `ADMIN_EMAILS` hoặc dùng `isAdminAccessAllowed()` theo ghi chú từng route.
+- Secret/API key chỉ được đọc server-side.
+- `src/proxy.ts` chặn mọi mutation API (`POST`, `PUT`, `PATCH`, `DELETE`) nếu thiếu `Origin`/`Referer` cùng host. Client ngoài browser phải gửi header phù hợp.
+- Error body thường có `{ "message": "translationKeyOrError" }`; route rate-limit có thể kèm `details.retryAfter` và header `Retry-After`.
+
+## Auth Và Owner
+
+| Loại route                                         | Quyền                                                        |
+| -------------------------------------------------- | ------------------------------------------------------------ |
+| Portfolio/account/Storage Unit/scan                | Owner guest hoặc Google; dữ liệu luôn phải filter theo owner |
+| Import inventory scan                              | Google session                                               |
+| User BUFF prices/preferences/recent imports/CS2Cap | Google session                                               |
+| Ably token, portfolio SSE, recent-import SSE       | Google session                                               |
+| Bug report submit                                  | Guest hoặc user                                              |
+| Bug report admin                                   | Google session + email trong `ADMIN_EMAILS`                  |
+| Post Analyzer mutation/delete history              | Admin access; production cần Google session + admin email    |
+| Post-analysis history `GET`                        | `checkAuth().authorized`; khi OAuth đã bật thì cần login     |
+
+`checkAuth()` có một hành vi cần lưu ý: nếu Google OAuth chưa được cấu hình, guest được coi là authorized. Tuy nhiên `isAdminAccessAllowed()` chỉ cho phép guest ở non-production, nên Post Analyzer không hoạt động cho guest production.
 
 ## Internal API Routes
 
 ### Auth
 
-| Method | Route                       | Mục đích                                            | File                                        |
-| ------ | --------------------------- | --------------------------------------------------- | ------------------------------------------- |
-| `GET`  | `/api/auth/google`          | Tạo URL Google OAuth và redirect                    | `src/app/api/auth/google/route.ts`          |
-| `GET`  | `/api/auth/google/callback` | Xử lý OAuth callback, tạo session, merge guest data | `src/app/api/auth/google/callback/route.ts` |
-| `GET`  | `/api/auth/session`         | Lấy session hiện tại                                | `src/app/api/auth/session/route.ts`         |
-| `POST` | `/api/auth/logout`          | Đăng xuất, xóa session cookie                       | `src/app/api/auth/logout/route.ts`          |
+| Method | Route                       | Mục đích                                                    |
+| ------ | --------------------------- | ----------------------------------------------------------- |
+| `GET`  | `/api/auth/google`          | Tạo authorization URL, state cookie và redirect sang Google |
+| `GET`  | `/api/auth/google/callback` | Exchange code, upsert user, merge guest data, tạo session   |
+| `GET`  | `/api/auth/session`         | Trả session hiện tại, trạng thái Google config/admin        |
+| `POST` | `/api/auth/logout`          | Xóa session và guest cookie                                 |
 
 ### Portfolio
 
-| Method   | Route                              | Mục đích                                     | File                                               |
-| -------- | ---------------------------------- | -------------------------------------------- | -------------------------------------------------- |
-| `GET`    | `/api/portfolio`                   | Lấy portfolio report theo owner              | `src/app/api/portfolio/route.ts`                   |
-| `POST`   | `/api/portfolio`                   | Thêm item vào portfolio                      | `src/app/api/portfolio/route.ts`                   |
-| `DELETE` | `/api/portfolio`                   | Xóa nhiều item                               | `src/app/api/portfolio/route.ts`                   |
-| `PATCH`  | `/api/portfolio/[id]`              | Cập nhật item                                | `src/app/api/portfolio/[id]/route.ts`              |
-| `DELETE` | `/api/portfolio/[id]`              | Xóa một item                                 | `src/app/api/portfolio/[id]/route.ts`              |
-| `POST`   | `/api/portfolio/import`            | Import Excel/CSV rows, có streaming progress | `src/app/api/portfolio/import/route.ts`            |
-| `POST`   | `/api/portfolio/import-inventory`  | Import kết quả inventory scan vào portfolio  | `src/app/api/portfolio/import-inventory/route.ts`  |
-| `POST`   | `/api/portfolio/migrate`           | Chạy migration portfolio nội bộ              | `src/app/api/portfolio/migrate/route.ts`           |
-| `GET`    | `/api/portfolio/find-inspect-link` | Tìm inspect link cho item portfolio          | `src/app/api/portfolio/find-inspect-link/route.ts` |
+| Method   | Route                              | Mục đích / ghi chú                                         |
+| -------- | ---------------------------------- | ---------------------------------------------------------- |
+| `GET`    | `/api/portfolio`                   | Build hoặc trả report cache theo owner                     |
+| `GET`    | `/api/portfolio?fresh=1`           | Bỏ qua cache 60 giây và build report mới                   |
+| `POST`   | `/api/portfolio`                   | Tạo lot; cập nhật Storage Unit nếu có; trả report mới      |
+| `DELETE` | `/api/portfolio`                   | Xóa nhiều item/virtual Storage Unit item                   |
+| `PATCH`  | `/api/portfolio/[id]`              | Sửa lot, ownership, inspect/pattern, accessory pricing     |
+| `DELETE` | `/api/portfolio/[id]`              | Xóa một lot và điều chỉnh Storage Unit                     |
+| `POST`   | `/api/portfolio/import`            | Import rows bằng NDJSON progress                           |
+| `POST`   | `/api/portfolio/import-inventory`  | Import kết quả scanner; yêu cầu login; JSON-lines progress |
+| `POST`   | `/api/portfolio/migrate`           | Migration portfolio nội bộ/legacy                          |
+| `GET`    | `/api/portfolio/find-inspect-link` | Tìm inspect link cho portfolio item                        |
 
-Các mutation portfolio publish realtime event sau khi ghi dữ liệu thành công.
+`DELETE /api/portfolio` body:
+
+```json
+{
+  "ids": ["mongoObjectId", "virtual_caseId"],
+  "recentImportId": "optional-id-used-by-undo"
+}
+```
+
+Nếu có `recentImportId` và owner đã login, route xóa luôn record trong `user_recent_imports` và publish recent-import event.
+
+`PATCH /api/portfolio/[id]` chấp nhận các field đang được UI/API client dùng:
+
+```ts
+type PortfolioItemPatch = {
+  quantity?: number;
+  buyPrice?: number;
+  buyDate?: string;
+  note?: string;
+  sourceAccounts?: Array<Record<string, unknown>>;
+  storageUnitId?: string | null;
+  tradeHoldUntil?: string | null;
+  dopplerPhase?: string;
+  inspectLink?: string;
+  patternInfo?: Record<string, unknown>;
+  stickerPriceRate?: number;
+  stickerBuyPriceRate?: number;
+  stickerScanTotalPrice?: number;
+  stickerScanPriceCapturedAt?: string;
+};
+```
+
+Các mutation portfolio publish `portfolio.changed`. Tạo/sửa/xóa trả `PortfolioReportDto`; import/sync dài cập nhật cache và event sau khi hoàn tất.
 
 ### Steam Accounts
 
-| Method   | Route                                 | Mục đích                            | File                                                  |
-| -------- | ------------------------------------- | ----------------------------------- | ----------------------------------------------------- |
-| `GET`    | `/api/portfolio/accounts`             | Lấy danh sách Steam account đã link | `src/app/api/portfolio/accounts/route.ts`             |
-| `POST`   | `/api/portfolio/accounts`             | Link Steam account mới              | `src/app/api/portfolio/accounts/route.ts`             |
-| `PATCH`  | `/api/portfolio/accounts`             | Cập nhật Steam cookie               | `src/app/api/portfolio/accounts/route.ts`             |
-| `DELETE` | `/api/portfolio/accounts?id=...`      | Xóa Steam account                   | `src/app/api/portfolio/accounts/route.ts`             |
-| `POST`   | `/api/portfolio/accounts/check`       | Kiểm tra cookie/account status      | `src/app/api/portfolio/accounts/check/route.ts`       |
-| `POST`   | `/api/portfolio/accounts/sync`        | Đồng bộ tất cả account              | `src/app/api/portfolio/accounts/sync/route.ts`        |
-| `POST`   | `/api/portfolio/accounts/sync/single` | Đồng bộ một account                 | `src/app/api/portfolio/accounts/sync/single/route.ts` |
+| Method   | Route                                 | Mục đích                                     |
+| -------- | ------------------------------------- | -------------------------------------------- |
+| `GET`    | `/api/portfolio/accounts`             | Lấy linked Steam accounts theo owner         |
+| `POST`   | `/api/portfolio/accounts`             | Link account mới và lưu cookie mã hóa nếu có |
+| `PATCH`  | `/api/portfolio/accounts`             | Cập nhật cookie/account data                 |
+| `DELETE` | `/api/portfolio/accounts?id=...`      | Xóa account                                  |
+| `POST`   | `/api/portfolio/accounts/check`       | Kiểm tra cookie/account status               |
+| `POST`   | `/api/portfolio/accounts/sync`        | Sync toàn bộ account, trả SSE progress       |
+| `POST`   | `/api/portfolio/accounts/sync/single` | Sync một account, trả SSE progress           |
 
-Sync route cũng publish realtime event `synced`.
+`/sync?bypassCooldown=true` chỉ bỏ cooldown khi `isAdminAccessAllowed()` trả true.
 
 ### Storage Units
 
-| Method   | Route                                          | Mục đích                                    | File                                                           |
-| -------- | ---------------------------------------------- | ------------------------------------------- | -------------------------------------------------------------- |
-| `GET`    | `/api/portfolio/storage-units`                 | Lấy Storage Unit theo SteamID/account       | `src/app/api/portfolio/storage-units/route.ts`                 |
-| `POST`   | `/api/portfolio/storage-units`                 | Tạo/cập nhật Storage Unit                   | `src/app/api/portfolio/storage-units/route.ts`                 |
-| `POST`   | `/api/portfolio/storage-units/assign`          | Gán item vào Storage Unit                   | `src/app/api/portfolio/storage-units/assign/route.ts`          |
-| `DELETE` | `/api/portfolio/storage-units/items`           | Xóa item khỏi Storage Unit                  | `src/app/api/portfolio/storage-units/items/route.ts`           |
-| `POST`   | `/api/portfolio/storage-units/resolve-missing` | Xử lý item thiếu/thừa khi sync Storage Unit | `src/app/api/portfolio/storage-units/resolve-missing/route.ts` |
+| Method   | Route                                          | Mục đích                                         |
+| -------- | ---------------------------------------------- | ------------------------------------------------ |
+| `GET`    | `/api/portfolio/storage-units`                 | Lấy Storage Units, có thể filter SteamID/account |
+| `POST`   | `/api/portfolio/storage-units`                 | Tạo/upsert Storage Unit                          |
+| `POST`   | `/api/portfolio/storage-units/assign`          | Gán item vào Storage Unit                        |
+| `DELETE` | `/api/portfolio/storage-units/items`           | Xóa item khỏi Storage Unit                       |
+| `POST`   | `/api/portfolio/storage-units/resolve-missing` | Giải quyết item thiếu/thừa sau sync              |
 
-### Inventory Scanner
+Capacity domain hiện là 1000 item cho mỗi Storage Unit. Route tạo/sửa lot kiểm tra capacity trước khi ghi.
 
-| Method | Route                            | Mục đích                         | File                                             |
-| ------ | -------------------------------- | -------------------------------- | ------------------------------------------------ |
-| `POST` | `/api/inventory/scan`            | Tạo scan job                     | `src/app/api/inventory/scan/route.ts`            |
-| `GET`  | `/api/inventory/scan?jobId=...`  | Poll tiến trình scan             | `src/app/api/inventory/scan/route.ts`            |
-| `GET`  | `/api/inventory/search-case`     | Tìm case/item theo tên           | `src/app/api/inventory/search-case/route.ts`     |
-| `POST` | `/api/inventory/buff-price`      | Lấy/refresh giá BUFF163          | `src/app/api/inventory/buff-price/route.ts`      |
-| `POST` | `/api/inventory/retry-price`     | Retry giá Steam cho item bị lỗi  | `src/app/api/inventory/retry-price/route.ts`     |
-| `POST` | `/api/inventory/inspect-pattern` | Inspect float/paint seed/pattern | `src/app/api/inventory/inspect-pattern/route.ts` |
-| `POST` | `/api/inventory/sticker-prices`  | Lấy giá sticker/charm/accessory  | `src/app/api/inventory/sticker-prices/route.ts`  |
+### Inventory Scanner Và Pricing
+
+| Method | Route                            | Mục đích                                    |
+| ------ | -------------------------------- | ------------------------------------------- |
+| `POST` | `/api/inventory/scan`            | Tạo scan job hoặc chạy synchronous fallback |
+| `GET`  | `/api/inventory/scan?jobId=...`  | Đọc job/progress/result, kiểm tra owner     |
+| `GET`  | `/api/inventory/search-case`     | Tìm case/item theo tên                      |
+| `POST` | `/api/inventory/buff-price`      | Lấy/refresh giá BUFF163                     |
+| `POST` | `/api/inventory/retry-price`     | Retry Steam price cho item lỗi              |
+| `POST` | `/api/inventory/inspect-pattern` | Inspect float, paint seed, phase/pattern    |
+| `POST` | `/api/inventory/sticker-prices`  | Lấy giá sticker/charm/accessory             |
+
+Scan request async chuẩn:
+
+```json
+{
+  "steamUrl": "https://steamcommunity.com/id/example",
+  "steamCookie": "optional-cookie",
+  "steamSessionId": "optional-session-id",
+  "forceRefresh": false,
+  "progress": true
+}
+```
+
+Response ban đầu là `{ "jobId": "..." }`. Client sau đó xin Ably token theo job; nếu không được thì poll route `GET`.
+
+BUFF price chọn API key theo thứ tự:
+
+1. CS2Cap active key của user đã login.
+2. `CS2CAP_API_KEY` của server.
 
 ### User BUFF Prices
 
-Route này chỉ dành cho user đã login. Guest dùng `localStorage`.
+Chỉ dành cho user đã login. Guest dùng `localStorage` key `cs2t_buffPricesCny`.
 
-| Method  | Route                   | Mục đích                              | File                                    |
-| ------- | ----------------------- | ------------------------------------- | --------------------------------------- |
-| `GET`   | `/api/user/buff-prices` | Lấy map giá BUFF thủ công của user    | `src/app/api/user/buff-prices/route.ts` |
-| `POST`  | `/api/user/buff-prices` | Merge nhiều giá BUFF vào DB           | `src/app/api/user/buff-prices/route.ts` |
-| `PUT`   | `/api/user/buff-prices` | Replace toàn bộ map giá BUFF của user | `src/app/api/user/buff-prices/route.ts` |
-| `PATCH` | `/api/user/buff-prices` | Update hoặc xóa giá BUFF của một item | `src/app/api/user/buff-prices/route.ts` |
+| Method  | Route                   | Mục đích            |
+| ------- | ----------------------- | ------------------- |
+| `GET`   | `/api/user/buff-prices` | Lấy map giá CNY     |
+| `POST`  | `/api/user/buff-prices` | Merge map vào DB    |
+| `PUT`   | `/api/user/buff-prices` | Replace toàn bộ map |
+| `PATCH` | `/api/user/buff-prices` | Update/xóa một item |
 
-Request/response chính:
+Response:
 
 ```ts
 type BuffPricesResponse = {
@@ -98,190 +165,250 @@ type BuffPricesResponse = {
 
 `PATCH` body:
 
-```ts
+```json
 {
   "marketHashName": "AK-47 | Redline (Field-Tested)",
   "priceCny": 123.45
 }
 ```
 
-Gửi `priceCny: null` hoặc giá không hợp lệ để xóa item đó khỏi DB.
+Gửi `priceCny: null` hoặc giá không hợp lệ để xóa giá của item. Mutation publish event `user-buff-prices.changed`.
 
-### CS2Cap User Keys
+### User Preferences
 
-| Method   | Route                       | Mục đích                                   | File                                        |
-| -------- | --------------------------- | ------------------------------------------ | ------------------------------------------- |
-| `GET`    | `/api/user/cs2cap`          | Lấy danh sách key đã lưu                   | `src/app/api/user/cs2cap/route.ts`          |
-| `POST`   | `/api/user/cs2cap`          | Thêm key mới                               | `src/app/api/user/cs2cap/route.ts`          |
-| `PATCH`  | `/api/user/cs2cap`          | Chọn active key                            | `src/app/api/user/cs2cap/route.ts`          |
-| `DELETE` | `/api/user/cs2cap`          | Xóa key                                    | `src/app/api/user/cs2cap/route.ts`          |
-| `GET`    | `/api/user/cs2cap/status`   | Kiểm tra server/user có key khả dụng không | `src/app/api/user/cs2cap/status/route.ts`   |
-| `POST`   | `/api/user/cs2cap/validate` | Validate key với CS2Cap                    | `src/app/api/user/cs2cap/validate/route.ts` |
+Chỉ dành cho user đã login.
 
-### Realtime
+| Method  | Route                   | Mục đích                                           |
+| ------- | ----------------------- | -------------------------------------------------- |
+| `GET`   | `/api/user/preferences` | Lấy Excel mapping templates và pricing preferences |
+| `PATCH` | `/api/user/preferences` | Cập nhật một hoặc cả hai section                   |
 
-| Method | Route                      | Mục đích                            | File                                       |
-| ------ | -------------------------- | ----------------------------------- | ------------------------------------------ |
-| `GET`  | `/api/realtime/ably-token` | Cấp Ably token cho user đã login    | `src/app/api/realtime/ably-token/route.ts` |
-| `GET`  | `/api/realtime/portfolio`  | SSE fallback cho portfolio realtime | `src/app/api/realtime/portfolio/route.ts`  |
-
-`/api/realtime/ably-token`:
-
-- Yêu cầu login.
-- Trả `401` nếu chưa login.
-- Trả `503` nếu chưa cấu hình `ABLY_API_KEY`.
-- Token chỉ có quyền subscribe channel `portfolio:<ownerId>`.
-
-`/api/realtime/portfolio`:
-
-- Yêu cầu login.
-- Response là `text/event-stream`.
-- Event chính: `portfolio-changed`.
-- Có heartbeat định kỳ.
-- Có poll MongoDB event log để bắt event missed trong thời gian ngắn.
-
-Realtime event payload:
+Response:
 
 ```ts
-type PortfolioRealtimeEvent = {
-  id: string;
-  type: 'portfolio.changed';
-  ownerId: string;
-  action:
-    | 'created'
-    | 'updated'
-    | 'deleted'
-    | 'deleted_many'
-    | 'imported'
-    | 'synced'
-    | 'prices_refreshed';
-  changedAt: string;
-  detail?: Record<string, unknown>;
+type UserPreferencesResponse = {
+  preferences: {
+    excelMappingTemplates: Array<{
+      id: string;
+      label: string;
+      headerFingerprint: string;
+      mapping: {
+        name: number;
+        quantity?: number;
+        buyPrice?: number;
+        buyDate?: number;
+        note?: number;
+        caseId?: number;
+      };
+      createdAt: string;
+    }>;
+    pricing: {
+      rateSi?: number;
+      rateLe?: number;
+      buffCnyToVndRate?: number;
+    };
+  };
 };
 ```
 
+Giới hạn normalize hiện tại:
+
+- tối đa 50 mapping templates;
+- column index từ 0 đến 200;
+- `rateSi`, `rateLe`: 0–100;
+- `buffCnyToVndRate`: 1–100000.
+
+Mutation publish `user-preferences.changed` với danh sách section đã đổi.
+
+### User Recent Imports
+
+Chỉ dành cho user đã login. API trả tối đa 10 record gần nhất.
+
+| Method   | Route                             | Mục đích                                      |
+| -------- | --------------------------------- | --------------------------------------------- |
+| `GET`    | `/api/user/recent-imports`        | Lấy lịch sử import gần nhất                   |
+| `POST`   | `/api/user/recent-imports`        | Upsert một `import` hoặc merge mảng `imports` |
+| `DELETE` | `/api/user/recent-imports?id=...` | Xóa một record                                |
+| `DELETE` | `/api/user/recent-imports`        | Xóa toàn bộ record của owner                  |
+
+```ts
+type RecentImport = {
+  id: string;
+  fileName: string;
+  date: string;
+  importedCount: number;
+  importedIds: string[]; // tối đa 10.000
+  items?: Array<{
+    name: string;
+    quantity: number;
+    buyPrice: number;
+    buyDate?: string;
+    note?: string;
+    createdAt?: string;
+  }>; // tối đa 1.000 details
+};
+```
+
+Mutation publish `user-recent-imports.changed`. Guest lưu cùng DTO trong `cs2t_recentImports`, rồi merge lên API khi login.
+
+### CS2Cap User Keys
+
+Route hiện chỉ export `GET` và `POST`; các method `PATCH`/`DELETE` cũ không còn tồn tại.
+
+| Method | Route                       | Mục đích                                          |
+| ------ | --------------------------- | ------------------------------------------------- |
+| `GET`  | `/api/user/cs2cap`          | Lấy danh sách prefix, active key và account stats |
+| `POST` | `/api/user/cs2cap`          | Thêm key mới; hoặc action `select`/`delete`       |
+| `GET`  | `/api/user/cs2cap/status`   | Kiểm tra user/server có key khả dụng              |
+| `POST` | `/api/user/cs2cap/validate` | Validate key với CS2Cap, có rate limit            |
+
+Ví dụ action:
+
+```json
+{ "action": "select", "keyPrefix": "first-12-chars••••" }
+```
+
+```json
+{ "action": "delete", "keyPrefix": "first-12-chars••••" }
+```
+
+Thêm/chọn/xóa key publish `user-settings.changed`.
+
+### Realtime
+
+| Method | Route                               | Mục đích                                            |
+| ------ | ----------------------------------- | --------------------------------------------------- |
+| `GET`  | `/api/realtime/ably-token`          | Cấp token mặc định cho portfolio                    |
+| `GET`  | `/api/realtime/portfolio`           | SSE portfolio, heartbeat và event-log catch-up      |
+| `GET`  | `/api/realtime/user-recent-imports` | SSE recent imports, heartbeat và event-log catch-up |
+
+`/api/realtime/ably-token` yêu cầu login, trả `503` nếu thiếu `ABLY_API_KEY`, TTL token 1 giờ và capability chỉ có `subscribe`.
+
+| Query                 | Channel trả về                  | Kiểm tra thêm        |
+| --------------------- | ------------------------------- | -------------------- |
+| không có              | `portfolio:<ownerId>`           | —                    |
+| `scanJobId=<id>`      | `scan:<ownerId>:<jobId>`        | Job phải thuộc owner |
+| `adminBugReports=1`   | `admin:bug-reports`             | Admin email          |
+| `adminPostAnalysis=1` | `admin:post-analysis-history`   | Admin email          |
+| `userBuffPrices=1`    | `user:<ownerId>:buff-prices`    | —                    |
+| `userPreferences=1`   | `user:<ownerId>:preferences`    | —                    |
+| `userRecentImports=1` | `user:<ownerId>:recent-imports` | —                    |
+| `userSettings=1`      | `user:<ownerId>:settings`       | —                    |
+
+Khi query chọn channel đặc biệt, response có dạng:
+
+```ts
+type RealtimeTokenResponse = {
+  tokenDetails: Ably.TokenDetails;
+  channelName: string;
+};
+```
+
+Mặc định portfolio trả trực tiếp `tokenDetails` để tương thích hook hiện tại.
+
 ### Post Analyzer
 
-| Method   | Route                       | Mục đích                                | File                                        |
-| -------- | --------------------------- | --------------------------------------- | ------------------------------------------- |
-| `POST`   | `/api/post/analyze`         | Phân tích text/ảnh                      | `src/app/api/post/analyze/route.ts`         |
-| `POST`   | `/api/post/analyze-html`    | Phân tích HTML bài đăng                 | `src/app/api/post/analyze-html/route.ts`    |
-| `POST`   | `/api/post/analyze-chatgpt` | Phân tích input JSON từ ChatGPT         | `src/app/api/post/analyze-chatgpt/route.ts` |
-| `POST`   | `/api/post/extract`         | Trích xuất text/author/time từ raw HTML | `src/app/api/post/extract/route.ts`         |
-| `GET`    | `/api/post/history`         | Lấy lịch sử phân tích                   | `src/app/api/post/history/route.ts`         |
-| `DELETE` | `/api/post/history/[id]`    | Xóa một history item                    | `src/app/api/post/history/[id]/route.ts`    |
+Các mutation dưới đây hiện yêu cầu admin access và có Gemini rate limit:
+
+| Method   | Route                       | Mục đích                                             |
+| -------- | --------------------------- | ---------------------------------------------------- |
+| `POST`   | `/api/post/analyze`         | Phân tích text/ảnh                                   |
+| `POST`   | `/api/post/analyze-html`    | Phân tích HTML bài đăng                              |
+| `POST`   | `/api/post/analyze-chatgpt` | Nhập/phân tích JSON từ ChatGPT                       |
+| `POST`   | `/api/post/extract`         | Trích text/author/time/image từ raw HTML             |
+| `GET`    | `/api/post/history`         | List 30 record hoặc tìm theo `postUrl`/`fingerprint` |
+| `DELETE` | `/api/post/history/[id]`    | Xóa history item; admin-only                         |
+
+Save/touch/delete history publish `post-analysis-history.changed`. History collection hiện là global, không gắn owner.
 
 ### Prices
 
-| Method | Route                 | Mục đích                  | File                                  |
-| ------ | --------------------- | ------------------------- | ------------------------------------- |
-| `POST` | `/api/prices/refresh` | Refresh giá cho portfolio | `src/app/api/prices/refresh/route.ts` |
+| Method | Route                 | Mục đích                                                                  |
+| ------ | --------------------- | ------------------------------------------------------------------------- |
+| `POST` | `/api/prices/refresh` | Refresh portfolio prices, update report cache, publish `prices_refreshed` |
 
-Route này publish realtime event `prices_refreshed`.
+### Utilities Và Admin
 
-### Utilities And Admin
+| Method  | Route              | Mục đích                                                       |
+| ------- | ------------------ | -------------------------------------------------------------- |
+| `GET`   | `/api/cases`       | Lấy/tìm catalog case/item; repository có thể enrich ảnh/rarity |
+| `GET`   | `/api/health`      | Health status; chỉ admin nhận env/memory/uptime chi tiết       |
+| `GET`   | `/api/image-proxy` | Proxy ảnh từ allowlisted host, có SSRF guard                   |
+| `POST`  | `/api/bug-report`  | Gửi report, hỗ trợ ảnh đơn legacy hoặc nhiều ảnh               |
+| `GET`   | `/api/bug-report`  | Admin lấy unresolved; `?all=true` lấy tất cả                   |
+| `PATCH` | `/api/bug-report`  | Admin cập nhật status                                          |
 
-| Method  | Route              | Mục đích                             | File                               |
-| ------- | ------------------ | ------------------------------------ | ---------------------------------- |
-| `GET`   | `/api/cases`       | Lấy danh sách cases/items            | `src/app/api/cases/route.ts`       |
-| `GET`   | `/api/health`      | Health check và env status           | `src/app/api/health/route.ts`      |
-| `GET`   | `/api/image-proxy` | Proxy ảnh ngoài, có bảo vệ SSRF      | `src/app/api/image-proxy/route.ts` |
-| `POST`  | `/api/bug-report`  | Gửi bug report                       | `src/app/api/bug-report/route.ts`  |
-| `GET`   | `/api/bug-report`  | Admin lấy bug reports                | `src/app/api/bug-report/route.ts`  |
-| `PATCH` | `/api/bug-report`  | Admin cập nhật trạng thái bug report | `src/app/api/bug-report/route.ts`  |
+`POST /api/bug-report` upload ảnh lên Cloudinary, lưu `imageUrl` và `imageUrls`, rồi publish `bug-report.changed`.
 
 ## Streaming APIs
 
-Một số route trả dữ liệu theo từng dòng JSON hoặc SSE:
+| Route                                      | Content type / format   | Event chính                                             |
+| ------------------------------------------ | ----------------------- | ------------------------------------------------------- |
+| `POST /api/portfolio/import`               | `application/x-ndjson`  | JSON line `progress`, `complete`, `error`               |
+| `POST /api/portfolio/import-inventory`     | `text/plain`, JSON line | `progress`, `done`, `error`                             |
+| `POST /api/portfolio/accounts/sync`        | `text/event-stream`     | SSE `data:` chứa sync progress object                   |
+| `POST /api/portfolio/accounts/sync/single` | `text/event-stream`     | SSE `data:` chứa sync progress object                   |
+| `GET /api/realtime/portfolio`              | `text/event-stream`     | `portfolio-changed`, `heartbeat`, `connected`           |
+| `GET /api/realtime/user-recent-imports`    | `text/event-stream`     | `user-recent-imports-changed`, `heartbeat`, `connected` |
 
-| Route                                      | Định dạng              | Ghi chú                               |
-| ------------------------------------------ | ---------------------- | ------------------------------------- |
-| `POST /api/portfolio/import`               | newline-delimited JSON | Event `progress`, `complete`, `error` |
-| `POST /api/portfolio/import-inventory`     | newline-delimited JSON | Import scan result vào portfolio      |
-| `POST /api/portfolio/accounts/sync`        | streaming events       | Đồng bộ nhiều account                 |
-| `POST /api/portfolio/accounts/sync/single` | streaming events       | Đồng bộ một account                   |
-| `GET /api/realtime/portfolio`              | Server-Sent Events     | Fallback realtime portfolio           |
+NDJSON client cần dùng `response.body.getReader()`, giữ buffer giữa các chunk và parse theo newline. SSE client dùng `EventSource` cho `GET`, hoặc tự parse `data:` khi route là `POST`.
 
-Client streaming JSON nên đọc `response.body.getReader()` và parse từng dòng/event.
+## Rate Limits
+
+Rate limit dùng collection MongoDB `rate_limits`, scope theo `<limiter-name>:<ip>`. Production fail-closed khi DB limiter lỗi.
+
+| Limiter                 | Cửa sổ  | Tối đa     |
+| ----------------------- | ------- | ---------- |
+| Gemini/Post Analyzer    | 60 giây | 10 request |
+| Steam scan              | 1 giây  | 15 request |
+| CS2Cap validate         | 60 giây | 5 request  |
+| Portfolio price refresh | 2 phút  | 5 request  |
+| Bug report              | 5 phút  | 3 request  |
+| Retry price             | 60 giây | 5 request  |
+| BUFF price              | 60 giây | 15 request |
 
 ## Client API Modules
 
-Client-side fetch wrapper nằm trong `src/lib/api-client`.
+Browser wrappers nằm trong `src/lib/api-client`.
 
-### `portfolio-api.ts`
+### Portfolio và Steam account
 
-| Function                     | API                          |
-| ---------------------------- | ---------------------------- |
-| `fetchPortfolioReport()`     | `GET /api/portfolio`         |
-| `refreshPortfolioPrices()`   | `POST /api/prices/refresh`   |
-| `addPortfolioItem()`         | `POST /api/portfolio`        |
-| `updatePortfolioItem()`      | `PATCH /api/portfolio/[id]`  |
-| `deletePortfolioItem()`      | `DELETE /api/portfolio/[id]` |
-| `deleteManyPortfolioItems()` | `DELETE /api/portfolio`      |
-| `importPortfolioRows()`      | `POST /api/portfolio/import` |
+| Module                  | Export chính                                                                         |
+| ----------------------- | ------------------------------------------------------------------------------------ |
+| `portfolio-api.ts`      | `fetchPortfolioReport`, `fetchFreshPortfolioReport`, CRUD, refresh, streaming import |
+| `steam-accounts-api.ts` | account CRUD/check/sync trigger và `fetchAccountStorageUnits`                        |
+| `buff-api.ts`           | `refreshBuffPrice`                                                                   |
 
-### `steam-accounts-api.ts`
+### User data
 
-| Function                     | API                                     |
-| ---------------------------- | --------------------------------------- |
-| `fetchSteamAccounts()`       | `GET /api/portfolio/accounts`           |
-| `triggerBackgroundSync()`    | `POST /api/portfolio/accounts/sync`     |
-| `checkSteamCookieStatus()`   | `POST /api/portfolio/accounts/check`    |
-| `addSteamAccount()`          | `POST /api/portfolio/accounts`          |
-| `updateSteamAccountCookie()` | `PATCH /api/portfolio/accounts`         |
-| `deleteSteamAccount()`       | `DELETE /api/portfolio/accounts?id=...` |
-| `fetchAccountStorageUnits()` | `GET /api/portfolio/storage-units`      |
+| Module                       | Export chính                                 |
+| ---------------------------- | -------------------------------------------- |
+| `user-buff-prices-api.ts`    | fetch/merge/replace/update BUFF prices       |
+| `user-preferences-api.ts`    | fetch/update preferences                     |
+| `user-recent-imports-api.ts` | fetch/save/merge/delete/clear recent imports |
 
-### `user-buff-prices-api.ts`
+### Realtime subscribers
 
-| Function                  | API                           |
-| ------------------------- | ----------------------------- |
-| `fetchUserBuffPrices()`   | `GET /api/user/buff-prices`   |
-| `mergeUserBuffPrices()`   | `POST /api/user/buff-prices`  |
-| `replaceUserBuffPrices()` | `PUT /api/user/buff-prices`   |
-| `updateUserBuffPrice()`   | `PATCH /api/user/buff-prices` |
+| Module                              | Kênh                        |
+| ----------------------------------- | --------------------------- |
+| `user-buff-prices-realtime.ts`      | User BUFF prices            |
+| `user-preferences-realtime.ts`      | User preferences            |
+| `user-recent-imports-realtime.ts`   | Recent imports; Ably + SSE  |
+| `user-settings-realtime.ts`         | CS2Cap settings             |
+| `post-analysis-history-realtime.ts` | Admin post-analysis history |
 
-### `buff-api.ts`
-
-| Function             | API                              |
-| -------------------- | -------------------------------- |
-| `refreshBuffPrice()` | `POST /api/inventory/buff-price` |
-
-### Realtime hook
-
-Realtime portfolio không có client API wrapper riêng. Dashboard dùng:
-
-```ts
-usePortfolioRealtime(Boolean(user), user ? `google:${user.id}` : undefined);
-```
-
-Hook này tự thử Ably trước, rồi fallback SSE nếu cần.
+Portfolio dùng hook `src/hooks/use-portfolio-realtime.ts`; scan dùng `scan-progress-client.ts` trong feature scanner.
 
 ## External Services
 
-| Service           | Dùng cho                             | File chính                                                                         | Env liên quan                                             |
-| ----------------- | ------------------------------------ | ---------------------------------------------------------------------------------- | --------------------------------------------------------- |
-| Google OAuth      | Đăng nhập                            | `src/services/auth-service.ts`                                                     | `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `AUTH_SECRET` |
-| Ably              | Realtime portfolio                   | `src/services/realtime/portfolio-events.ts`, `src/hooks/use-portfolio-realtime.ts` | `ABLY_API_KEY`                                            |
-| Google Gemini     | AI analyzer                          | `src/services/parser/gemini-client.ts`                                             | `GEMINI_API_KEY`, `GEMINI_MODEL`                          |
-| Steam Community   | Profile, inventory, listings, wallet | `src/infrastructure/steam.ts`, `src/services/scan-service.ts`                      | User Steam cookie                                         |
-| Steam Market      | Giá Steam                            | `src/infrastructure/price/steam-market-price-provider.ts`                          | Không bắt buộc                                            |
-| CSGOTrader        | Fallback giá Steam                   | `src/infrastructure/price/steam-market-price-provider.ts`                          | Không bắt buộc                                            |
-| CS2Cap            | BUFF163 price, key validation        | `src/services/parser/buff-price-client.ts`                                         | `CS2CAP_API_KEY`                                          |
-| CSFloat           | Float/paint seed                     | `src/services/pattern/csfloat-client.ts`                                           | `CSFLOAT_API_KEY`                                         |
-| Cloudinary        | Upload ảnh                           | `src/infrastructure/cloudinary.ts`                                                 | `CLOUDINARY_*`                                            |
-| Exchange Rate API | USD/VND fallback conversion          | `src/infrastructure/price/steam-market-price-provider.ts`                          | Không bắt buộc                                            |
-
-## Auth, Owner Và Permission
-
-| Loại API                             | Yêu cầu                                                 |
-| ------------------------------------ | ------------------------------------------------------- |
-| Portfolio/Steam account/Storage Unit | `ownerId`, luôn filter query/update/delete theo owner   |
-| User BUFF prices                     | Phải login Google                                       |
-| Realtime Ably token                  | Phải login Google, chỉ subscribe channel của chính user |
-| Realtime SSE fallback                | Phải login Google                                       |
-| Admin bug report                     | Email nằm trong `ADMIN_EMAILS`                          |
-| CS2Cap user keys                     | User/session owner                                      |
-| Public utilities                     | Validate input và rate limit nếu cần                    |
-
-Khi thêm route mới có đọc/ghi dữ liệu người dùng, xác định owner sớm và áp dụng owner filter trong mọi query/update/delete.
+| Service                | Dùng cho                                          | Env                                                       |
+| ---------------------- | ------------------------------------------------- | --------------------------------------------------------- |
+| Google OAuth           | Login/admin identity                              | `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `AUTH_SECRET` |
+| Ably                   | Pub/sub realtime                                  | `ABLY_API_KEY`                                            |
+| Gemini                 | Post Analyzer                                     | `GEMINI_API_KEY`, `GEMINI_MODEL`                          |
+| Steam Community/Market | Inventory, profile, listing, wallet, price, image | Cookie user tùy luồng                                     |
+| CSGOTrader             | Price fallback                                    | Không bắt buộc                                            |
+| CS2Cap                 | BUFF price/key validation                         | User key hoặc `CS2CAP_API_KEY`                            |
+| CSFloat                | Pattern inspect                                   | `CSFLOAT_API_KEY` tùy chọn                                |
+| Cloudinary             | Analyzer/bug-report images                        | `CLOUDINARY_*`                                            |
+| Exchange-rate API      | USD/VND fallback                                  | Không bắt buộc                                            |
